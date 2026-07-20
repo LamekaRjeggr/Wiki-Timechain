@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiki · Timechain</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0a0a0b;
+    --panel:#111113;
+    --border:#25262b;
+    --rail:#ffb02e;          /* amber rail — colorblind-safe */
+    --rail-dim:#5a4415;
+    --accent:#4aa3ff;        /* blue links — safe against amber */
+    --text:#e6e6e8;
+    --dim:#8a8b92;
+    --faint:#3a3b42;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"SF Mono",ui-monospace,"Courier New",monospace}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  header{
+    padding:26px 20px 18px;border-bottom:1px solid var(--border);
+    background:radial-gradient(circle at top left,rgba(255,176,46,.10),transparent 40%);
+  }
+  .wrap{max-width:780px;margin:0 auto}
+  h1{margin:0;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+  h1 .dot{color:var(--rail)}
+  .sub{margin-top:6px;color:var(--dim);font-size:12.5px;line-height:1.5}
+  .status{margin-top:12px;font-size:12px;color:var(--dim);
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .status b{color:var(--text);font-weight:600}
+  .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
+    background:var(--faint);margin-right:5px;vertical-align:1px}
+  .relaydot.up{background:var(--rail)}
+  .relaydot.down{background:transparent;border:1px solid var(--faint)}
+
+  main{max-width:780px;margin:0 auto;padding:8px 20px 80px}
+
+  /* timeline rail */
+  .timeline{position:relative;margin-top:24px;padding-left:34px}
+  .timeline::before{content:"";position:absolute;left:9px;top:6px;bottom:6px;
+    width:2px;background:linear-gradient(var(--rail),var(--rail-dim))}
+
+  .node{position:relative;margin:0 0 22px}
+  .node::before{content:"";position:absolute;left:-31px;top:6px;
+    width:12px;height:12px;border-radius:999px;background:var(--rail);
+    box-shadow:0 0 0 4px var(--bg),0 0 14px rgba(255,176,46,.5)}
+
+  .date{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--rail);
+    margin-bottom:6px}
+  .card{border:1px solid var(--border);background:
+      linear-gradient(180deg,rgba(255,176,46,.04),transparent 22%),var(--panel);
+    border-radius:8px;padding:14px 16px}
+  .card:hover{border-color:var(--rail-dim)}
+  .ctitle{font-size:15.5px;font-weight:600;margin:0 0 8px;line-height:1.35}
+  .cbody{font-size:14px;line-height:1.6;color:#d5d6da}
+  .cbody p{margin:0 0 8px}
+  .cbody p:last-child{margin-bottom:0}
+  .cmeta{margin-top:10px;font-size:11px;color:var(--dim);
+    display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .cmeta code{color:var(--faint)}
+
+  .msg{margin-top:40px;text-align:center;color:var(--dim);font-size:13px;line-height:1.7}
+  .msg.err{color:#ffb27a}          /* orange, not red — meaning also in text */
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--faint);
+    border-top-color:var(--rail);border-radius:999px;animation:spin 1s linear infinite;
+    vertical-align:-2px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Wiki <span class="dot">·</span> Timechain</h1>
+      <div class="sub">A timeline of bitcoin arbitrary-data history — published as nostr
+        <b>kind&nbsp;30818</b> wiki cards (<code>c=bitcoin-arbitrary-data</code>), read live from relays.</div>
+      <div class="status" id="status">
+        <span><span class="spinner"></span>connecting…</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="feed"></div>
+  </main>
+
+<script>
+"use strict";
+
+// ── config (pulled from Forge) ─────────────────────────────────────────
+const RELAYS = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.primal.net",
+  "wss://relay.mostr.pub",
+  "wss://relay.nostr.band",
+  "wss://nostr.wine"
+];
+const AUTHOR     = "REDACTED";
+const COLLECTION = "bitcoin-arbitrary-data";
+const KIND       = 30818;
+const SUBID      = "wtc";
+
+// ── state ──────────────────────────────────────────────────────────────
+const byDtag = new Map();          // d-tag → newest event (30818 is replaceable)
+const relayState = new Map();      // url → 'up' | 'down' | 'connecting'
+RELAYS.forEach(r => relayState.set(r, "connecting"));
+let renderTimer = null;
+
+const feedEl   = document.getElementById("feed");
+const statusEl = document.getElementById("status");
+
+// ── helpers ────────────────────────────────────────────────────────────
+function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t[1] : ""; }
+
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+}
+
+// tiny djot-ish renderer: paragraphs + [label](url) links (what the cards use)
+function renderContent(text){
+  return escapeHtml(text).split(/\n\s*\n/).map(p =>
+    "<p>" + p
+      .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\n/g,"<br>") + "</p>"
+  ).join("");
+}
+
+function eventYear(ev){
+  const d = tag(ev,"event_date");                 // YYYY-MM-DD
+  if(d){ const y = parseInt(d.slice(0,4),10); if(!isNaN(y)) return y; }
+  const pa = parseInt(tag(ev,"published_at"),10);
+  if(!isNaN(pa)) return new Date(pa*1000).getUTCFullYear();
+  return new Date((ev.created_at||0)*1000).getUTCFullYear();
+}
+function eventSortKey(ev){
+  const d = tag(ev,"event_date");
+  return d || String(eventYear(ev));
+}
+
+// ── ingest / dedup ─────────────────────────────────────────────────────
+function ingest(ev){
+  if(!ev || ev.kind !== KIND) return;
+  const d = tag(ev,"d") || ev.id;
+  const prev = byDtag.get(d);
+  if(!prev || (ev.created_at||0) > (prev.created_at||0)){
+    byDtag.set(d, ev);
+    scheduleRender();
+  }
+}
+function scheduleRender(){
+  if(renderTimer) return;
+  renderTimer = setTimeout(() => { renderTimer = null; render(); }, 120);
+}
+
+// ── render ─────────────────────────────────────────────────────────────
+function renderStatus(){
+  const up = [...relayState.values()].filter(v => v === "up").length;
+  const dots = RELAYS.map(r =>
+    `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${escapeHtml(r)}"></span>`
+  ).join("");
+  statusEl.innerHTML =
+    `<span><b>${byDtag.size}</b> card${byDtag.size===1?"":"s"}</span>` +
+    `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
+}
+
+function render(){
+  renderStatus();
+  const events = [...byDtag.values()].sort((a,b) =>
+    eventSortKey(a).localeCompare(eventSortKey(b)));   // chronological
+
+  if(!events.length){
+    const anyUp = [...relayState.values()].some(v => v === "up");
+    const allDown = [...relayState.values()].every(v => v === "down");
+    feedEl.innerHTML = allDown
+      ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
+      : `<div class="msg"><span class="spinner"></span>${anyUp?"no cards found yet…":"connecting to relays…"}</div>`;
+    return;
+  }
+
+  let lastYear = null, html = '<div class="timeline">';
+  for(const ev of events){
+    const y = eventYear(ev);
+    const title = tag(ev,"title") || tag(ev,"d") || "(untitled)";
+    const dateStr = tag(ev,"event_date") || String(y);
+    html += `
+      <div class="node">
+        <div class="date">${escapeHtml(dateStr)}</div>
+        <div class="card">
+          <p class="ctitle">${escapeHtml(title)}</p>
+          <div class="cbody">${renderContent(ev.content||"")}</div>
+          <div class="cmeta"><code>${escapeHtml(tag(ev,"d"))}</code></div>
+        </div>
+      </div>`;
+    lastYear = y;
+  }
+  html += "</div>";
+  feedEl.innerHTML = html;
+}
+
+// ── relay connections ──────────────────────────────────────────────────
+function connect(url){
+  let ws;
+  try { ws = new WebSocket(url); }
+  catch(e){ relayState.set(url,"down"); renderStatus(); return; }
+
+  ws.onopen = () => {
+    relayState.set(url,"up");
+    renderStatus();
+    ws.send(JSON.stringify(["REQ", SUBID, {
+      kinds:[KIND], authors:[AUTHOR], "#c":[COLLECTION]
+    }]));
+  };
+  ws.onmessage = (m) => {
+    let data; try { data = JSON.parse(m.data); } catch { return; }
+    if(data[0] === "EVENT" && data[1] === SUBID) ingest(data[2]);
+    else if(data[0] === "EOSE" && data[1] === SUBID){ /* keep open for live edits */ }
+  };
+  ws.onerror = () => { relayState.set(url,"down"); renderStatus(); };
+  ws.onclose = () => { if(relayState.get(url) !== "up") relayState.set(url,"down"); renderStatus(); };
+}
+
+// ── go ─────────────────────────────────────────────────────────────────
+render();
+RELAYS.forEach(connect);
+// mark still-silent relays as down after a grace period
+setTimeout(() => {
+  RELAYS.forEach(r => { if(relayState.get(r) === "connecting") relayState.set(r,"down"); });
+  renderStatus();
+  render();
+}, 8000);
+</script>
+</body>
+</html>
