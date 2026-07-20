@@ -12,7 +12,7 @@
     --border:#25262b;
     --rail:#ffb02e;          /* amber rail — colorblind-safe */
     --rail-dim:#5a4415;
-    --accent:#4aa3ff;        /* blue links — safe against amber */
+    --accent:#4aa3ff;        /* blue links/selection — safe against amber */
     --text:#e6e6e8;
     --dim:#8a8b92;
     --faint:#3a3b42;
@@ -22,16 +22,17 @@
     font-family:"SF Mono",ui-monospace,"Courier New",monospace}
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
+  button{font-family:inherit}
 
   header{
-    padding:26px 20px 18px;border-bottom:1px solid var(--border);
+    padding:22px 20px 0;border-bottom:1px solid var(--border);
     background:radial-gradient(circle at top left,rgba(255,176,46,.10),transparent 40%);
   }
-  .wrap{max-width:780px;margin:0 auto}
+  .wrap{max-width:980px;margin:0 auto}
   h1{margin:0;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
   h1 .dot{color:var(--rail)}
   .sub{margin-top:6px;color:var(--dim);font-size:12.5px;line-height:1.5}
-  .status{margin-top:12px;font-size:12px;color:var(--dim);
+  .status{margin-top:10px;font-size:12px;color:var(--dim);
     display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .status b{color:var(--text);font-weight:600}
   .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
@@ -39,60 +40,186 @@
   .relaydot.up{background:var(--rail)}
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
-  main{max-width:780px;margin:0 auto;padding:8px 20px 80px}
+  /* collection tabs */
+  .tabs{margin-top:14px;display:flex;gap:6px;flex-wrap:wrap;padding-bottom:12px}
+  .tab{background:transparent;border:1px solid var(--border);color:var(--dim);
+    border-radius:6px 6px 0 0;padding:6px 12px;font-size:12px;cursor:pointer;
+    letter-spacing:.04em}
+  .tab:hover{color:var(--text);border-color:var(--rail-dim)}
+  .tab.active{color:var(--text);border-color:var(--rail);border-bottom-color:var(--rail);
+    background:rgba(255,176,46,.07)}
+  .tab .n{color:var(--rail);margin-left:6px;font-weight:600}
+  .tab.empty .n{color:var(--faint);font-weight:400}
 
-  /* timeline rail */
-  .timeline{position:relative;margin-top:24px;padding-left:34px}
-  .timeline::before{content:"";position:absolute;left:9px;top:6px;bottom:6px;
-    width:2px;background:linear-gradient(var(--rail),var(--rail-dim))}
+  main{max-width:980px;margin:0 auto;padding:0 20px 80px}
 
-  .node{position:relative;margin:0 0 22px}
-  .node::before{content:"";position:absolute;left:-31px;top:6px;
-    width:12px;height:12px;border-radius:999px;background:var(--rail);
-    box-shadow:0 0 0 4px var(--bg),0 0 14px rgba(255,176,46,.5)}
+  /* ── proportional timeline band ── */
+  .band-wrap{position:relative;margin-top:18px;border:1px solid var(--border);
+    border-radius:8px;background:var(--panel);overflow:hidden;
+    cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+  .band-wrap.dragging{cursor:grabbing}
+  .band{position:relative}
+  .rail{position:absolute;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,var(--rail-dim),var(--rail),var(--rail-dim))}
+  .gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--faint);opacity:.45}
+  .gridline.month{opacity:.18}
+  .gridlabel{position:absolute;bottom:4px;transform:translateX(-50%);
+    font-size:10px;color:var(--dim)}
+  .gridlabel.month{color:var(--faint)}
 
-  .date{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--rail);
-    margin-bottom:6px}
+  .node{position:absolute;width:12px;height:12px;border-radius:999px;
+    background:var(--rail);transform:translate(-50%,-50%);cursor:pointer;
+    box-shadow:0 0 0 3px var(--panel),0 0 12px rgba(255,176,46,.45)}
+  .node:hover{box-shadow:0 0 0 3px var(--panel),0 0 16px rgba(255,176,46,.9)}
+  .node.selected{background:var(--accent);width:14px;height:14px;
+    box-shadow:0 0 0 3px var(--panel),0 0 14px rgba(74,163,255,.8)}
+  /* contested versions: square nodes, so the difference survives any palette */
+  .node.contested{border-radius:2px}
+  .spine{position:absolute;width:2px;background:var(--rail-dim);transform:translateX(-50%)}
+
+  .nlabel{position:absolute;transform:translateX(-50%);font-size:10.5px;color:var(--dim);
+    white-space:nowrap;pointer-events:none;max-width:150px;overflow:hidden;
+    text-overflow:ellipsis;text-align:center}
+  .nlabel b{color:var(--text);font-weight:500}
+
+  .band-hint{position:absolute;top:6px;right:10px;font-size:10px;color:var(--faint);
+    pointer-events:none}
+  .zoombtns{position:absolute;top:6px;left:10px;display:flex;gap:4px}
+  .zoombtns button{width:26px;height:26px;border:1px solid var(--border);border-radius:6px;
+    background:var(--bg);color:var(--dim);font-size:14px;cursor:pointer;line-height:1}
+  .zoombtns button:hover{color:var(--text);border-color:var(--rail-dim)}
+  .edges{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);
+    padding:6px 4px 0}
+
+  /* ── detail card ── */
+  .detail{margin-top:18px}
   .card{border:1px solid var(--border);background:
       linear-gradient(180deg,rgba(255,176,46,.04),transparent 22%),var(--panel);
-    border-radius:8px;padding:14px 16px}
-  .card:hover{border-color:var(--rail-dim)}
-  .ctitle{font-size:15.5px;font-weight:600;margin:0 0 8px;line-height:1.35}
-  .cbody{font-size:14px;line-height:1.6;color:#d5d6da}
+    border-radius:8px;padding:16px 18px}
+  .cmeta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .ctitle{font-size:16px;font-weight:600;line-height:1.35;margin-right:auto}
+  .badge{font-size:11px;border:1px solid var(--border);border-radius:5px;
+    padding:2px 8px;color:var(--dim)}
+  .badge.date{color:var(--rail);border-color:var(--rail-dim)}
+  .badge.contested{color:#ffb27a;border-color:#7a4a1f}   /* orange + text, never hue-only */
+  .cbody{font-size:14px;line-height:1.65;color:#d5d6da}
   .cbody p{margin:0 0 8px}
   .cbody p:last-child{margin-bottom:0}
-  .cmeta{margin-top:10px;font-size:11px;color:var(--dim);
-    display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-  .cmeta code{color:var(--faint)}
+  .cfoot{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);
+    font-size:11.5px;color:var(--dim);display:flex;gap:16px;flex-wrap:wrap}
+  .cfoot .k{color:var(--faint)}
+  .versions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+  .versions button{border:1px solid var(--border);background:transparent;color:var(--dim);
+    border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer}
+  .versions button.cur{border-color:var(--accent);color:var(--accent)}
+  .detail-hint{color:var(--dim);font-size:12.5px;text-align:center;padding:18px 0}
 
-  .msg{margin-top:40px;text-align:center;color:var(--dim);font-size:13px;line-height:1.7}
+  .msg{margin:26px 0;text-align:center;color:var(--dim);font-size:13px;line-height:1.7}
   .msg.err{color:#ffb27a}          /* orange, not red — meaning also in text */
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--faint);
     border-top-color:var(--rail);border-radius:999px;animation:spin 1s linear infinite;
     vertical-align:-2px;margin-right:8px}
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── contribute section ── */
+  .contribute{margin-top:56px;border-top:1px solid var(--border);padding-top:28px}
+  .contribute h2{font-size:14px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--rail);margin:0 0 14px}
+  .contribute h3{font-size:13px;margin:22px 0 8px;color:var(--text)}
+  .contribute p,.contribute li{font-size:13px;line-height:1.7;color:#c9cacf}
+  .contribute ol{padding-left:22px}
+  .contribute code,pre{background:var(--bg);border:1px solid var(--border);
+    border-radius:4px;font-size:12px}
+  .contribute code{padding:1px 5px}
+  .contribute pre{padding:12px 14px;overflow-x:auto;line-height:1.6;color:#c9cacf}
+
+  @media (max-width:640px){
+    .nlabel{display:none}                              /* labels collide on phones */
+    .nlabel.selected-label{display:block}              /* keep the selected one */
+    h1{font-size:17px}
+  }
 </style>
 </head>
 <body>
   <header>
     <div class="wrap">
       <h1>Wiki <span class="dot">·</span> Timechain</h1>
-      <div class="sub">A timeline of bitcoin arbitrary-data history — published as nostr
-        <b>kind&nbsp;30818</b> wiki cards (<code>c=bitcoin-arbitrary-data</code>), read live from relays.</div>
+      <div class="sub">Open timelines of public record — published as nostr
+        <b>kind&nbsp;30818</b> wiki cards, read live from relays. Anyone can add
+        or dispute an entry; the tags on each card are the source of truth.</div>
       <div class="status" id="status">
         <span><span class="spinner"></span>connecting…</span>
       </div>
+      <div class="tabs" id="tabs"></div>
     </div>
   </header>
 
   <main>
-    <div id="feed"></div>
+    <div id="timeline-area"></div>
+    <div class="detail" id="detail"></div>
+
+    <section class="contribute">
+      <h2>Add to the record</h2>
+      <p>This page only <em>reads</em>. The timelines live on public nostr relays, so
+        contributing happens from any nostr client that can publish wiki events — you
+        don't need permission from this site, and this site can't stop you. That's the point.</p>
+
+      <h3>1 · Get a nostr identity</h3>
+      <p>A nostr account is just a keypair — no signup, no email. Start at
+        <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>
+        or read <a href="https://nostr.how" target="_blank" rel="noopener noreferrer">nostr.how</a>
+        for a walkthrough. Guard your secret key (<code>nsec</code>) — it can't be reset.
+        Use a signer extension or app rather than pasting it into websites.</p>
+
+      <h3>2 · Publish a card</h3>
+      <p>An entry is a <b>kind 30818</b> wiki event
+        (<a href="https://github.com/nostr-protocol/nips/blob/master/54.md" target="_blank"
+            rel="noopener noreferrer">NIP-54</a>). Wiki clients such as
+        <a href="https://wikifreedia.xyz" target="_blank" rel="noopener noreferrer">wikifreedia.xyz</a>
+        or <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
+        can publish them. A card that this page can place on a timeline carries these tags:</p>
+<pre>
+kind: 30818
+tags:
+  d           2026-my-entry-slug          (identity — one entry, editable by you)
+  title       2026 · Short entry name
+  event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail)
+  c           &lt;collection&gt;                (which timeline it belongs to)
+content:
+  One factual sentence about what happened.
+
+  Source: [label](https://link-to-primary-source)
+</pre>
+      <p>Keep the content to verifiable facts with a primary source. The timeline shows
+        who published every card — your entry stands on your signature.</p>
+
+      <h3>3 · Dispute a card</h3>
+      <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
+        <code>d</code> tag</b> and your correction. Nothing is overwritten — both
+        versions appear side by side on the rail, each signed by its author, and readers
+        judge for themselves. Disputes are additions, not deletions.</p>
+
+      <h3>Verify everything</h3>
+      <p>Every card links to its author — click a publisher's name to inspect their full
+        history on <a href="https://njump.me" target="_blank" rel="noopener noreferrer">njump.me</a>.
+        This site has no accounts, no moderators, and no server: it renders whatever the
+        relays hold, and the relays hold whatever people sign.</p>
+    </section>
   </main>
 
 <script>
 "use strict";
 
-// ── config (pulled from Forge) ─────────────────────────────────────────
+// ═══════════════ config — the ONLY baked-in editorial choice ═══════════════
+// Each entry: the c-tag value of a timeline this site serves, plus a display name.
+// Add a timeline = add a line. No keys, no schemas — cards define themselves.
+const COLLECTIONS = [
+  { c: "bitcoin-arbitrary-data", name: "bitcoin arbitrary data" },
+  // { c: "propositions",        name: "propositions" },
+  // { c: "land-rezoning",       name: "land rezoning" },
+  // { c: "community-comment",   name: "community comment" },
+];
+
 const RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
@@ -101,24 +228,30 @@ const RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine"
 ];
-const AUTHOR     = "REDACTED";
-const COLLECTION = "bitcoin-arbitrary-data";
-const KIND       = 30818;
-const SUBID      = "wtc";
+const KIND = 30818;
 
-// ── state ──────────────────────────────────────────────────────────────
-const byDtag = new Map();          // d-tag → newest event (30818 is replaceable)
-const relayState = new Map();      // url → 'up' | 'down' | 'connecting'
+// ═══════════════ state ═══════════════
+const events   = new Map();     // pubkey:d → newest 30818 (replaceable per author)
+const profiles = new Map();     // pubkey → {name, fetched}
+const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
+const sockets  = [];
 RELAYS.forEach(r => relayState.set(r, "connecting"));
+
+let activeC   = COLLECTIONS[0].c;
+let selected  = null;           // selected event id
+let view      = null;           // {lo,hi} fractional years; null = fit to data
 let renderTimer = null;
+let profileTimer = null;
 
-const feedEl   = document.getElementById("feed");
+const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
+const areaEl   = document.getElementById("timeline-area");
+const detailEl = document.getElementById("detail");
 
-// ── helpers ────────────────────────────────────────────────────────────
+// ═══════════════ helpers ═══════════════
 function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t[1] : ""; }
 
-function escapeHtml(s){
+function esc(s){
   return String(s ?? "")
     .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
     .replaceAll('"',"&quot;").replaceAll("'","&#39;");
@@ -126,7 +259,7 @@ function escapeHtml(s){
 
 // tiny djot-ish renderer: paragraphs + [label](url) links (what the cards use)
 function renderContent(text){
-  return escapeHtml(text).split(/\n\s*\n/).map(p =>
+  return esc(text).split(/\n\s*\n/).map(p =>
     "<p>" + p
       .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
         '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
@@ -134,108 +267,439 @@ function renderContent(text){
   ).join("");
 }
 
-function eventYear(ev){
-  const d = tag(ev,"event_date");                 // YYYY-MM-DD
-  if(d){ const y = parseInt(d.slice(0,4),10); if(!isNaN(y)) return y; }
+function dateOf(ev){
+  const ed = tag(ev,"event_date");
+  if (ed) return ed;
   const pa = parseInt(tag(ev,"published_at"),10);
-  if(!isNaN(pa)) return new Date(pa*1000).getUTCFullYear();
-  return new Date((ev.created_at||0)*1000).getUTCFullYear();
+  const ts = isNaN(pa) ? (ev.created_at||0) : pa;
+  return new Date(ts*1000).toISOString().slice(0,10);
 }
-function eventSortKey(ev){
-  const d = tag(ev,"event_date");
-  return d || String(eventYear(ev));
+function yearFrac(dateStr){
+  const p = String(dateStr).split("-").map(Number);
+  return (p[0]||1970) + ((p[1]?p[1]-1:0)/12) + ((p[2]?p[2]-1:0)/365);
 }
 
-// ── ingest / dedup ─────────────────────────────────────────────────────
-function ingest(ev){
-  if(!ev || ev.kind !== KIND) return;
-  const d = tag(ev,"d") || ev.id;
-  const prev = byDtag.get(d);
-  if(!prev || (ev.created_at||0) > (prev.created_at||0)){
-    byDtag.set(d, ev);
-    scheduleRender();
+// ── bech32 npub encoding (BIP-173), inlined — zero deps ──
+const B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function b32polymod(vals){
+  const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+  let chk = 1;
+  for (const v of vals){
+    const b = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i=0;i<5;i++) if ((b>>i)&1) chk ^= GEN[i];
   }
+  return chk;
 }
+function npub(hex){
+  const data = [];
+  for (let i=0;i<hex.length;i+=2) data.push(parseInt(hex.slice(i,i+2),16));
+  // convert 8-bit → 5-bit
+  let acc=0, bits=0; const out=[];
+  for (const b of data){ acc=(acc<<8)|b; bits+=8;
+    while(bits>=5){ bits-=5; out.push((acc>>bits)&31); } }
+  if (bits>0) out.push((acc<<(5-bits))&31);
+  const hrp="npub", exp=[];
+  for (const c of hrp) exp.push(c.charCodeAt(0)>>5);
+  exp.push(0);
+  for (const c of hrp) exp.push(c.charCodeAt(0)&31);
+  const pm = b32polymod(exp.concat(out,[0,0,0,0,0,0])) ^ 1;
+  const chk=[]; for (let i=0;i<6;i++) chk.push((pm>>5*(5-i))&31);
+  return hrp+"1"+out.concat(chk).map(v=>B32[v]).join("");
+}
+
+function authorLabel(pk){
+  const p = profiles.get(pk);
+  if (p && p.name) return esc(p.name);
+  return esc(npub(pk).slice(0,12)) + "…";
+}
+function authorLink(pk){
+  return `<a href="https://njump.me/${npub(pk)}" target="_blank" rel="noopener noreferrer">${authorLabel(pk)}</a>`;
+}
+
+// ═══════════════ ingest ═══════════════
+function ingest(ev){
+  if (!ev || ev.kind !== KIND) return;
+  const d = tag(ev,"d"); if (!d) return;
+  const key = ev.pubkey + ":" + d;
+  const cur = events.get(key);
+  if (cur && cur.created_at >= ev.created_at) return;
+  events.set(key, ev);
+  if (!profiles.has(ev.pubkey)){
+    profiles.set(ev.pubkey, { name:null, fetched:false });
+    scheduleProfileFetch();
+  }
+  scheduleRender();
+}
+
+function ingestProfile(ev){
+  if (!ev || ev.kind !== 0) return;
+  const p = profiles.get(ev.pubkey);
+  if (p && p.at && p.at >= ev.created_at) return;
+  let meta; try { meta = JSON.parse(ev.content); } catch { return; }
+  profiles.set(ev.pubkey, {
+    name: meta.display_name || meta.name || null,
+    at: ev.created_at, fetched: true
+  });
+  scheduleRender();
+}
+
+// batch kind-0 lookups for authors we haven't resolved yet
+function scheduleProfileFetch(){
+  if (profileTimer) return;
+  profileTimer = setTimeout(() => {
+    profileTimer = null;
+    const want = [...profiles.entries()].filter(([,p]) => !p.fetched).map(([pk]) => pk);
+    if (!want.length) return;
+    sockets.forEach(ws => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(["CLOSE","prof"]));
+      ws.send(JSON.stringify(["REQ","prof",{ kinds:[0], authors:want }]));
+    });
+  }, 400);
+}
+
 function scheduleRender(){
-  if(renderTimer) return;
+  if (renderTimer) return;
   renderTimer = setTimeout(() => { renderTimer = null; render(); }, 120);
 }
 
-// ── render ─────────────────────────────────────────────────────────────
+// ═══════════════ data views ═══════════════
+function inCollection(c){
+  return [...events.values()].filter(ev => tag(ev,"c") === c);
+}
+// group the active collection's events by d-tag: one entry per d, versions within
+function entriesOf(c){
+  const byD = new Map();
+  for (const ev of inCollection(c)){
+    const d = tag(ev,"d");
+    (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
+  }
+  return [...byD.entries()].map(([d, evs]) => {
+    evs.sort((a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1));
+    return { d, evs, date: dateOf(evs[0]), frac: yearFrac(dateOf(evs[0])),
+             title: tag(evs[0],"title") || d, contested: evs.length > 1 };
+  }).sort((a,b) => a.frac - b.frac);
+}
+
+// data-derived default window: fit the collection's own span, padded
+function fitView(entries){
+  if (!entries.length){ const y = new Date().getUTCFullYear(); return { lo:y-1, hi:y+1 }; }
+  let lo = Math.min(...entries.map(e => e.frac));
+  let hi = Math.max(...entries.map(e => e.frac));
+  const pad = Math.max((hi-lo)*0.08, 0.4);
+  return { lo: lo-pad, hi: hi+pad };
+}
+
+// ═══════════════ render: status + tabs ═══════════════
 function renderStatus(){
   const up = [...relayState.values()].filter(v => v === "up").length;
   const dots = RELAYS.map(r =>
-    `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${escapeHtml(r)}"></span>`
+    `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${esc(r)}"></span>`
   ).join("");
+  const n = entriesOf(activeC).length;
   statusEl.innerHTML =
-    `<span><b>${byDtag.size}</b> card${byDtag.size===1?"":"s"}</span>` +
+    `<span><b>${n}</b> entr${n===1?"y":"ies"}</span>` +
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
+function renderTabs(){
+  tabsEl.innerHTML = "";
+  COLLECTIONS.forEach(col => {
+    const n = entriesOf(col.c).length;
+    const b = document.createElement("button");
+    b.className = "tab" + (col.c === activeC ? " active" : "") + (n ? "" : " empty");
+    b.innerHTML = esc(col.name) + `<span class="n">${n}</span>`;
+    b.addEventListener("click", () => {
+      if (activeC === col.c) return;
+      activeC = col.c; selected = null; view = null;
+      render();
+    });
+    tabsEl.appendChild(b);
+  });
+}
+
+// ═══════════════ render: timeline band ═══════════════
+const BAND_H = 220, RAIL_Y = 110, SLOT = 40, MINGAP = 0.05;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtEdge(v, span){
+  if (span >= 4) return String(Math.round(v));
+  const y = Math.floor(v), m = Math.min(11, Math.floor((v-y)*12));
+  return y + " " + MONTHS[m];
+}
+function slotOrder(n){ const o=[0]; for(let k=1;o.length<n;k++){ o.push(k); if(o.length<n) o.push(-k); } return o; }
+
 function render(){
   renderStatus();
-  const events = [...byDtag.values()].sort((a,b) =>
-    eventSortKey(a).localeCompare(eventSortKey(b)));   // chronological
+  renderTabs();
 
-  if(!events.length){
-    const anyUp = [...relayState.values()].some(v => v === "up");
+  const entries = entriesOf(activeC);
+
+  if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
-    feedEl.innerHTML = allDown
+    const anyUp   = [...relayState.values()].some(v => v === "up");
+    areaEl.innerHTML = allDown
       ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
-      : `<div class="msg"><span class="spinner"></span>${anyUp?"no cards found yet…":"connecting to relays…"}</div>`;
+      : `<div class="msg"><span class="spinner"></span>${anyUp?"no entries in this timeline yet…":"connecting to relays…"}</div>`;
+    detailEl.innerHTML = "";
     return;
   }
 
-  let lastYear = null, html = '<div class="timeline">';
-  for(const ev of events){
-    const y = eventYear(ev);
-    const title = tag(ev,"title") || tag(ev,"d") || "(untitled)";
-    const dateStr = tag(ev,"event_date") || String(y);
-    html += `
-      <div class="node">
-        <div class="date">${escapeHtml(dateStr)}</div>
-        <div class="card">
-          <p class="ctitle">${escapeHtml(title)}</p>
-          <div class="cbody">${renderContent(ev.content||"")}</div>
-          <div class="cmeta"><code>${escapeHtml(tag(ev,"d"))}</code></div>
-        </div>
-      </div>`;
-    lastYear = y;
+  const v = view || fitView(entries);
+  const lo = v.lo, hi = v.hi, span = hi - lo;
+
+  let html = `
+    <div class="band-wrap" id="bandwrap">
+      <div class="band" id="band" style="height:${BAND_H}px"></div>
+      <div class="zoombtns">
+        <button id="zin"  title="zoom in">+</button>
+        <button id="zout" title="zoom out">−</button>
+        <button id="zfit" title="fit all">⊡</button>
+      </div>
+      <div class="band-hint">drag to pan · scroll or pinch to zoom</div>
+    </div>
+    <div class="edges"><span>${esc(fmtEdge(lo,span))}</span><span>${esc(fmtEdge(hi,span))}</span></div>`;
+  areaEl.innerHTML = html;
+  const band = document.getElementById("band");
+
+  // rail
+  const rail = document.createElement("div");
+  rail.className = "rail"; rail.style.top = RAIL_Y + "px"; band.appendChild(rail);
+
+  // gridlines: years always, months when zoomed in
+  const yStep = span > 34 ? 4 : span > 17 ? 2 : 1;
+  for (let y = Math.ceil(lo); y <= Math.floor(hi); y++){
+    const gx = (y-lo)/span; if (gx<0||gx>1) continue;
+    const g = document.createElement("div"); g.className="gridline"; g.style.left=(gx*100)+"%"; band.appendChild(g);
+    if (y % yStep) continue;
+    const gl = document.createElement("div"); gl.className="gridlabel"; gl.style.left=(gx*100)+"%";
+    gl.textContent = span > 8 ? "'"+String(y).slice(2) : String(y); band.appendChild(gl);
   }
-  html += "</div>";
-  feedEl.innerHTML = html;
+  if (span <= 3){
+    for (let y=Math.floor(lo); y<hi; y++) for (let m=1; m<12; m++){
+      const val = y + m/12; if (val < lo || val > hi) continue;
+      const gx = (val-lo)/span;
+      const g = document.createElement("div"); g.className="gridline month"; g.style.left=(gx*100)+"%"; band.appendChild(g);
+      if (span <= 1.5){
+        const gl = document.createElement("div"); gl.className="gridlabel month"; gl.style.left=(gx*100)+"%";
+        gl.textContent = MONTHS[m]; band.appendChild(gl);
+      }
+    }
+  }
+
+  // place entries; contested d-tags get a spine column of version nodes
+  const vis = entries
+    .map(e => ({ ...e, x: (e.frac-lo)/span }))
+    .filter(e => e.x >= -0.02 && e.x <= 1.02)
+    .map(e => ({ ...e, x: Math.max(0, Math.min(1, e.x)) }));
+
+  const slotOcc = {};
+  const free   = (s,x) => !(slotOcc[s]||[]).some(xx => Math.abs(xx-x) < MINGAP);
+  const occupy = (s,x) => (slotOcc[s] ||= []).push(x);
+  const SLOT_SEQ = [0,1,-1,2,-2,3,-3,4,-4];
+
+  vis.forEach(e => {
+    if (e.contested){
+      const order = slotOrder(e.evs.length);
+      order.forEach(s => occupy(s, e.x));
+      const smin = Math.min(...order), smax = Math.max(...order);
+      const yTop = RAIL_Y - smax*SLOT, yBot = RAIL_Y - smin*SLOT;
+      const sp = document.createElement("div"); sp.className="spine";
+      sp.style.left=(e.x*100)+"%"; sp.style.top=yTop+"px"; sp.style.height=(yBot-yTop)+"px";
+      band.appendChild(sp);
+      e.evs.forEach((ev,i) => placeNode(band, e, ev, e.x, order[i], true));
+    } else {
+      let s = 0;
+      for (const cand of SLOT_SEQ){ if (free(cand, e.x)){ s = cand; break; } }
+      occupy(s, e.x);
+      placeNode(band, e, e.evs[0], e.x, s, false);
+    }
+  });
+
+  bindPanZoom(entries);
+  renderDetail(entries);
 }
 
-// ── relay connections ──────────────────────────────────────────────────
+function placeNode(band, entry, ev, x, slot, contested){
+  const y = RAIL_Y - slot*SLOT;
+  const node = document.createElement("div");
+  node.className = "node" + (contested?" contested":"") + (ev.id===selected?" selected":"");
+  node.style.left = (x*100)+"%"; node.style.top = y+"px";
+  node.title = entry.title + " · " + dateOf(ev);
+  node.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (didDrag) return;
+    selected = ev.id;
+    render();
+  });
+  band.appendChild(node);
+
+  const lab = document.createElement("div");
+  lab.className = "nlabel" + (ev.id===selected?" selected-label":"");
+  lab.style.left = (x*100)+"%";
+  lab.style.top = (slot >= 0 ? (y-22) : (y+10)) + "px";
+  lab.innerHTML = "<b>" + esc(shortTitle(entry.title)) + "</b>" +
+    (contested ? " <span>· " + authorLabel(ev.pubkey) + "</span>" : "");
+  band.appendChild(lab);
+}
+function shortTitle(t){
+  // titles follow "YYYY · name"; the rail already shows time, so drop the year prefix
+  return String(t).replace(/^\d{4}\s*·\s*/, "");
+}
+
+// ═══════════════ pan / zoom (pointer + wheel + pinch) ═══════════════
+let didDrag = false;
+function bindPanZoom(entries){
+  const wrap = document.getElementById("bandwrap"); if (!wrap) return;
+  const fit = fitView(entries);
+  const SPAN_MIN = 0.05;                       // ~2.5 weeks
+  const SPAN_MAX = Math.max(fit.hi-fit.lo, 2) * 3;
+  const LO_MIN = fit.lo - (fit.hi-fit.lo), HI_MAX = fit.hi + (fit.hi-fit.lo);
+
+  const ensure = () => { if (!view) view = { ...fit }; };
+  const clamp = (lo,hi) => {
+    let span = Math.min(Math.max(hi-lo, SPAN_MIN), SPAN_MAX);
+    if (lo < LO_MIN) lo = LO_MIN;
+    if (lo + span > HI_MAX) lo = HI_MAX - span;
+    return { lo, hi: lo+span };
+  };
+  let raf = null;
+  const rr = () => { if (raf) return; raf = requestAnimationFrame(() => { raf=null; render(); }); };
+  const zoomAt = (fx, f) => {
+    ensure();
+    const cx = view.lo + fx*(view.hi-view.lo);
+    view = clamp(cx-(cx-view.lo)*f, cx+(view.hi-cx)*f);
+    rr();
+  };
+
+  wrap.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    zoomAt(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), Math.pow(1.0018, e.deltaY));
+  }, { passive:false });
+
+  document.getElementById("zin").addEventListener("click", e => { e.stopPropagation(); zoomAt(0.5, 0.6); });
+  document.getElementById("zout").addEventListener("click", e => { e.stopPropagation(); zoomAt(0.5, 1/0.6); });
+  document.getElementById("zfit").addEventListener("click", e => { e.stopPropagation(); view = null; render(); });
+
+  // pointers: 1 = pan, 2 = pinch
+  const pts = new Map();
+  let drag = null, pinch = null;
+  wrap.addEventListener("pointerdown", e => {
+    if (e.target.closest(".zoombtns")) return;
+    pts.set(e.pointerId, e.clientX);
+    if (pts.size === 1){
+      ensure();
+      drag = { x:e.clientX, lo:view.lo, hi:view.hi, moved:false, id:e.pointerId };
+    } else if (pts.size === 2){
+      ensure();
+      drag = null;
+      const [a,b] = [...pts.values()];
+      pinch = { d0: Math.abs(a-b), lo:view.lo, hi:view.hi };
+    }
+  });
+  wrap.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, e.clientX);
+    const r = wrap.getBoundingClientRect();
+    if (pinch && pts.size === 2){
+      const [a,b] = [...pts.values()];
+      const d1 = Math.max(20, Math.abs(a-b));
+      const f = pinch.d0 / d1;                          // spread fingers → zoom in
+      const cx = pinch.lo + ((a+b)/2 - r.left)/r.width * (pinch.hi-pinch.lo);
+      view = clamp(cx-(cx-pinch.lo)*f, cx+(pinch.hi-cx)*f);
+      didDrag = true; rr();
+    } else if (drag && e.pointerId === drag.id){
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < 4) return;
+      if (!drag.moved){ try { wrap.setPointerCapture(drag.id); } catch {} }
+      drag.moved = true; didDrag = true;
+      wrap.classList.add("dragging");
+      const shift = -dx/r.width * (drag.hi-drag.lo);
+      view = clamp(drag.lo+shift, drag.hi+shift);
+      rr();
+    }
+  });
+  const up = e => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (drag && e.pointerId === drag.id){ drag = null; wrap.classList.remove("dragging"); }
+    if (!pts.size) setTimeout(() => { didDrag = false; }, 0);
+  };
+  wrap.addEventListener("pointerup", up);
+  wrap.addEventListener("pointercancel", up);
+}
+
+// ═══════════════ render: detail card ═══════════════
+function renderDetail(entries){
+  if (!selected){
+    detailEl.innerHTML = `<div class="detail-hint">select a point on the timeline to read its card</div>`;
+    return;
+  }
+  let entry = null, ev = null;
+  for (const e of entries){
+    const hit = e.evs.find(x => x.id === selected);
+    if (hit){ entry = e; ev = hit; break; }
+  }
+  if (!ev){ selected = null; detailEl.innerHTML = ""; return; }
+
+  const versions = entry.evs.length > 1
+    ? `<div class="versions">` + entry.evs.map(v =>
+        `<button class="${v.id===selected?"cur":""}" data-id="${esc(v.id)}">${authorLabel(v.pubkey)} · ${esc(dateOf(v))}</button>`
+      ).join("") + `</div>`
+    : "";
+
+  detailEl.innerHTML = `
+    <div class="card">
+      <div class="cmeta">
+        <span class="ctitle">${esc(tag(ev,"title") || entry.d)}</span>
+        <span class="badge date">${esc(dateOf(ev))}</span>
+        ${entry.contested ? `<span class="badge contested">contested · ${entry.evs.length} versions</span>` : ""}
+      </div>
+      <div class="cbody">${renderContent(ev.content || "")}</div>
+      ${versions}
+      <div class="cfoot">
+        <span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>
+        <span><span class="k">d</span> ${esc(entry.d)}</span>
+        <span><span class="k">kind</span> 30818</span>
+      </div>
+    </div>`;
+
+  detailEl.querySelectorAll(".versions button").forEach(b =>
+    b.addEventListener("click", () => { selected = b.dataset.id; render(); }));
+}
+
+// ═══════════════ relay connections ═══════════════
 function connect(url){
   let ws;
   try { ws = new WebSocket(url); }
   catch(e){ relayState.set(url,"down"); renderStatus(); return; }
+  sockets.push(ws);
 
   ws.onopen = () => {
     relayState.set(url,"up");
     renderStatus();
-    ws.send(JSON.stringify(["REQ", SUBID, {
-      kinds:[KIND], authors:[AUTHOR], "#c":[COLLECTION]
-    }]));
+    // one open subscription covering every timeline this site serves — no author filter
+    ws.send(JSON.stringify(["REQ","wtc",{ kinds:[KIND], "#c": COLLECTIONS.map(c => c.c) }]));
   };
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
-    if(data[0] === "EVENT" && data[1] === SUBID) ingest(data[2]);
-    else if(data[0] === "EOSE" && data[1] === SUBID){ /* keep open for live edits */ }
+    if (data[0] === "EVENT"){
+      if (data[1] === "wtc")  ingest(data[2]);
+      if (data[1] === "prof") ingestProfile(data[2]);
+    }
+    // EOSE: keep subscriptions open for live edits
   };
   ws.onerror = () => { relayState.set(url,"down"); renderStatus(); };
-  ws.onclose = () => { if(relayState.get(url) !== "up") relayState.set(url,"down"); renderStatus(); };
+  ws.onclose = () => { if (relayState.get(url) !== "up") relayState.set(url,"down"); renderStatus(); };
 }
 
-// ── go ─────────────────────────────────────────────────────────────────
+// ═══════════════ go ═══════════════
 render();
 RELAYS.forEach(connect);
-// mark still-silent relays as down after a grace period
 setTimeout(() => {
-  RELAYS.forEach(r => { if(relayState.get(r) === "connecting") relayState.set(r,"down"); });
-  renderStatus();
-  render();
+  RELAYS.forEach(r => { if (relayState.get(r) === "connecting") relayState.set(r,"down"); });
+  renderStatus(); render();
 }, 8000);
 </script>
 </body>
