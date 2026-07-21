@@ -49,18 +49,24 @@
   .relaydot.up{background:var(--rail)}
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
-  /* collection tabs */
-  .tabs{margin-top:16px;display:flex;gap:6px;flex-wrap:wrap;padding-bottom:0;
-    transform:translateY(1px);justify-content:center}
-  .tab{background:transparent;border:1px solid var(--border);color:var(--dim);
-    border-radius:7px 7px 0 0;padding:8px 14px;font-size:12.5px;cursor:pointer;
-    font-weight:500;transition:color .12s,border-color .12s,background .12s}
-  .tab:hover{color:var(--text);border-color:var(--rail-dim)}
-  .tab.active{color:var(--text);border-color:var(--border);
-    border-top:2px solid var(--rail);padding-top:7px;background:var(--panel)}
-  .tab .n{color:var(--rail);margin-left:7px;font-weight:600;
-    font-variant-numeric:tabular-nums}
-  .tab.empty .n{color:var(--faint);font-weight:400}
+  /* collection selector row */
+  .tabs{margin-top:16px;display:flex;justify-content:center}
+
+  /* dropdown selector */
+  .picker{background:var(--panel);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:9px 36px 9px 14px;font-size:13px;font-family:inherit;
+    font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-repeat:no-repeat;background-position:right 13px center;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%239296a0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")}
+  .picker:hover,.picker:focus{border-color:var(--rail-dim);outline:none}
+
+  /* copy-a-link-to-this-timeline button */
+  .pickrow{margin-top:10px;display:flex;justify-content:center}
+  .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
+    border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
+    cursor:pointer;transition:color .12s,border-color .12s}
+  .linkbtn:hover{color:var(--text);border-color:var(--rail-dim)}
+  .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
@@ -188,6 +194,10 @@
         <span><span class="spinner"></span>connecting…</span>
       </div>
       <div class="tabs" id="tabs"></div>
+      <div class="pickrow">
+        <button id="copylink" class="linkbtn" type="button"
+          title="Copy a shareable link to the selected timeline">⧉ Copy link</button>
+      </div>
     </div>
   </header>
 
@@ -285,6 +295,25 @@ let memberTimer = null;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
+const copyBtn  = document.getElementById("copylink");
+
+// URL that reproduces the current view — the shareable deep link
+function timelineUrl(){
+  const u = new URL(location);
+  if (activeC) u.searchParams.set("c", activeC);
+  return u;
+}
+const COPY_LABEL = "⧉ Copy link";
+copyBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(timelineUrl().href);
+    copyBtn.classList.add("copied");
+    copyBtn.textContent = "Link copied ✓";
+  } catch {
+    copyBtn.textContent = "Copy failed — use the address bar";
+  }
+  setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = COPY_LABEL; }, 1600);
+});
 const areaEl   = document.getElementById("timeline-area");
 const detailEl = document.getElementById("detail");
 
@@ -474,23 +503,31 @@ function renderStatus(){
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
+// one selection path shared by the tab buttons and the dropdown
+function selectCollection(c){
+  if (activeC === c) return;
+  activeC = c; userPicked = true; selected = null; view = null;
+  history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
+  render();
+}
+
 function renderTabs(){
+  const list = [...slugs].sort();
   tabsEl.innerHTML = "";
-  [...slugs].sort().forEach(c => {
-    const n = entriesOf(c).length;
-    const b = document.createElement("button");
-    b.className = "tab" + (c === activeC ? " active" : "") + (n ? "" : " empty");
-    b.innerHTML = esc(slugName(c)) + `<span class="n">${n}</span>`;
-    b.addEventListener("click", () => {
-      if (activeC === c) return;
-      activeC = c; userPicked = true; selected = null; view = null;
-      const u = new URL(location);            // address bar becomes the shareable link
-      u.searchParams.set("c", c);
-      history.replaceState(null, "", u);
-      render();
-    });
-    tabsEl.appendChild(b);
+  copyBtn.style.display = activeC ? "" : "none";   // nothing to link until one is active
+  if (!list.length) return;                        // status line shows "connecting…"
+
+  const sel = document.createElement("select");
+  sel.className = "picker";
+  list.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c;
+    o.textContent = `${slugName(c)}  (${entriesOf(c).length})`;
+    if (c === activeC) o.selected = true;
+    sel.appendChild(o);
   });
+  sel.addEventListener("change", () => selectCollection(sel.value));
+  tabsEl.appendChild(sel);
 }
 
 // ═══════════════ render: timeline band ═══════════════
