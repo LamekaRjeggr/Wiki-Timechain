@@ -275,6 +275,8 @@ const slugs    = new Set();     // discovered collection slugs — grows, never 
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
 let activeC   = null;           // no collection until discovery finds one
+let userPicked = false;         // true once the visitor clicks a tab (stops URL override)
+const wantedC = new URLSearchParams(location.search).get("c");  // ?c=slug deep link
 let selected  = null;           // selected event id
 let view      = null;           // {lo,hi} fractional years; null = fit to data
 let renderTimer = null;
@@ -481,7 +483,10 @@ function renderTabs(){
     b.innerHTML = esc(slugName(c)) + `<span class="n">${n}</span>`;
     b.addEventListener("click", () => {
       if (activeC === c) return;
-      activeC = c; selected = null; view = null;
+      activeC = c; userPicked = true; selected = null; view = null;
+      const u = new URL(location);            // address bar becomes the shareable link
+      u.searchParams.set("c", c);
+      history.replaceState(null, "", u);
       render();
     });
     tabsEl.appendChild(b);
@@ -499,7 +504,9 @@ function fmtEdge(v, span){
 function slotOrder(n){ const o=[0]; for(let k=1;o.length<n;k++){ o.push(k); if(o.length<n) o.push(-k); } return o; }
 
 function render(){
-  if (activeC === null && slugs.size) activeC = [...slugs].sort()[0];
+  // deep link wins until the visitor picks a tab; honored once its slug is discovered
+  if (!userPicked && wantedC && slugs.has(wantedC)) activeC = wantedC;
+  else if (activeC === null && slugs.size) activeC = [...slugs].sort()[0];
   renderStatus();
   renderTabs();
 
