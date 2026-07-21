@@ -221,14 +221,17 @@ tags:
   d           2026-my-entry-slug          (identity — one entry, editable by you)
   title       2026 · Short entry name
   event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail)
-  c           &lt;collection&gt;                (which timeline it belongs to)
+  c           &lt;collection&gt;                (which timeline — a NEW value starts a new one)
 content:
   One factual sentence about what happened.
 
   Source: [label](https://link-to-primary-source)
 </pre>
       <p>Keep the content to verifiable facts with a primary source. The timeline shows
-        who published every card — your entry stands on your signature.</p>
+        who published every card — your entry stands on your signature. There is no
+        registration step for a timeline: this page discovers collections from the cards
+        themselves (any card with an <code>event_date</code> and a <code>c</code> tag),
+        so publishing the first card of a new <code>c</code> value is all it takes.</p>
 
       <h3>3 · Dispute a card</h3>
       <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
@@ -247,15 +250,11 @@ content:
 <script>
 "use strict";
 
-// ═══════════════ config — the ONLY baked-in editorial choice ═══════════════
-// Each entry: the c-tag value of a timeline this site serves, plus a display name.
-// Add a timeline = add a line. No keys, no schemas — cards define themselves.
-const COLLECTIONS = [
-  { c: "bitcoin-arbitrary-data", name: "bitcoin arbitrary data" },
-  { c: "tonopah-310ac-411th-camelback-z260019-cpa260008", name: "tonopah rezoning" },
-  // { c: "propositions",        name: "propositions" },
-  // { c: "community-comment",   name: "community comment" },
-];
+// ═══════════════ config ═══════════════
+// No collection list. Timelines are DISCOVERED: any kind-30818 card carrying a
+// c tag plus a parseable event_date is, by that fact, a timeline entry — a card
+// can't sit on a proportional rail without a date, so validation doubles as
+// discovery. Publish a card with a new c value and a new timeline exists here.
 
 const RELAYS = [
   "wss://relay.damus.io",
@@ -272,13 +271,15 @@ const events   = new Map();     // pubkey:d → newest 30818 (replaceable per au
 const profiles = new Map();     // pubkey → {name, fetched}
 const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
+const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
-let activeC   = COLLECTIONS[0].c;
+let activeC   = null;           // no collection until discovery finds one
 let selected  = null;           // selected event id
 let view      = null;           // {lo,hi} fractional years; null = fit to data
 let renderTimer = null;
 let profileTimer = null;
+let memberTimer = null;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -355,6 +356,33 @@ function authorLink(pk){
 }
 
 // ═══════════════ ingest ═══════════════
+// Discovery sieve: the membership signature is a c tag + a parseable event_date.
+// Cards passing it are kept AND their c value becomes a known timeline; anything
+// else from the open pull (wild wiki articles) is dropped, not stored. Strictness
+// is discovery-only — membership fetches stay lenient via dateOf()'s fallbacks.
+function sieve(ev){
+  if (!ev || ev.kind !== KIND) return;
+  const c = tag(ev,"c");
+  if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(tag(ev,"event_date"))) return;
+  if (!slugs.has(c)){ slugs.add(c); scheduleMemberFetch(); }
+  ingest(ev);
+}
+
+// (re)subscribe membership on every open socket whenever the slug set grows —
+// the exact per-slug query has no discovery-window problem
+function scheduleMemberFetch(){
+  if (memberTimer) return;
+  memberTimer = setTimeout(() => {
+    memberTimer = null;
+    if (!slugs.size) return;
+    sockets.forEach(ws => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(["CLOSE","wtc"]));
+      ws.send(JSON.stringify(["REQ","wtc",{ kinds:[KIND], "#c": [...slugs] }]));
+    });
+  }, 400);
+}
+
 function ingest(ev){
   if (!ev || ev.kind !== KIND) return;
   const d = tag(ev,"d"); if (!d) return;
@@ -429,27 +457,31 @@ function fitView(entries){
 }
 
 // ═══════════════ render: status + tabs ═══════════════
+function slugName(c){ return c.replaceAll("-"," "); }
+
 function renderStatus(){
   const up = [...relayState.values()].filter(v => v === "up").length;
   const dots = RELAYS.map(r =>
     `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${esc(r)}"></span>`
   ).join("");
-  const n = entriesOf(activeC).length;
+  const k = slugs.size;
+  const n = activeC ? entriesOf(activeC).length : 0;
   statusEl.innerHTML =
+    `<span><b>${k}</b> timeline${k===1?"":"s"}</span>` +
     `<span><b>${n}</b> entr${n===1?"y":"ies"}</span>` +
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
 function renderTabs(){
   tabsEl.innerHTML = "";
-  COLLECTIONS.forEach(col => {
-    const n = entriesOf(col.c).length;
+  [...slugs].sort().forEach(c => {
+    const n = entriesOf(c).length;
     const b = document.createElement("button");
-    b.className = "tab" + (col.c === activeC ? " active" : "") + (n ? "" : " empty");
-    b.innerHTML = esc(col.name) + `<span class="n">${n}</span>`;
+    b.className = "tab" + (c === activeC ? " active" : "") + (n ? "" : " empty");
+    b.innerHTML = esc(slugName(c)) + `<span class="n">${n}</span>`;
     b.addEventListener("click", () => {
-      if (activeC === col.c) return;
-      activeC = col.c; selected = null; view = null;
+      if (activeC === c) return;
+      activeC = c; selected = null; view = null;
       render();
     });
     tabsEl.appendChild(b);
@@ -467,17 +499,18 @@ function fmtEdge(v, span){
 function slotOrder(n){ const o=[0]; for(let k=1;o.length<n;k++){ o.push(k); if(o.length<n) o.push(-k); } return o; }
 
 function render(){
+  if (activeC === null && slugs.size) activeC = [...slugs].sort()[0];
   renderStatus();
   renderTabs();
 
-  const entries = entriesOf(activeC);
+  const entries = activeC ? entriesOf(activeC) : [];
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
     const anyUp   = [...relayState.values()].some(v => v === "up");
     areaEl.innerHTML = allDown
       ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
-      : `<div class="msg"><span class="spinner"></span>${anyUp?"no entries in this timeline yet…":"connecting to relays…"}</div>`;
+      : `<div class="msg"><span class="spinner"></span>${anyUp?"listening for timelines…":"connecting to relays…"}</div>`;
     detailEl.innerHTML = "";
     return;
   }
@@ -788,14 +821,19 @@ function connect(url){
   ws.onopen = () => {
     relayState.set(url,"up");
     renderStatus();
-    // one open subscription covering every timeline this site serves — no author filter
-    ws.send(JSON.stringify(["REQ","wtc",{ kinds:[KIND], "#c": COLLECTIONS.map(c => c.c) }]));
+    // open discovery pull — no #c filter, no author filter; the sieve decides.
+    // Kept open so a brand-new timeline appears live. Window-limited (newest
+    // first), which is why known slugs also get the exact membership query.
+    ws.send(JSON.stringify(["REQ","sieve",{ kinds:[KIND], limit:500 }]));
+    if (slugs.size)
+      ws.send(JSON.stringify(["REQ","wtc",{ kinds:[KIND], "#c": [...slugs] }]));
   };
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT"){
-      if (data[1] === "wtc")  ingest(data[2]);
-      if (data[1] === "prof") ingestProfile(data[2]);
+      if (data[1] === "sieve") sieve(data[2]);
+      if (data[1] === "wtc")   ingest(data[2]);
+      if (data[1] === "prof")  ingestProfile(data[2]);
     }
     // EOSE: keep subscriptions open for live edits
   };
