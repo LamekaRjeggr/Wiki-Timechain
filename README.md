@@ -12,12 +12,16 @@ Any dated event with a source link fits naturally on the rail.
 
 Timelines are discovered automatically, not hardcoded — the viewer pulls
 30818 events from relays and groups any that carry a date and a collection
-tag into tabs. Add a new card to a new collection and it just shows up —
-no fixed list, no publish-side registration.
+tag. Pick one from the dropdown and it shows up. Add a new card to a new
+collection and it appears there too — no fixed list, no publish-side
+registration.
 
 ## Navigating
 
-Pan by dragging, zoom with the wheel or pinch, click a node to open its card.
+Choose a timeline from the collection dropdown. Pan by dragging, zoom with
+the wheel or pinch, click a node to open its card. **⧉ Copy link** copies a
+shareable URL to whatever timeline you're viewing — opening it drops the
+recipient straight onto that collection.
 
 ## The convention
 
