@@ -33,15 +33,16 @@
   .mono{font-family:var(--mono)}
 
   header{
-    padding:30px 20px 0;border-bottom:1px solid var(--border);
-    background:radial-gradient(120% 100% at top left,rgba(255,176,46,.08),transparent 46%);
+    padding:24px 20px 0;border-bottom:1px solid var(--border);text-align:center;
+    background:radial-gradient(120% 130% at 50% -20%,rgba(255,176,46,.07),transparent 55%);
   }
   .wrap{max-width:1000px;margin:0 auto}
-  h1{margin:0;font-size:23px;font-weight:650;letter-spacing:-.01em}
+  h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
   h1 .dot{color:var(--rail);font-weight:400;margin:0 2px}
-  .sub{margin-top:8px;color:var(--dim);font-size:13.5px;line-height:1.55;max-width:60ch}
-  .status{margin-top:14px;font-size:12.5px;color:var(--dim);
-    display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .sub{margin:8px auto 0;color:var(--dim);font-size:13px;line-height:1.55;max-width:52ch}
+  .status{margin-top:12px;font-size:12px;color:var(--dim);
+    display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:center}
+  .status > span + span{border-left:1px solid var(--border);padding-left:16px}
   .status b{color:var(--text);font-weight:600}
   .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
     background:var(--faint);margin-right:5px;vertical-align:1px}
@@ -49,8 +50,8 @@
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
   /* collection tabs */
-  .tabs{margin-top:18px;display:flex;gap:6px;flex-wrap:wrap;padding-bottom:0;
-    transform:translateY(1px)}
+  .tabs{margin-top:16px;display:flex;gap:6px;flex-wrap:wrap;padding-bottom:0;
+    transform:translateY(1px);justify-content:center}
   .tab{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px 7px 0 0;padding:8px 14px;font-size:12.5px;cursor:pointer;
     font-weight:500;transition:color .12s,border-color .12s,background .12s}
