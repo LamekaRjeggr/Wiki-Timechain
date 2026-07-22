@@ -237,6 +237,10 @@
     color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:#9aa0ab}
+  /* footer parity with the desktop detail card: exact date · author → njump · d · kind */
+  .mtl .cfoot{margin-top:11px;padding-top:10px;gap:11px 14px;font-size:11px}
+  .mtl .contest .cfoot{margin-left:6px}
+  .mtl .cfoot .fdate{color:var(--rail)}
 </style>
 </head>
 <body>
@@ -951,17 +955,24 @@ function renderMobile(entries){
         e.evs.map((ev, vi) =>
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLabel(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
+          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
           `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` +
           `<div class="cbody">${renderContent(ev.content || "")}</div></div>`
         ).join("") +
+        `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
+        `<span><span class="k">kind</span> 30818</span></div>` +
         `</div></div>`;
     } else {
       const ev = e.evs[0];
       html += `<div class="node">${dateCol}<span class="dot${future?" future":""}"></span>` +
         `<div class="card"><h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        `<div class="cbody">${renderContent(ev.content || "")}</div></div></div>`;
+        `<div class="cbody">${renderContent(ev.content || "")}</div>` +
+        `<div class="cfoot"><span class="fdate">${esc(dateOf(ev))}</span>` +
+        `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
+        `<span><span class="k">d</span> ${esc(e.d)}</span>` +
+        `<span><span class="k">kind</span> 30818</span></div>` +
+        `</div></div>`;
     }
   });
 
