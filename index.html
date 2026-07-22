@@ -188,8 +188,10 @@
      editorial serif here (Georgia fallback — zero-CDN); desktop stays sans. */
   .mtl{font-family:Georgia,"Times New Roman",serif;padding:6px 2px 4px}
   .mtl .track{position:relative;padding:6px 6px 6px 0}
-  .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border)}
-  .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px}
+  .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border);transform:none}
+  /* reset every prop the desktop rail's .node dot leaks in (width/height/radius/bg/transform/shadow) */
+  .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px;
+    width:auto;height:auto;border-radius:0;background:none;transform:none;box-shadow:none;cursor:default}
   .mtl .date{padding-top:15px;text-align:right;padding-right:16px}
   .mtl .date .y{font-family:var(--mono);font-size:13px;color:var(--text)}
   .mtl .date .m{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
