@@ -181,6 +181,60 @@
     .nlabel.selected-label,.stem.selected{display:block}  /* keep the selected one + its stem */
     h1{font-size:17px}
   }
+
+  /* ── mobile vertical spine-column (≤640px) ──
+     the rail's two jobs split apart: TIME → vertical scroll, DISTANCE → gap height.
+     content lives ON the rail (no detail pane), so there's nothing to tap-to-reveal.
+     editorial serif here (Georgia fallback — zero-CDN); desktop stays sans. */
+  .mtl{font-family:Georgia,"Times New Roman",serif;padding:6px 2px 4px}
+  .mtl .track{position:relative;padding:6px 6px 6px 0}
+  .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border)}
+  .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px}
+  .mtl .date{padding-top:15px;text-align:right;padding-right:16px}
+  .mtl .date .y{font-family:var(--mono);font-size:13px;color:var(--text)}
+  .mtl .date .m{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
+  .mtl .dot{position:absolute;left:59px;top:19px;width:12px;height:12px;border-radius:50%;
+    background:var(--bg);border:2px solid var(--accent);z-index:2}
+  .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
+  .mtl .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:13px 15px;margin:8px 0}
+  .mtl .card h4{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--text)}
+  .mtl .cbody{margin-top:7px;font-size:14px;line-height:1.55;color:#c6c8ce}
+  .mtl .cbody p{margin:0 0 8px}
+  .mtl .cbody p:last-child{margin-bottom:0}
+  .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--rail);vertical-align:1px;font-weight:400}
+  /* gaps: proportional spacer, or a collapsed marker for long silences */
+  .mtl .gap{width:100%}
+  .mtl .gap-c{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px;
+    align-items:center;cursor:pointer}
+  .mtl .gap-c.nowrow{cursor:default}
+  .mtl .gap-c .dashline{position:absolute;left:64px;top:0;bottom:0;width:2px;
+    background:repeating-linear-gradient(var(--faint) 0 4px,transparent 4px 9px)}
+  .mtl .gap-c .gdot{position:absolute;left:60px;top:calc(50% - 5px);width:10px;height:10px;
+    border-radius:50%;background:var(--bg);border:2px solid var(--faint);z-index:2}
+  .mtl .gap-c .lab{grid-column:2;padding:11px 0;color:var(--dim);
+    font-family:var(--mono);font-size:12px}
+  .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
+  /* contested: diamond node + amber brace + badge — shape+label carry it, never hue alone */
+  .mtl .cdot{position:absolute;left:59px;top:19px;width:12px;height:12px;background:var(--bg);
+    border:2px solid var(--rail);transform:rotate(45deg);z-index:2}
+  .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
+  .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
+    border:2px solid var(--rail);border-right:none;border-radius:6px 0 0 6px}
+  .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,176,46,.12);
+    border:1px solid var(--rail-dim);color:var(--rail);border-radius:20px;padding:4px 11px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
+  .mtl .vcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;margin-top:8px}
+  .mtl .vcard:first-of-type{margin-top:0}
+  .mtl .byline{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+    font-size:10.5px;color:var(--dim);margin-bottom:7px}
+  .mtl .vtag{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;
+    border-radius:5px;background:var(--panel-2);border:1px solid var(--border);
+    color:var(--text);font-size:10px;flex:none}
+  .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
+  .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:#9aa0ab}
 </style>
 </head>
 <body>
@@ -292,6 +346,8 @@ let view      = null;           // {lo,hi} fractional years; null = fit to data
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
+const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height (mobile)
+const isMobile = () => window.innerWidth <= 640;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -559,6 +615,9 @@ function render(){
     return;
   }
 
+  // phones get the vertical spine-column (time↓, distance=gap); the rail is desktop-only
+  if (isMobile()){ renderMobile(entries); return; }
+
   const v = view || fitView(entries);
   const lo = v.lo, hi = v.hi, span = hi - lo;
   const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
@@ -815,6 +874,100 @@ function bindPanZoom(entries){
   area.addEventListener("pointercancel", up);
 }
 
+// ═══════════════ render: mobile vertical spine-column ═══════════════
+// Time is the scroll axis; proportional distance rotates into the whitespace BETWEEN
+// cards. Cards sit on the rail, so there is no tap-to-reveal (and no drag/tap race — the
+// bug that started this). Long silences collapse to a labeled marker, expandable in place.
+function median(arr){
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a,b) => a-b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+}
+function humanSpan(g){
+  if (g >= 1.4) return Math.round(g) + " years";
+  const mo = g*12;
+  if (mo >= 1.4) return Math.round(mo) + " months";
+  return Math.max(1, Math.round(g*365)) + " days";
+}
+
+let gapBound = false;
+function bindMobileGaps(){
+  if (gapBound) return;
+  gapBound = true;
+  areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
+    const g = e.target.closest(".gap-c"); if (!g || !g.dataset.k) return;
+    const k = g.dataset.k;
+    expandedGaps.has(k) ? expandedGaps.delete(k) : expandedGaps.add(k);
+    render();
+  });
+}
+
+function renderMobile(entries){
+  detailEl.innerHTML = "";                                // content lives on the rail now
+  const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
+
+  // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
+  const gaps = entries.slice(1).map((e,i) => e.frac - entries[i].frac);
+  const med = median(gaps.filter(g => g > 1e-4)) || 0.5;
+  const UNIT = 42, FLOOR = 14, COLLAPSE_H = 240;           // px per median gap · min · collapse threshold
+  const pxOf = g => (g/med) * UNIT;
+
+  let nowShown = false;
+  let html = `<div class="mtl"><div class="track"><div class="spine"></div>`;
+
+  entries.forEach((e, i) => {
+    if (i > 0){                                            // the gap that precedes this entry
+      const g = e.frac - entries[i-1].frac, h = pxOf(g);
+      const k = entries[i-1].d + "→" + e.d;
+      if (h > COLLAPSE_H){                                 // long silence → collapsible marker
+        const exp = expandedGaps.has(k);
+        html += `<div class="gap-c" data-k="${esc(k)}"><div class="dashline"></div>` +
+                `<span class="gdot"></span><div class="lab">⋯ ${esc(humanSpan(g))}` +
+                `<span class="go">${exp ? "collapse ↑" : "expand ↓"}</span></div></div>`;
+        if (exp) html += `<div class="gap" style="height:${Math.round(h)}px"></div>`;
+      } else {
+        html += `<div class="gap" style="height:${Math.round(Math.max(FLOOR, h))}px"></div>`;
+      }
+    }
+    if (!nowShown && e.frac > nowFrac){                    // structural past/future divider
+      html += `<div class="gap-c nowrow"><div class="dashline" style="background:` +
+              `repeating-linear-gradient(var(--rail) 0 5px,transparent 5px 10px);opacity:.6"></div>` +
+              `<div class="lab" style="color:var(--rail)">— now —</div></div>`;
+      nowShown = true;
+    }
+
+    const future = e.frac > nowFrac;
+    const yr = String(e.date).slice(0,4);
+    const moIdx = Math.max(0, Math.min(11, (parseInt(String(e.date).slice(5,7),10) || 1) - 1));
+    const dateCol = `<div class="date"><div class="y">${esc(yr)}</div>` +
+                    `<div class="m">${MONTHS[moIdx].toUpperCase()}</div></div>`;
+
+    if (e.contested){
+      html += `<div class="node">${dateCol}<span class="cdot"></span>` +
+        `<div class="contest"><div class="cbrace"></div>` +
+        `<div class="cbadge">◆ contested · ${e.evs.length} versions</div>` +
+        e.evs.map((ev, vi) =>
+          `<div class="vcard"><div class="byline">` +
+          `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
+          `${authorLabel(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
+          `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` +
+          `<div class="cbody">${renderContent(ev.content || "")}</div></div>`
+        ).join("") +
+        `</div></div>`;
+    } else {
+      const ev = e.evs[0];
+      html += `<div class="node">${dateCol}<span class="dot${future?" future":""}"></span>` +
+        `<div class="card"><h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
+        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
+        `<div class="cbody">${renderContent(ev.content || "")}</div></div></div>`;
+    }
+  });
+
+  html += `</div></div>`;
+  areaEl.innerHTML = html;
+  bindMobileGaps();
+}
+
 // ═══════════════ render: detail card ═══════════════
 function renderDetail(entries){
   if (!selected){
@@ -884,6 +1037,13 @@ function connect(url){
   ws.onerror = () => { relayState.set(url,"down"); renderStatus(); };
   ws.onclose = () => { if (relayState.get(url) !== "up") relayState.set(url,"down"); renderStatus(); };
 }
+
+// switch renderers when the viewport crosses the mobile boundary (rotate / resize)
+let wasMobile = isMobile();
+window.addEventListener("resize", () => {
+  const m = isMobile();
+  if (m !== wasMobile){ wasMobile = m; render(); }
+});
 
 // ═══════════════ go ═══════════════
 render();
