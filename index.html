@@ -107,11 +107,15 @@
   .stem.future{border-left-color:var(--future);opacity:.55}
   .stem.selected{border-left-color:var(--accent);opacity:.9}
 
-  /* the present moment on the rail — structural past/future divider, text-labelled */
+  /* the present moment on the rail — bold amber threshold; the future span past it is
+     washed cyan (reinforces the hollow cyan future nodes — a zone, not just dots) */
+  .nowzone{position:absolute;top:0;bottom:0;right:0;background:rgba(47,214,230,.06);
+    pointer-events:none;z-index:0}
   .nowline{position:absolute;top:0;bottom:0;width:0;
-    border-left:1px dashed var(--rail);opacity:.65}
-  .nowlabel{position:absolute;top:3px;transform:translateX(-50%);font-size:9.5px;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--rail);pointer-events:none}
+    border-left:2px solid var(--rail);opacity:.85;z-index:1}
+  .nowlabel{position:absolute;top:2px;transform:translateX(-50%);font-size:9px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--rail);pointer-events:none;
+    background:var(--panel);border:1px solid var(--rail-dim);border-radius:10px;padding:2px 7px}
 
   .nlabel{position:absolute;transform:translateX(-50%);font-size:10.5px;color:var(--dim);
     white-space:nowrap;pointer-events:none;max-width:150px;overflow:hidden;
@@ -210,7 +214,16 @@
   .mtl .gap{width:100%}
   .mtl .gap-c{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px;
     align-items:center;cursor:pointer}
-  .mtl .gap-c.nowrow{cursor:default}
+  /* present threshold: full-width amber rule; the chip bridges the spine (half over the
+     date column, half over the cards) — same crosshair the desktop now-line uses */
+  .mtl .nowdiv{position:relative;height:0;margin:16px 0 34px;border-top:2px solid var(--rail)}
+  .mtl .nowchip{position:absolute;left:65px;top:0;transform:translate(-50%,-50%);
+    white-space:nowrap;background:var(--bg);border:1px solid var(--rail-dim);color:var(--rail);
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:4px 12px;border-radius:20px}
+  /* now-section: cards wear an amber border matching the now marker — no fill wash */
+  .mtl .futurezone .card,
+  .mtl .futurezone .vcard{border-color:var(--rail)}
   .mtl .gap-c .dashline{position:absolute;left:64px;top:0;bottom:0;width:2px;
     background:repeating-linear-gradient(var(--faint) 0 4px,transparent 4px 9px)}
   .mtl .gap-c .gdot{position:absolute;left:60px;top:calc(50% - 5px);width:10px;height:10px;
@@ -667,13 +680,19 @@ function render(){
     }
   }
 
-  // "now" divider: everything to its right is scheduled, not yet happened
+  // "now" divider + future wash: everything past it is scheduled, not yet happened.
+  // The zone is tinted cyan (reinforcing the hollow cyan future nodes) and the line is
+  // a bold amber threshold — amber present meets cyan future, two distinguishable hues.
   const nx = (nowFrac - lo) / span;
-  if (nx >= 0 && nx <= 1){
-    const nl = document.createElement("div"); nl.className = "nowline";
-    nl.style.left = (nx*100)+"%"; band.appendChild(nl);
-    const nlab = document.createElement("div"); nlab.className = "nowlabel";
-    nlab.style.left = (nx*100)+"%"; nlab.textContent = "now"; band.appendChild(nlab);
+  if (nx <= 1){
+    const nz = document.createElement("div"); nz.className = "nowzone";
+    nz.style.left = (Math.max(0, nx)*100)+"%"; band.appendChild(nz);      // wash the future span
+    if (nx >= 0){                                                          // now is on-screen → draw the line
+      const nl = document.createElement("div"); nl.className = "nowline";
+      nl.style.left = (nx*100)+"%"; band.appendChild(nl);
+      const nlab = document.createElement("div"); nlab.className = "nowlabel";
+      nlab.style.left = (nx*100)+"%"; nlab.textContent = "now"; band.appendChild(nlab);
+    }
   }
 
   // place entries; contested d-tags get a spine column of version nodes
@@ -935,10 +954,10 @@ function renderMobile(entries){
         html += `<div class="gap" style="height:${Math.round(Math.max(FLOOR, h))}px"></div>`;
       }
     }
-    if (!nowShown && e.frac > nowFrac){                    // structural past/future divider
-      html += `<div class="gap-c nowrow"><div class="dashline" style="background:` +
-              `repeating-linear-gradient(var(--rail) 0 5px,transparent 5px 10px);opacity:.6"></div>` +
-              `<div class="lab" style="color:var(--rail)">— now —</div></div>`;
+    if (!nowShown && e.frac > nowFrac){                    // bold present threshold, then tint the future
+      const today = new Date().toISOString().slice(0,10);
+      html += `<div class="nowdiv"><span class="nowchip">now · ${esc(today)}</span></div>` +
+              `<div class="futurezone">`;
       nowShown = true;
     }
 
@@ -976,6 +995,7 @@ function renderMobile(entries){
     }
   });
 
+  if (nowShown) html += `</div>`;                          // close .futurezone
   html += `</div></div>`;
   areaEl.innerHTML = html;
   bindMobileGaps();
