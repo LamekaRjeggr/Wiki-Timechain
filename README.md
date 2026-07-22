@@ -1,7 +1,7 @@
 # Wiki-Timechain
 
-A live viewer for nostr kind-30818 wiki cards, rendered on a proportional
-timeline. Reads straight from relays — no server, no login, no build step.
+A live viewer of timeline events (nostr kind-30818 wiki cards). 
+Reads straight from relays — no server, no login, no build step.
 Any dated event with a source link fits naturally on the rail.
 
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/
