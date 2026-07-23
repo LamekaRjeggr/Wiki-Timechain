@@ -159,7 +159,8 @@ Accepted, not solved.
 
 **6. Publish-side dependency.** Nothing changes until the manifests exist, and they
 are published from the Forge side (bunker-signed), not from this repo — the viewer
-stays read-only per CLAUDE.md. Backfill is exactly two events:
+never writes cards or manifests per CLAUDE.md (its only writes are the visitor's
+own reactions and comments). Backfill is exactly two events:
 `d=bitcoin-arbitrary-data` (`type=history`) and `d=tonopah-rezoning` (`type=land`).
 No card is republished. **Softened by layer zero:** discovery now works before any
 manifest exists — the manifests upgrade titles and types rather than gate the
