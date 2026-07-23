@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ────────────────────────────────────────────────────────────────────────────
-// Convention v2 migration tool — the durable "how" for MIGRATION-v2.md §2.
+// Convention v2 migration tool — the durable "how" behind CONVENTION.md.
 // Self-contained (node built-ins only; needs global WebSocket → node 22+).
 // Always reads LIVE from relays, never a snapshot, so it can't go stale.
 //
@@ -21,7 +21,7 @@ const RELAYS = ["wss://relay.damus.io","wss://nos.lol","wss://relay.primal.net",
                 "wss://relay.mostr.pub","wss://relay.nostr.band","wss://nostr.wine"];
 const KIND = 30818, MARKER = "wikitimechain";
 
-// Per-collection location policy (MIGRATION-v2.md §2). Location is CATALOG data:
+// Per-collection location policy (CONVENTION.md, jurisdiction ladder). Location is CATALOG data:
 // only add rungs that are TRUE for the card. Placeless collections get none.
 const LOCATION = {
   "bitcoin-arbitrary-data": null,                                   // placeless

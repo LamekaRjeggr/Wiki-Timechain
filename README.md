@@ -55,40 +55,19 @@ own key.
 
 ## The convention
 
-A timeline entry is a single **kind-30818** wiki event ([NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md))
-carrying four tags. The viewer discovers any card that has both an
-`event_date` and a `c` tag — nothing else is required:
+A timeline entry is a single **kind-30818** wiki event
+([NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)) that labels
+itself as belonging here ([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)):
+the `wikitimechain` marker, a `wikitimechain.collection` label, and an
+`event_date`. A collection *is* its slug — publish the first card carrying a new
+one and that timeline exists, with no registration step.
 
-```
-kind: 30818
-tags:
-  d           2026-my-entry-slug     identity — one entry, editable by you
-  title       2026 · Short name       heading shown on the node
-  event_date  2026-07-20              YYYY-MM-DD — where it sits on the rail
-  c           my-collection           which timeline; a new value starts one
-content:
-  One factual sentence about what happened.
+Same `d` from the **same** author edits the card; same `d` from a **different**
+author renders beside it — a dispute, never an overwrite.
 
-  Source: [label](https://primary-source)
-```
-
-- **`c`** (collection) — a kebab-case slug shared by every card in one
-  timeline. Publishing the first card of a new `c` value creates that
-  timeline; there is no registration step.
-- **`event_date`** (`YYYY-MM-DD`) — the historical date, which fixes the
-  card's position on the rail. A card with no parseable `event_date` is
-  never discovered.
-- **`d`** — the entry's identity. Editing means re-publishing with the same
-  `d` tag; the newest version from a given author replaces the older
-  ([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)
-  addressable events).
-- **content** — one sourced fact in [djot](https://djot.net): a sentence, a
-  blank line, then `Source: [label](url)`. Bare URLs don't autolink — use
-  the `[label](url)` form.
-
-Same `d`, **different** authors → both versions render side by side (a
-dispute, not an overwrite). Same `d`, **same** author → newest replaces
-oldest.
+**The tag scheme lives in one place: [CONVENTION.md](CONVENTION.md).** Don't copy
+it into other docs — copies go stale, and a stale copy tells a contributor to
+publish a card the viewer can't see.
 
 ## Deploy
 

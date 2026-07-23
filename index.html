@@ -426,13 +426,13 @@ function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t
 
 // NIP-32 self-label read: value of the `l` tag whose namespace (3rd element) matches.
 // Relays index `l` by VALUE only — the namespace is not filterable — so this pairing
-// check is client-side and is the truth the membership gate leans on (MIGRATION-v2 §1.2).
+// check is client-side and is the truth the membership gate leans on (CONVENTION.md, "the #l value-only caveat").
 function labelVal(ev, ns){
   const t = ev.tags.find(t => t[0] === "l" && t[2] === ns);
   return t ? t[1] : "";
 }
 // a card's collection slug is its wikitimechain.collection label. The legacy `c`
-// fallback is a post-legacy-drop grace window (MIGRATION-v2 §5) — every live card
+// fallback is a post-legacy-drop grace window — every live card
 // is pure v2, but the fallback costs nothing. One place decides membership.
 function collectionSlug(ev){
   return labelVal(ev, "wikitimechain.collection") || tag(ev,"c");
@@ -511,7 +511,7 @@ function authorLink(pk){
 // Cards passing it are kept AND their slug becomes a known timeline; anything else
 // from the open pull (wild wiki articles) is dropped, not stored. Strictness is
 // discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
-// gate stays client-side because relays index `l` by value only (MIGRATION-v2 §1.2).
+// gate stays client-side because relays index `l` by value only (CONVENTION.md, "the #l value-only caveat").
 function sieve(ev){
   if (!ev || ev.kind !== KIND) return;
   const c = collectionSlug(ev);
@@ -546,7 +546,7 @@ function ingest(ev){
   if (cur){
     if (cur.created_at > ev.created_at) return;
     // same created_at during a propagation gap (relay A has v2, relay B still v1):
-    // prefer the version carrying a v2 collection label (MIGRATION-v2 §1.4).
+    // prefer the version carrying a v2 collection label (CONVENTION.md, dedup rule).
     if (cur.created_at === ev.created_at &&
         !(labelVal(ev,"wikitimechain.collection") && !labelVal(cur,"wikitimechain.collection"))) return;
   }
@@ -1248,7 +1248,7 @@ function connect(url){
   ws.onopen = () => {
     relayState.set(url,"up");
     renderStatus();
-    // discovery pull (convention v2, post-legacy-drop MIGRATION-v2 §5): one narrow
+    // discovery pull (convention v2, post-legacy-drop): one narrow
     // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.

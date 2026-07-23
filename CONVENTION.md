@@ -1,8 +1,8 @@
 # Collection & discovery convention — v2
 
-**LIVE since 2026-07-23.** The migration in `MIGRATION-v2.md` shipped end to end:
+**LIVE since 2026-07-23.** The migration off v1 shipped end to end:
 all 31 cards across 3 collections are pure v2, and the viewer runs the `#t`-only
-discovery path (legacy-drop, §5).
+discovery path — the `c` tag and the broad sieve are gone from the client.
 
 v2 moves discovery off the shared `c` tag and the un-indexed `event_date` sieve onto
 a NIP-32 self-label scheme under one global marker, and adds jurisdiction, date-bucket,
@@ -165,7 +165,7 @@ collection); no UI should assume server-side multi-axis AND.
 
 - **Dual-read.** The viewer accepts both v2 cards (collection label) and legacy v1
   cards (`c` tag + `event_date`), merging into one slug set. Legacy support is dropped
-  only after every card is confirmed migrated (see `MIGRATION-v2.md` §5).
+  only after every card is confirmed migrated.
 - **Dedup by `pubkey:d`,** newest `created_at` wins; on a same-second tie, the card
   carrying a collection label (v2) wins. Different pubkeys with the same `d` **coexist**
   — that is the dispute mechanism, unchanged from v1.
