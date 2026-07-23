@@ -28,30 +28,15 @@ straight onto that collection.
 
 ## Reactions and comments
 
-Each card carries a small margin line under it:
+Cards carry reactions ([NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
+kind-7) and comments ([NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)
+kind-1111), read live from the same relays and written from the page — signed
+by a browser extension if you have one, otherwise by a keypair the page mints
+for you on the spot. It never asks for an existing secret key.
 
-- **The `+` pill** — a [NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
-  kind-7 reaction on that card. The count rides inside the pill; tap it to
-  add yours (filled when yours is in it). If you have a signer extension
-  ([NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)) it
-  signs; if you have nothing, the page mints a fresh keypair right in your
-  browser and the tap becomes that key's first signed event — a working
-  nostr identity born from one click, shown to you afterwards (npub + nsec)
-  to save and reuse in any client. The page tells you honestly how many
-  relays accepted the event. It never asks for an existing secret key.
-- **`◦ N comments`** — [NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)
-  kind-1111 comments scoped to one author's version of the card, read live
-  from the same relays. Charged comments sort first, and each comment has
-  its own small reaction pill.
-- **Writing a comment** — the reply box sits at the bottom of the thread,
-  ghosted until you've reacted to the card: read → react → comment, each
-  rung costing a little more. Your reaction glyph rides beside your name on
-  the comment, so a `+`-gated note reads as support in context. Same signer,
-  same honest relay tally.
-
-Cards themselves are read-only forever: the only things this page ever
-writes are the reactions and comments you tap out yourself, signed by your
-own key.
+Cards themselves are read-only forever: reactions and comments are the only
+things this page ever writes. Try it on the live site; the behavior is the
+documentation.
 
 ## The convention
 
