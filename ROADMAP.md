@@ -1,0 +1,94 @@
+# Roadmap — comments & reactions
+
+One roadmap, merged 2026-07-22 from the comments phase plan and the reactions
+checkpoint plan. Each checkpoint ships alone, is useful alone, and is a freeze
+line: later checkpoints don't rewrite earlier ones.
+
+## Where things stand
+
+- Viewer is live; the **vertical spine is the only view** (horizontal rail
+  excised 2026-07-22).
+- **Comments read side is shipped and proven end-to-end**: NIP-22 kind-1111,
+  scoped to one author's signed version (`A` = `30818:pubkey:d`), collapsed
+  `◦ N comments` toggle under the card, expand in place. A real comment is
+  live on the relays and renders on the public page.
+
+## The shape (decided)
+
+**The ladder: read → react → comment.** Each rung costs more. To comment on a
+card you must have reacted to it first — extension users included (NIP-07 is a
+shortcut past the *mint*, not past the ladder).
+
+**The tap mints the key.** On first reaction: `window.nostr` (NIP-07) if
+present, else mint a keypair client-side. One flow. A newborn key's first
+signed event is one character, not a composed paragraph — the `+` is the key's
+proof-of-life; by comment time the pipe is proven.
+
+**Reward first, ceremony after.** The tap succeeds immediately — glyph lights
+up, event publishes. *Then* the birth-certificate popup: "That was your first
+nostr event. This key signed it — save it somewhere safe; it works in any
+nostr client." nsec + npub, copy button. Never a toll booth, never a
+paste-your-nsec field, no hard save-gate — just an escalating "N events ride
+on this unsaved key" counter and an always-available key chip.
+
+**One signer seam.** All write code asks `getSigner() → { pubkey, sign(event) }`.
+NIP-07 and the minted localStorage key are two implementations behind the same
+interface. Minted nsec lives in localStorage — a starter identity designed to
+graduate out to real clients.
+
+**Honest OK tally.** Relays answer each publish with an OK frame; we count and
+say the truth ("accepted by 4 of 6 relays"). This doubles as instrumentation:
+fresh zero-history keys' accept rates are the data that decide whether
+proof-of-work is ever needed. PoW stays parked until that data says otherwise.
+
+**Glyphs mean what readers think they mean.** No UI copy defines `+`/`=`/`−`.
+Shape-pure ASCII — colorblind-safe by construction; `+`/`-` are NIP-25
+standard so foreign clients interop. Ship `+` alone first.
+
+**Reactions attach to cards AND comments** (resolved at merge — the unlock
+ladder needs a target on zero-comment cards). Card reactions tag both `a`
+(the `30818:pubkey:d` coord — survives the author editing the card) and `e`
+(the exact signed version), read back by `#a`, mirroring how comments scope.
+Comment reactions are plain `#e` — 1111s are never replaced. Reacting to a
+card doesn't modify it; cards stay read-only as documents.
+
+## Checkpoints
+
+**2a — reaction read.** One more grow-only sub beside `"cmt"`: kind-7s by
+`#a` (card coords) + `#e` (comment ids). Counts on cards and comments;
+lift-sort so charged comments surface first. No writes. Ships alone, useful
+alone.
+
+**2b — the tap.** `+` glyph on each card. The viewer's first write ever:
+`getSigner()` (NIP-07-or-mint), publish kind-7 over the already-open relay
+sockets, honest OK tally, then the birth-certificate popup. Unsaved-key
+counter starts here, counting every event signed by the unsaved key. The
+README/manifesto "this page only reads" sentence gets its honest amendment
+here. Keep write code tiny and separate from render code.
+
+**2c — the unlock.** Compose box opens only for identities that have reacted
+to that card. Same NIP-22 tag shape as the proven test comment, same signer,
+same OK tally. The commenter's gate-glyph rides along as context — a `−`-gated
+comment reads as dispute, a `+`-gated one as support, with zero comment-type
+machinery.
+
+## Held loosely (decide when there's real charge to learn from)
+
+- Vocabulary growth: when (if ever) `=` and `−` join `+`.
+- Whether net-negative comments drop behind a second click ("1 below
+  threshold — show anyway"). Nothing is ever deleted — just higher resistance.
+- Preview: top-charged comment as a one-liner beside the collapsed
+  `◦ N comments` count?
+- Exact popup copy and how hard to push key-saving.
+- NIP-46 bunker connect for mobile key-holders (parked, v2).
+
+## Constraints inherited (don't relitigate)
+
+- Single self-contained `index.html`, zero deps. The schnorr signer for
+  minting (~15 KB inlined) will be the only library ever added.
+- Colorblind-safe: meaning by shape/label/lightness, never hue alone.
+- **Cards stay read-only forever.** Only reactions and comments ever write.
+- No pubkeys in the repo.
+- Kind-7 tags per NIP-25: lowercase `e`/`p`/`k` (+ `a` for cards); check a
+  real Damus like before adding NIP-22-style uppercase scope tags.
+- Single writer on `index.html`: `git fetch` + diff before editing.
