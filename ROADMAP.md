@@ -12,9 +12,10 @@ line: later checkpoints don't rewrite earlier ones.
   scoped to one author's signed version (`A` = `30818:pubkey:d`), collapsed
   `◦ N comments` toggle under the card, expand in place. A real comment is
   live on the relays and renders on the public page.
-- **Reactions are shipped through 2b**: the read side (2a) and the tap (2b)
-  are both live. A real kind-7 `+` on the Taproot card renders from the
-  relays. Next rung: 2c, the comment compose unlock.
+- **The whole ladder is shipped**: reaction read (2a), the tap (2b), and the
+  comment compose unlock (2c) are all live. Real kind-7 `+`s on the Taproot
+  card render from the relays. The roadmap's checkpoints are complete; what
+  remains lives under "Held loosely".
 
 ## The shape (decided)
 
@@ -73,11 +74,17 @@ key; "I saved it" quiets it. The manifesto sentence got its honest
 amendment. Write code lives in its own section, apart from render code.
 Cards only — comment tap targets arrive with the ladder in 2c.
 
-**2c — the unlock.** Compose box opens only for identities that have reacted
-to that card. Same NIP-22 tag shape as the proven test comment, same signer,
-same OK tally. The commenter's gate-glyph rides along as context — a `−`-gated
-comment reads as dispute, a `+`-gated one as support, with zero comment-type
-machinery.
+**2c — the unlock. SHIPPED 2026-07-23.** The compose box rides at the bottom
+of each card's comment thread, ghosted (visible but inert) until this identity
+has reacted to the card — the ladder shown by behavior, not copy. Same NIP-22
+tag shape as the proven test comment, same signer, same OK tally beside the
+send button. The commenter's gate-glyph rides before their name as context —
+a `−`-gated comment reads as dispute, a `+`-gated one as support, with zero
+comment-type machinery. Ships with two agreed amendments: the 2b tap button
+and the glyph tally fused into ONE pill (count inside, filled when yours is
+in it — the lone `+` didn't read as a reaction), and comments got their own
+small pills (plain `#e` reactions, the targets the ladder needed). Drafts
+survive live re-renders; the caret is restored mid-typing.
 
 ## Held loosely (decide when there's real charge to learn from)
 

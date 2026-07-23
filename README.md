@@ -30,8 +30,9 @@ straight onto that collection.
 
 Each card carries a small margin line under it:
 
-- **`+` (the tap)** — a [NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
-  kind-7 reaction on that card. If you have a signer extension
+- **The `+` pill** — a [NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
+  kind-7 reaction on that card. The count rides inside the pill; tap it to
+  add yours (filled when yours is in it). If you have a signer extension
   ([NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)) it
   signs; if you have nothing, the page mints a fresh keypair right in your
   browser and the tap becomes that key's first signed event — a working
@@ -40,7 +41,13 @@ Each card carries a small margin line under it:
   relays accepted the event. It never asks for an existing secret key.
 - **`◦ N comments`** — [NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)
   kind-1111 comments scoped to one author's version of the card, read live
-  from the same relays. Charged comments sort first.
+  from the same relays. Charged comments sort first, and each comment has
+  its own small reaction pill.
+- **Writing a comment** — the reply box sits at the bottom of the thread,
+  ghosted until you've reacted to the card: read → react → comment, each
+  rung costing a little more. Your reaction glyph rides beside your name on
+  the comment, so a `+`-gated note reads as support in context. Same signer,
+  same honest relay tally.
 
 Cards themselves are read-only forever: the only things this page ever
 writes are the reactions and comments you tap out yourself, signed by your

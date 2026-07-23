@@ -189,18 +189,35 @@
   .mtl .mcmt-t .sep{color:var(--faint);margin-right:6px}
   .mtl .mcmt-rct{margin-left:8px;font-size:10.5px}
 
-  /* ── write side (checkpoint 2b): the tap ── */
-  /* the + button: pressed state = FILLED amber + title text, never hue alone */
+  /* ── write side (checkpoints 2b + 2c): the tap & the margin note ── */
+  /* the +-pill IS the tally: count rides inside; pressed = FILLED amber + title
+     text, never hue alone. .sm = the per-comment pill */
   .mtl .tapbtn{font-family:var(--mono);font-size:13px;line-height:1;cursor:pointer;
-    width:26px;height:22px;border-radius:6px;background:var(--panel-2);
-    border:1px solid var(--border);color:var(--dim);padding:0;margin-right:6px;
+    min-width:26px;height:22px;border-radius:6px;background:var(--panel-2);
+    border:1px solid var(--border);color:var(--dim);padding:0 7px;margin-right:6px;
     transition:color .12s,border-color .12s}
+  .mtl .tapbtn.sm{min-width:22px;height:18px;font-size:11px;padding:0 6px;margin-right:0}
   .mtl .tapbtn:hover{color:var(--rail);border-color:var(--rail-dim)}
   .mtl .tapbtn:disabled{opacity:.5;cursor:default}
   .mtl .tapbtn.mine{background:var(--rail);border-color:var(--rail);color:#181203;
     font-weight:700}
   .oktally{color:var(--dim);font-size:10.5px;margin-left:2px}
   .oktally.err{color:#ffb27a}          /* orange + text, never red */
+  /* the gate-glyph: what a commenter tapped on the card, riding before their name */
+  .mtl .gateg{font-family:var(--mono);color:var(--rail);margin-right:7px}
+  /* compose (checkpoint 2c): ghosted until this identity has reacted to the card —
+     the read → react → comment ladder shown by behavior, not copy */
+  .mtl .cmp{margin-top:8px;padding-top:9px;border-top:1px solid var(--border-soft)}
+  .mtl .cmp.locked{opacity:.4}
+  .mtl .cmp-ta{width:100%;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;
+    line-height:1.55;padding:8px 10px;resize:vertical;min-height:48px}
+  .mtl .cmp-ta:focus{outline:none;border-color:var(--rail-dim)}
+  .mtl .cmp-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+  .mtl .cmp-send{font-family:var(--mono);font-size:11px;cursor:pointer;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--dim);padding:5px 11px}
+  .mtl .cmp-send:hover:enabled{color:var(--rail);border-color:var(--rail-dim)}
+  .mtl .cmp-send:disabled{opacity:.55;cursor:default}
   /* the always-available key chip (minted keys only) */
   .keychip{position:fixed;right:14px;bottom:14px;z-index:40;cursor:pointer;
     font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel);
@@ -259,9 +276,9 @@
 
     <section class="contribute">
       <h2>Add to the record</h2>
-      <p>This page <em>reads</em> the record. The only thing it ever writes is what you
-        tap out yourself — a reaction signed by your own key (comments will follow the
-        same path). It never writes a card, and it never asks for your secret key.
+      <p>This page <em>reads</em> the record. The only things it ever writes are what you
+        tap out yourself — a reaction, or a margin comment once you've reacted, each
+        signed by your own key. It never writes a card, and it never asks for your secret key.
         The timelines live on public nostr relays, so contributing happens from any
         nostr client that can publish wiki events — you don't need permission from
         this site, and this site can't stop you. That's the point.</p>
@@ -739,7 +756,12 @@ function bindTaps(){                                      // gap expanders + com
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
-    if (b && !b.disabled){ tapCard(b.dataset.coord, b.dataset.e, b.dataset.p, b); return; }
+    if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b); return; }
+    const s = e.target.closest(".cmp-send");
+    if (s && !s.disabled){
+      sendComment(s.dataset.coord, s.dataset.p, s.closest(".cmp").querySelector(".cmp-ta"), s);
+      return;
+    }
     const t = e.target.closest(".mcmt-t");
     if (t && t.dataset.coord){
       const c = t.dataset.coord;
@@ -751,6 +773,13 @@ function bindTaps(){                                      // gap expanders + com
     const k = g.dataset.k;
     expandedGaps.has(k) ? expandedGaps.delete(k) : expandedGaps.add(k);
     render();
+  });
+  areaEl.addEventListener("input", e => {                 // drafts survive live re-renders
+    const ta = e.target.closest(".cmp-ta");
+    if (!ta) return;
+    cmtDraft.set(ta.dataset.coord, ta.value);
+    const send = ta.closest(".cmp").querySelector(".cmp-send");
+    if (send) send.disabled = !ta.value.trim();
   });
 }
 
@@ -766,34 +795,57 @@ function renderTimeline(entries){
     wantCardReactions(coord);
   }));
 
-  // margin block for one card version: the tap + reaction charge + comments. The tap
-  // line renders on EVERY card (it's the affordance — checkpoint 2b); comments still
-  // show nothing at zero. Charged comments lift to the top of the thread.
+  // margin block for one card version: the tap-pill, the thread, the compose box.
+  // The +-pill IS the tally — count inside, filled when yours is in it; foreign
+  // glyphs render beside it. Comments carry their own small pill (plain #e) and a
+  // gate-glyph: what their author tapped on the card. The compose box sits at the
+  // bottom of the open thread, ghosted until this identity has reacted — the
+  // read → react → comment ladder shown by behavior, not copy (checkpoint 2c).
   const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(g)} ${n}</span>`).join("");
+  const pill = (target, eid, pk, k, cls) => {
+    const ch = charge(target);
+    const p = ch.find(([g]) => g === "+");
+    const mine = myPk && reactions.get(target)?.has(myPk);
+    return `<button class="tapbtn${cls}${mine ? " mine" : ""}" type="button" data-t="${esc(target)}"` +
+      ` data-e="${esc(eid)}" data-p="${esc(pk)}" data-k="${k}"` +
+      ` title="${mine ? "you reacted +" : "react +"}">+${p ? "&#8201;" + p[1] : ""}</button>` +
+      glyphs(ch.filter(([g]) => g !== "+"));
+  };
+  const gateGlyph = (coord, pk) => {
+    const ev = reactions.get(coord)?.get(pk);
+    if (!ev) return "";
+    const c = String(ev.content ?? "").trim();
+    const g = (c === "" || c === "+") ? "+" : [...c].slice(0,8).join("");
+    return `<span class="gateg" title="reacted ${esc(g)} to this card">${esc(g)}</span>`;
+  };
+  const composeBlock = (coord, rootPk) => {
+    const unlocked = !!(myPk && reactions.get(coord)?.has(myPk));
+    const draft = cmtDraft.get(coord) || "";
+    return `<div class="cmp${unlocked ? "" : " locked"}">` +
+      `<textarea class="cmp-ta" data-coord="${esc(coord)}" rows="2"${unlocked ? "" : " disabled"}>${esc(draft)}</textarea>` +
+      `<div class="cmp-row"><button class="cmp-send" type="button" data-coord="${esc(coord)}"` +
+      ` data-p="${esc(rootPk)}"${unlocked && draft.trim() ? "" : " disabled"}>sign &amp; send</button>` +
+      tallyHtml(cmtSent.get(coord), cmtErr.get(coord)) + `</div></div>`;
+  };
   const marginBlock = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
     const w = id => reactions.get(id)?.size || 0;          // a comment's total charge
     const cs = [...(comments.get(coord)?.values() || [])]
       .sort((a,b) => (w(b.id) - w(a.id)) || (a.created_at - b.created_at));
-    const mine = myPk && reactions.get(coord)?.has(myPk);
-    const rctLine = `<div class="mrct">` +
-      `<button class="tapbtn${mine ? " mine" : ""}" type="button" data-coord="${esc(coord)}"` +
-      ` data-e="${esc(ev.id)}" data-p="${esc(ev.pubkey)}"` +
-      ` title="${mine ? "you reacted +" : "react +"}">+</button>` +
-      glyphs(charge(coord)) + tallyHtml(coord) + `</div>`;
-    if (!cs.length)
-      return `<div class="mcmts">${rctLine}</div>`;
+    const rctLine = `<div class="mrct">` + pill(coord, ev.id, ev.pubkey, String(KIND), "") +
+      tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>`;
     const open = expandedCmts.has(coord);
-    return `<div class="mcmts">${rctLine}<div class="mcmt-t" data-coord="${esc(coord)}">` +
-      `◦ ${cs.length} comment${cs.length===1?"":"s"}` +
-      `<span class="go">${open ? "collapse ▴" : "read ▾"}</span></div>` +
-      (open ? cs.map(c => {
-        const cch = glyphs(charge(c.id));
-        return `<div class="mcmt"><div class="mcmt-who">${authorLink(c.pubkey)}` +
-          `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span>` +
-          (cch ? `<span class="mcmt-rct">${cch}</span>` : "") + `</div>` +
-          `<div class="mcmt-body">${renderContent(c.content || "")}</div></div>`;
-      }).join("") : "") +
+    const toggle = `<div class="mcmt-t" data-coord="${esc(coord)}">` +
+      (cs.length ? `◦ ${cs.length} comment${cs.length===1?"":"s"}` : `◦ comment`) +
+      `<span class="go">${open ? "collapse ▴" : cs.length ? "read ▾" : "write ▾"}</span></div>`;
+    return `<div class="mcmts">${rctLine}${toggle}` +
+      (open ? cs.map(c =>
+        `<div class="mcmt"><div class="mcmt-who">${gateGlyph(coord, c.pubkey)}${authorLink(c.pubkey)}` +
+        `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span>` +
+        `<span class="mcmt-rct">${pill(c.id, c.id, c.pubkey, "1111", " sm")}` +
+        tallyHtml(tapped.get(c.id), tapErr.get(c.id)) + `</span></div>` +
+        `<div class="mcmt-body">${renderContent(c.content || "")}</div></div>`
+      ).join("") + composeBlock(coord, ev.pubkey) : "") +
       `</div>`;
   };
 
@@ -864,28 +916,38 @@ function renderTimeline(entries){
 
   if (nowShown) html += `</div>`;                          // close .futurezone
   html += `</div></div>`;
+  // live events re-render mid-typing: keep the focused compose box's caret alive
+  const ae = document.activeElement;
+  const keep = ae && ae.classList && ae.classList.contains("cmp-ta")
+    ? { coord: ae.dataset.coord, s: ae.selectionStart, e: ae.selectionEnd } : null;
   areaEl.innerHTML = html;
+  if (keep){
+    const ta = areaEl.querySelector(`.cmp-ta[data-coord="${CSS.escape(keep.coord)}"]`);
+    if (ta && !ta.disabled){ ta.focus(); ta.setSelectionRange(keep.s, keep.e); }
+  }
   bindTaps();
 }
 
-// ═══════════════ write side — checkpoint 2b: the tap ═══════════════
-// The viewer's only writes, ever: reactions (and, come 2c, comments) the visitor
-// taps out, signed by the visitor's own key. Cards stay read-only forever.
+// ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
+// The viewer's only writes, ever: reactions and comments the visitor taps out,
+// signed by the visitor's own key. Cards stay read-only forever.
 // Kept apart from the render code above on purpose.
 
 const tallies  = new Map();     // published event id → {ok,no,sent,done} — the honest OK tally
-const coordTap = new Map();     // card coord → event id of my latest tap on it
-const tapErr   = new Map();     // card coord → short error text (signer declined, …)
+const tapped   = new Map();     // reaction target (card coord | comment id) → my latest tap's event id
+const tapErr   = new Map();     // reaction target → short error text (signer declined, …)
+const cmtSent  = new Map();     // card coord → my latest margin note's event id
+const cmtErr   = new Map();     // card coord → short error text for the compose box
+const cmtDraft = new Map();     // card coord → compose text, held across live re-renders
 let myPk = null;                // my pubkey once a signer produced one — lights .mine
 let certForId = null;           // event id whose first accept triggers the birth certificate
 
 const SK_KEY = "wtc:sk", SAVED_KEY = "wtc:saved", UNSAVED_N = "wtc:unsaved", CERT_SEEN = "wtc:cert";
 
-// margin-line tally text for one card — rendered by marginBlock
-function tallyHtml(coord){
-  const err = tapErr.get(coord);
+// honest tally text for one published event id — rendered by marginBlock
+function tallyHtml(id, err){
   if (err) return `<span class="oktally err">⚠ ${esc(err)}</span>`;
-  const t = tallies.get(coordTap.get(coord));
+  const t = tallies.get(id);
   if (!t) return "";
   if (!t.ok && !t.no && !t.done) return `<span class="oktally">publishing…</span>`;
   return `<span class="oktally${t.done && !t.ok ? " err" : ""}">accepted by ${t.ok} of ${t.sent} relay${t.sent === 1 ? "" : "s"}</span>`;
@@ -997,26 +1059,58 @@ function publish(ev){
   setTimeout(() => { tallies.delete(ev.id); scheduleRender(); }, 20000);
 }
 
-// ── the tap ──
-async function tapCard(coord, eid, pk, btn){
+// ── the tap: one handler for cards and comments. A card's target is its coord;
+//    a comment IS its own target (target === eid ⇒ plain #e reaction) ──
+async function tapTarget(target, eid, pk, k, btn){
   if (btn) btn.disabled = true;
-  tapErr.delete(coord);
+  tapErr.delete(target);
   try {
     const s = await getSigner();
+    const tags = [["e", eid], ["p", pk], ["k", k]];
+    if (target !== eid) tags.unshift(["a", target]);       // card taps ride the coord — they survive edits
     const ev = await s.sign({
       kind: REACTION_KIND,
       created_at: Math.floor(Date.now() / 1000),
       content: "+",                                        // proof-of-life: one character
-      tags: [["a", coord], ["e", eid], ["p", pk], ["k", String(KIND)]]
+      tags
     });
     myPk = ev.pubkey;
     if (s.via === "mint" && !localStorage.getItem(CERT_SEEN)) certForId = ev.id;
-    coordTap.set(coord, ev.id);
+    tapped.set(target, ev.id);
     ingestReaction(ev);                                    // reward first: the glyph lights now
     publish(ev);
     if (s.via === "mint") bumpUnsaved();
   } catch {
-    tapErr.set(coord, "signer declined — tap to retry");
+    tapErr.set(target, "signer declined — tap to retry");
+    scheduleRender();
+  }
+}
+
+// ── the margin note (checkpoint 2c): compose unlocks by reacting; same NIP-22
+//    shape as the proven test comment — uppercase root scope, lowercase parent
+//    (parent = root for a top-level note) ──
+async function sendComment(coord, rootPk, ta, btn){
+  const text = ((ta && ta.value) || "").trim();
+  if (!text) return;
+  btn.disabled = true; ta.disabled = true;
+  cmtErr.delete(coord);
+  try {
+    const s = await getSigner();
+    const ev = await s.sign({
+      kind: COMMENT_KIND,
+      created_at: Math.floor(Date.now() / 1000),
+      content: text,
+      tags: [["A", coord], ["K", String(KIND)], ["P", rootPk],
+             ["a", coord], ["k", String(KIND)], ["p", rootPk]]
+    });
+    myPk = ev.pubkey;
+    cmtDraft.delete(coord);
+    cmtSent.set(coord, ev.id);
+    ingestComment(ev);                                     // reward first: the note joins the thread now
+    publish(ev);
+    if (s.via === "mint") bumpUnsaved();
+  } catch {
+    cmtErr.set(coord, "signer declined — try again");
     scheduleRender();
   }
 }
