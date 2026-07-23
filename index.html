@@ -49,10 +49,10 @@
   .relaydot.up{background:var(--rail)}
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
-  /* collection selector row */
+  /* filter picker row */
   .tabs{margin-top:16px;display:flex;justify-content:center}
 
-  /* dropdown selector */
+  /* grouped filter dropdown: timelines / places / topics */
   .picker{background:var(--panel);border:1px solid var(--border);color:var(--text);
     border-radius:8px;padding:9px 36px 9px 14px;font-size:13px;font-family:inherit;
     font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;
@@ -266,7 +266,7 @@
       <div class="tabs" id="tabs"></div>
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
-          title="Copy a shareable link to the selected timeline">⧉ Copy link</button>
+          title="Copy a shareable link to the selected view">⧉ Copy link</button>
       </div>
     </div>
   </header>
@@ -387,9 +387,14 @@ const rctA     = new Set();     // card coords whose reactions we've asked for (
 const rctE     = new Set();     // comment ids whose reactions we've asked for (#e) — grow-only
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
-let activeC   = null;           // no collection until discovery finds one
-let userPicked = false;         // true once the visitor clicks a tab (stops URL override)
-const wantedC = new URLSearchParams(location.search).get("c");  // ?c=slug deep link
+// The picker holds ONE filter at a time — "axis:value". Axes: c = collection (a curated
+// story), l = place (one jurisdiction-ladder rung), t = topic. Time is deliberately NOT
+// an axis here: it is already rendered as scroll position. Axes never AND (the relays
+// can't either — CONVENTION.md "Axes don't compose"); one filter, one spine.
+let activeF   = null;           // no filter until discovery finds a card
+let userPicked = false;         // true once the visitor picks (stops URL override)
+const _q = new URLSearchParams(location.search);   // deep links: ?c=slug | ?l=rung | ?t=topic
+const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Boolean) || null;
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
@@ -405,7 +410,8 @@ const copyBtn  = document.getElementById("copylink");
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  if (activeC) u.searchParams.set("c", activeC);
+  ["c","l","t"].forEach(a => u.searchParams.delete(a));
+  if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
   return u;
 }
 const COPY_LABEL = "⧉ Copy link";
@@ -436,6 +442,23 @@ function labelVal(ev, ns){
 // is pure v2, but the fallback costs nothing. One place decides membership.
 function collectionSlug(ev){
   return labelVal(ev, "wikitimechain.collection") || tag(ev,"c");
+}
+
+// ── the filter, "axis:value" ──
+const axisOf = f => f.slice(0, f.indexOf(":"));
+const valOf  = f => f.slice(f.indexOf(":") + 1);
+// A place is a rung VALUE in any of the three ladder namespaces. The ladder is emitted
+// top-down (CONVENTION.md), so a county card also carries — and matches — its state and
+// country rungs; filtering client-side on cards that already passed the gate.
+const PLACE_NS = ["ISO-3166-1","ISO-3166-2","wikitimechain.location"];
+function matchesF(ev, f){
+  const v = valOf(f);
+  switch (axisOf(f)){
+    case "c": return collectionSlug(ev) === v;
+    case "l": return ev.tags.some(t => t[0] === "l" && t[1] === v && PLACE_NS.includes(t[2]));
+    case "t": return v !== MARKER && ev.tags.some(t => t[0] === "t" && t[1] === v);
+  }
+  return false;
 }
 
 function esc(s){
@@ -694,13 +717,14 @@ function scheduleRender(){
 }
 
 // ═══════════════ data views ═══════════════
-function inCollection(c){
-  return [...events.values()].filter(ev => collectionSlug(ev) === c);
+function matching(f){
+  return [...events.values()].filter(ev => matchesF(ev, f));
 }
-// group the active collection's events by d-tag: one entry per d, versions within
-function entriesOf(c){
+// group a filter's events by d-tag: one entry per d, versions within. A non-collection
+// filter can span collections — the entries merge onto one spine, interleaved by date.
+function entriesOf(f){
   const byD = new Map();
-  for (const ev of inCollection(c)){
+  for (const ev of matching(f)){
     const d = tag(ev,"d");
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
@@ -720,37 +744,61 @@ function renderStatus(){
     `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${esc(r)}"></span>`
   ).join("");
   const k = slugs.size;
-  const n = activeC ? entriesOf(activeC).length : 0;
+  const n = activeF ? entriesOf(activeF).length : 0;
   statusEl.innerHTML =
     `<span><b>${k}</b> timeline${k===1?"":"s"}</span>` +
     `<span><b>${n}</b> entr${n===1?"y":"ies"}</span>` +
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
-// one selection path shared by the tab buttons and the dropdown
-function selectCollection(c){
-  if (activeC === c) return;
-  activeC = c; userPicked = true;
+// one selection path shared by the picker and the in-card collection links
+function selectF(f){
+  if (activeF === f) return;
+  activeF = f; userPicked = true;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
 
+// The picker is a grouped view of every filterable value the cards in memory carry —
+// derived fresh each render from the tags themselves, nothing baked. Places print as
+// the jurisdiction ladder (indent = rung depth); values are shown verbatim.
 function renderTabs(){
-  const list = [...slugs].sort();
   tabsEl.innerHTML = "";
-  copyBtn.style.display = activeC ? "" : "none";   // nothing to link until one is active
-  if (!list.length) return;                        // status line shows "connecting…"
+  copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
+  if (!slugs.size) return;                         // status line shows "connecting…"
+
+  const placeNs = new Map(), topics = new Set();
+  for (const ev of events.values())
+    for (const t of ev.tags){
+      if (t[0] === "l" && PLACE_NS.includes(t[2]) && !placeNs.has(t[1])) placeNs.set(t[1], t[2]);
+      if (t[0] === "t" && t[1] !== MARKER) topics.add(t[1]);
+    }
+  const depth = v => placeNs.get(v) === "ISO-3166-1" ? 0
+                   : placeNs.get(v) === "ISO-3166-2" ? 1
+                   : v.split("-").length - 1;       // kebab rungs are parent-prefixed
 
   const sel = document.createElement("select");
   sel.className = "picker";
-  list.forEach(c => {
-    const o = document.createElement("option");
-    o.value = c;
-    o.textContent = `${slugName(c)}  (${entriesOf(c).length})`;
-    if (c === activeC) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.addEventListener("change", () => selectCollection(sel.value));
+  const group = (label, opts) => {
+    const g = document.createElement("optgroup");
+    g.label = label;
+    for (const [f, text] of opts){
+      const n = entriesOf(f).length;
+      if (!n) continue;
+      const o = document.createElement("option");
+      o.value = f;
+      o.textContent = `${text}  (${n})`;
+      if (f === activeF) o.selected = true;
+      g.appendChild(o);
+    }
+    if (g.children.length) sel.appendChild(g);
+  };
+  group("timelines", [...slugs].sort().map(c => ["c:" + c, slugName(c)]));
+  group("places", [...placeNs.keys()]
+    .sort((a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)  // parent-prefix ⇒ ladder order
+    .map(v => ["l:" + v, "  ".repeat(depth(v)) + v]));
+  group("topics", [...topics].sort().map(v => ["t:" + v, v]));
+  sel.addEventListener("change", () => selectF(sel.value));
   tabsEl.appendChild(sel);
 }
 
@@ -758,13 +806,13 @@ function renderTabs(){
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function render(){
-  // deep link wins until the visitor picks a tab; honored once its slug is discovered
-  if (!userPicked && wantedC && slugs.has(wantedC)) activeC = wantedC;
-  else if (activeC === null && slugs.size) activeC = [...slugs].sort()[0];
+  // deep link wins until the visitor picks; honored once it matches a discovered card
+  if (!userPicked && wantedF && entriesOf(wantedF).length) activeF = wantedF;
+  else if (activeF === null && slugs.size) activeF = "c:" + [...slugs].sort()[0];
   renderStatus();
   renderTabs();
 
-  const entries = activeC ? entriesOf(activeC) : [];
+  const entries = activeF ? entriesOf(activeF) : [];
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
@@ -804,6 +852,8 @@ function bindTaps(){                                      // gap expanders + com
   if (tapsBound) return;
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
+    const col = e.target.closest(".incol");
+    if (col){ e.preventDefault(); selectF("c:" + col.dataset.c); return; }
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b); return; }
     const s = e.target.closest(".cmp-send");
@@ -834,6 +884,13 @@ function bindTaps(){                                      // gap expanders + com
 
 function renderTimeline(entries){
   const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
+  // under a place/topic filter the spine interleaves collections, so each card names
+  // its story — a tap on the name narrows the filter to that collection
+  const merged = activeF && axisOf(activeF) !== "c";
+  const inChip = ev => merged
+    ? `<span><span class="k">in</span> <a class="incol" data-c="${esc(collectionSlug(ev))}"` +
+      ` href="?c=${esc(collectionSlug(ev))}">${esc(slugName(collectionSlug(ev)))}</a></span>`
+    : "";
 
   // the spine has no selection, so comment laziness is per-COLLECTION: subscribe
   // every version's coord in one batch (bounded — collections are tens of cards).
@@ -947,6 +1004,7 @@ function renderTimeline(entries){
           marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
+        inChip(e.evs[0]) +
         `<span><span class="k">kind</span> 30818</span></div>` +
         `</div></div>`;
     } else {
@@ -958,6 +1016,7 @@ function renderTimeline(entries){
         `<div class="cfoot"><span class="fdate">${esc(dateOf(ev))}</span>` +
         `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
         `<span><span class="k">d</span> ${esc(e.d)}</span>` +
+        inChip(ev) +
         `<span><span class="k">kind</span> 30818</span></div>` +
         `</div>${marginBlock(ev, e.d)}</div>`;
     }
