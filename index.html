@@ -408,8 +408,9 @@ function labelVal(ev, ns){
   const t = ev.tags.find(t => t[0] === "l" && t[2] === ns);
   return t ? t[1] : "";
 }
-// convention v2 dual-read: a card's collection slug is its wikitimechain.collection
-// label (v2), falling back to the legacy `c` tag (v1). One place decides membership.
+// a card's collection slug is its wikitimechain.collection label. The legacy `c`
+// fallback is a post-legacy-drop grace window (MIGRATION-v2 §5) — every live card
+// is pure v2, but the fallback costs nothing. One place decides membership.
 function collectionSlug(ev){
   return labelVal(ev, "wikitimechain.collection") || tag(ev,"c");
 }
@@ -482,8 +483,8 @@ function authorLink(pk){
 }
 
 // ═══════════════ ingest ═══════════════
-// Discovery sieve (convention v2 dual-read): membership = a parseable event_date +
-// a collection slug, read label-first (wikitimechain.collection) then legacy `c`.
+// Discovery sieve (convention v2): membership = a parseable event_date + a
+// collection slug from the wikitimechain.collection label (legacy `c` grace-window).
 // Cards passing it are kept AND their slug becomes a known timeline; anything else
 // from the open pull (wild wiki articles) is dropped, not stored. Strictness is
 // discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
@@ -506,13 +507,10 @@ function scheduleMemberFetch(){
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","wtc"]));
-      // dual-read: OR two filters — legacy cards match #c, v2 cards match #l on the
-      // same slug. #l is value-only-indexed, so a card wearing our slug as some other
-      // label value could sneak in — same squatting exposure as v1's #c fetch, and
-      // our slugs are distinct kebab names that won't collide with date/location values.
-      ws.send(JSON.stringify(["REQ","wtc",
-        { kinds:[KIND], "#c": [...slugs] },
-        { kinds:[KIND], "#l": [...slugs] }]));
+      // #l is value-only-indexed, so a card wearing our slug as some other label
+      // value could sneak in — same squatting exposure as v1's #c fetch, and our
+      // slugs are distinct kebab names that won't collide with date/location values.
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
     });
   }, 400);
 }
@@ -1227,20 +1225,13 @@ function connect(url){
   ws.onopen = () => {
     relayState.set(url,"up");
     renderStatus();
-    // open discovery pull — no #c filter, no author filter; the sieve decides.
+    // discovery pull (convention v2, post-legacy-drop MIGRATION-v2 §5): one narrow
+    // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.
-    // dual-read discovery (convention v2, MIGRATION-v2 §1.1): two subs side by side —
-    //  "sieve"  = broad legacy pull, client-sieved for the `c` tag (every card is still
-    //             legacy at phase-1 ship, so this is what keeps the corpus visible);
-    //  "tsieve" = narrow #t=wikitimechain pull, relay-indexed, for v2 cards.
-    // Both route to the same sieve(). The broad sub is removed only at legacy-drop (§5).
-    ws.send(JSON.stringify(["REQ","sieve", { kinds:[KIND], limit:500 }]));
     ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
     if (slugs.size)
-      ws.send(JSON.stringify(["REQ","wtc",
-        { kinds:[KIND], "#c": [...slugs] },
-        { kinds:[KIND], "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
     if (cmtSubs.size)
       ws.send(JSON.stringify(["REQ","cmt",{ kinds:[COMMENT_KIND], "#A": [...cmtSubs] }]));
     const rf = rctFilters();
@@ -1250,7 +1241,6 @@ function connect(url){
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT"){
-      if (data[1] === "sieve")  sieve(data[2]);
       if (data[1] === "tsieve") sieve(data[2]);
       if (data[1] === "wtc")    ingest(data[2]);
       if (data[1] === "prof")  ingestProfile(data[2]);

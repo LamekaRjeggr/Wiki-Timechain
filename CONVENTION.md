@@ -1,193 +1,224 @@
-# Collection discovery convention
+# Collection & discovery convention — v2
 
-Written 2026-07-21. **Status: layer zero is implemented** (same day) — the viewer
-now discovers collections by sieve alone and the hardcoded `COLLECTIONS` list is
-gone. Manifests (kind 30004) remain unimplemented and the marker string remains
-unfrozen. The visual companion is the `timechain-discoverability` canvas in the
-memviz store.
+**LIVE since 2026-07-23.** The migration in `MIGRATION-v2.md` shipped end to end:
+all 31 cards across 3 collections are pure v2, and the viewer runs the `#t`-only
+discovery path (legacy-drop, §5).
 
-## The problem
+v2 moves discovery off the shared `c` tag and the un-indexed `event_date` sieve onto
+a NIP-32 self-label scheme under one global marker, and adds jurisdiction, date-bucket,
+and geohash query shadows. Cards stay **kind 30818** (NIP-54 wiki). The viewer stays a
+single zero-dependency `index.html`.
 
-A nostr relay only answers filters for tag values it is explicitly given — there is
-no "list the distinct `c` values" and no "has a `c` tag" query. So today the viewer
-can only show collections named in the hardcoded `COLLECTIONS` list in `index.html`.
-A new collection published tomorrow is invisible until someone edits the viewer.
+## Why v1 changed
 
-Dropping the `#c` filter doesn't work either: kind 30818 + `c` is the shared
-wikifreedia wiki namespace. A probe (2026-07-20) found ~5% of wild 30818 events
-carry `c` at all; ours are kebab slugs (`tonopah-rezoning`), theirs are Title-Case
-category words (`Nostr`, `Biology`).
+v1 discovered a card by "has a `c` tag + a parseable `event_date`." Two problems:
+`c` is the shared wikifreedia category namespace (our slugs sit beside wild
+Title-Case categories — collision by design), and `event_date` is a multi-letter tag
+so **relays never index it** — the discovery fetch had to pull the entire global
+30818 stream and sieve it client-side, which caps out as wiki traffic grows.
 
-## What the open world does
+v1 also bet on **kind-30004 manifests** as the durable discovery layer and demoted
+per-card labels. **v2 reverses that:** per-card NIP-32 labels are now the whole
+scheme, and **the manifest layer is dropped.** One indexed marker + labels on the
+cards is enough; a separate manifest event to keep in sync is not worth its staleness.
 
-Surveyed 2026-07-21: PeriodO, IIIF, ActivityStreams/ActivityPub, Memento (RFC 7089),
-TimelineJS, OAI-PMH, sitemaps, and NIPs 32/51/54/72/89. Every mature open system
-converges on the same shape for this exact problem: **a small manifest document per
-collection** (IIIF Collection, ActivityStreams OrderedCollection, Memento TimeMap,
-OAI-PMH ListSets), usually layered over tags on the members themselves. Discovery
-reduces to "fetch the manifests," which is a much smaller haystack because manifests
-share one type.
+## The tag scheme
 
-Nostr already has the primitive: **NIP-51 curation sets, kind 30004** — addressable
-events with a `d` identifier, `title` and `description` tags, and pointers to members.
+Every field is a tag on the 30818 event itself (self-labeling, NIP-32 — the card
+labels itself; no `1985` labeling event, no `e`/`p`/`a` target).
 
-## The convention
+### Required — on every card
 
-One kind-30004 event per collection. Cards are not touched.
+| Tag | Example | Meaning |
+|---|---|---|
+| `d` | `["d","2026-proposition-number"]` | addressable identifier (NIP-01/54); republish = same `d` |
+| `title` | `["title","Proposition number assigned"]` | display title |
+| `event_date` | `["event_date","2026-07-01"]` | **display-precision truth**, `YYYY-MM-DD`; where the card sits on the spine |
+| `t` marker | `["t","wikitimechain"]` | the global discovery marker — lowercase, one word, no `#` |
+| collection | `["L","wikitimechain.collection"]` `["l","hcr2001-fast-election-results","wikitimechain.collection"]` | which timeline this card belongs to |
+| date buckets | `["L","wikitimechain.date"]` `["l","2026","wikitimechain.date"]` `["l","2026-07","wikitimechain.date"]` | query shadow of `event_date`: **year and month, both** |
+
+`published_at` (NIP-54, original publish time) is carried unchanged and is **not** the
+same as `event_date` or the event `created_at`.
+
+### Required when the card has a location — the jurisdiction ladder
+
+Emit the **full ladder from the top down to the event's true scope** — every rung
+present, because relays filter on the `l` **value**, not the (`L`,`l`) pair, so a rung
+is only queryable if its value is physically on the card. Do **not** fabricate rungs
+deeper than the event's real scope.
+
+```json
+["L", "ISO-3166-1"],           ["l", "US", "ISO-3166-1"],
+["L", "ISO-3166-2"],           ["l", "US-AZ", "ISO-3166-2"],
+["L", "wikitimechain.location"], ["l", "us-az-maricopa", "wikitimechain.location"],
+                                 ["l", "us-az-maricopa-phoenix", "wikitimechain.location"]
+```
+
+- ISO rungs use ISO codes verbatim (`US`, `US-AZ`) under the standard NIP-32
+  namespaces `ISO-3166-1` / `ISO-3166-2`.
+- Sub-state rungs are **kebab-case, parent-prefixed** (`us-az-maricopa`,
+  `us-az-maricopa-phoenix`) under `wikitimechain.location`.
+- **Scope, not fabrication.** A statewide act stops at `US-AZ` — no county rung. A
+  county event adds `us-az-maricopa`. A city point event adds the city rung. The
+  ladder goes as deep as the event genuinely is, no deeper.
+
+### Optional
+
+| Tag | Example | Rule |
+|---|---|---|
+| geohash | `["g","9w0d3fjq"]` `["g","9w0d"]` `["g","9w0"]` | **point events only** — never a jurisdiction's centroid. Emit as prefix rungs for proximity queries. |
+| topic | `["t","taproot"]` | freeform lowercase `t` values, **deliberately unspecced** — no registry, no controlled vocabulary. Add as many as fit. |
+
+## Worked example — a statewide card (no county, no geohash)
 
 ```json
 {
-  "kind": 30004,
+  "kind": 30818,
+  "content": "Over the summer the Secretary of State assigns HCR 2001 its proposition number for the November ballot.\n\nAPPROXIMATE DATE: \"Summer 2026\" — placed at 2026-07-01.\n\nSource: [Arizona Secretary of State — ballot measures](https://azsos.gov/elections/ballot-measures)",
   "tags": [
-    ["d", "tonopah-rezoning"],
-    ["title", "Tonopah Rezoning"],
-    ["description", "Public record of the rezoning cases around Tonopah, AZ."],
-    ["t", "wiki-timechain"],
-    ["type", "land"]
-  ],
-  "content": ""
+    ["d", "2026-proposition-number"],
+    ["title", "Proposition number assigned"],
+    ["published_at", "1784681375"],
+    ["event_date", "2026-07-01"],
+    ["t", "wikitimechain"],
+    ["L", "wikitimechain.collection"],
+    ["l", "hcr2001-fast-election-results", "wikitimechain.collection"],
+    ["L", "wikitimechain.date"],
+    ["l", "2026", "wikitimechain.date"],
+    ["l", "2026-07", "wikitimechain.date"],
+    ["L", "ISO-3166-1"],
+    ["l", "US", "ISO-3166-1"],
+    ["L", "ISO-3166-2"],
+    ["l", "US-AZ", "ISO-3166-2"]
+  ]
 }
 ```
 
-Field by field:
+A statewide act by the Secretary of State: the ladder stops at `US-AZ`, and there is
+no `g` tag because it is not a point event. A city-level point card in the same
+collection would additionally carry the `wikitimechain.location` rungs and the geohash
+prefixes.
 
-- `d` — the collection slug, **identical to the `c` value on its cards**. This
-  equality is the joint that holds the two layers together.
-- `title`, `description` — collection metadata, native to NIP-51. (`image` also
-  allowed, unused for now.)
-- `t` = `wiki-timechain` — the discovery marker. Single-letter, so relays index it;
-  this is the "well-known location" in nostr form (an agreed kind + marker pair
-  instead of an agreed URL). **Forever choice — see wall 4.**
-- `type` — the collection's kind of subject: `land`, `law`, `proposition`,
-  `history`. Custom multi-letter tag, so relays do *not* index it; the viewer reads
-  it from manifests it already fetched, which is enough because the manifest count
-  stays small. The set is open: a viewer must render an unknown type as a new group,
-  never an error.
-- **No `a` tags pointing at cards.** Membership stays where it already lives: the
-  `c` tag on the cards. See wall 3 for why.
+## Approximate dates — one canonical, greppable line
 
-The `c` tag on cards remains the member-signed ground truth. The manifest is
-discovery + metadata only.
+`event_date` is always a full `YYYY-MM-DD`; the spine needs a concrete point. When the
+real date is coarser, place the card on a canonical day and record the true precision
+in **one canonical line** in the content — fixed prefix, controlled precision clause,
+then `— placed at <the event_date value>`. The fixed prefix makes every contributor's
+caveat grep with a single pattern later.
 
-## Layer zero: event_date is the signature
+Form: `APPROXIMATE DATE: <precision clause> — placed at <YYYY-MM-DD>.`
 
-Added later the same day. The cards already carry an unfakeable membership signal:
-**`event_date`**. A card without one cannot be placed on a proportional timeline at
-all — the viewer has to validate it regardless — and the wild wiki articles sharing
-kind 30818 have no reason to carry it. So validation doubles as discovery, with
-zero publish-side change and no new convention to remember:
+| Case | Canonical line | Placement | Buckets emitted |
+|---|---|---|---|
+| Month known, day unknown | `APPROXIMATE DATE: known to the month — placed at 2003-07-01.` | day `01` | `2003`, `2003-07` |
+| Year known only | `APPROXIMATE DATE: known to the year — placed at 2003-01-01.` | `01-01` | `2003` only |
+| Source names a period | `APPROXIMATE DATE: "Summer 2026" — placed at 2026-07-01.` | first day of the chosen month | `2026`, `2026-07` |
 
-1. One open pull per relay: `{"kinds":[30818], "limit":500}` — no `#c` filter.
-2. Client-side sieve: keep events with a `c` tag AND a parseable `YYYY-MM-DD`
-   `event_date`. Group by `c` value. Each group is a discovered collection.
-3. No card-count threshold. One valid card is enough — a new collection's first
-   card is exactly what discovery exists to surface.
+Rules:
+- The prefix is exactly `APPROXIMATE DATE:` (uppercase, trailing colon) — the grep anchor.
+- The date after `placed at` is *identical* to the `event_date` tag value.
+- A named source period is **quoted verbatim** in double quotes (`"Summer 2026"`,
+  `"Q3 2011"`); a bare precision uses the controlled clauses
+  (`known to the month` / `known to the year`).
+- **Buckets encode the *known* precision, never the placeholder day.** Year-only ⇒ emit
+  the year bucket only; do not emit a month bucket, because the placeholder month is not
+  a fact. This keeps `#l` date queries honest.
+- An exactly-known date carries **no** `APPROXIMATE DATE:` line at all.
 
-Relay filters cannot express any of this (no presence tests, no conditionals, and
-`event_date` is multi-letter so relays never index it) — the pull must be open and
-the sieve must run in the client. Discovery is therefore approximate: bounded by
-the `limit` window. Membership is then made exact by the per-slug `#c` query.
+## Discovery & the membership gate
 
-Metadata without a manifest: title derived from the slug (kebab → words), type =
-untyped. A manifest, when one exists for the slug, overrides title, description,
-and type. The sieve stays on permanently as the net under the manifests —
-collections nobody wrote a manifest for still appear.
+The viewer subscribes `{"kinds":[30818], "#t":["wikitimechain"], limit:500}` — one
+indexed filter, the relay does the narrowing. But **`wikitimechain` is squattable**:
+anyone can wear the marker. So the marker is *discovery bait, not proof*. A card is
+one of ours only if it passes the gate:
 
-## Viewer boot sequence
+> **`#t`=wikitimechain  AND  a parseable `YYYY-MM-DD` `event_date`  AND  a
+> `wikitimechain.collection` label.**
 
-*(Amended 2026-07-21: the original step 1, a hardcoded "featured" list, was
-removed by user decision — discovery carries the whole page. Steps 1 and 3 are
-live; step 2 is future.)*
+The collection slug is read from that label's value. Cards failing the gate are
+dropped, not stored. Membership per collection is then made exact by the label query
+(below), which has no discovery-window problem.
 
-1. **Layer zero** — open 30818 pull per relay (`limit:500`, kept open for live
-   discovery), sieve by `event_date` + `c`, union the discovered slugs across
-   relays. **Implemented.**
-2. **Manifests** — one open REQ `{"kinds":[30004], "#t":["wiki-timechain"]}` — no
-   authors filter, per the no-pubkeys rule in CLAUDE.md. Each result declares a
-   collection: slug from `d`, display name from `title`, grouping from `type`.
-   Declared metadata overrides anything layer zero inferred; a manifest also
-   surfaces a collection whose cards are too old for the discovery window. Rival
-   manifests for the same `d` from different authors: first-seen wins, for now.
-   **Not implemented — wait for the marker freeze.**
-3. **Membership** — for every known slug, the exact card query:
-   `{"kinds":[30818], "#c":["<slug>"]}`, re-sent whenever the slug set grows.
-   Complete, no window problem. **Implemented.**
+### The `#l` value-only caveat — do not optimize the gate away
 
-Until manifests exist, tab names are the raw slug (kebab → words) — accepted,
-including the long tonopah slug; the ugliness is standing pressure to publish
-the manifests.
+Relays index labels by **value only** — the namespace (the `L` tag / the label's 3rd
+element) is *not* part of the filter. So `{"#l":["2026"]}` matches the value `2026` in
+**any** namespace, including a stranger's unrelated label; `{"#l":["us-az-maricopa"]}`
+matches that value wherever it appears. Value grammars (ISO codes, kebab locations,
+`YYYY`/`YYYY-MM` dates, kebab collection slugs) are kept disjoint so collisions are
+unlikely — but **labels are discovery, the gate is truth.** A future contributor must
+not "simplify" the client-side gate into a bare `#l` trust; the value-only index is
+exactly why it can't be trusted alone.
 
-## The walls
+### Axes don't compose in one query
 
-Where this can break, and the empirical status of each.
+Collection, date, and location are all `l` values. A single filter's `#l` array is an
+OR, and two constraints sharing the key `l` cannot be AND-ed. "Cards in collection X
+**and** county Y" is therefore **not one REQ** — fetch by the most selective axis and
+client-filter the rest. Each rung is individually filterable; they do not compose
+server-side. For a small corpus this is a non-issue (client-filter a fetched
+collection); no UI should assume server-side multi-axis AND.
 
-**1. Relays might not honor the marker filter.** Probed 2026-07-21, read-only,
-against live kind-30004 events: relay.damus.io, nos.lol, relay.primal.net, and
-relay.mostr.pub all return exactly the matching events for a `#t` filter and
-correctly return zero for a nonsense value. relay.nostr.band was unreachable
-(handshake timeout — connectivity, not filtering). nostr.wine refuses
-unauthenticated reads (403). **Verdict: passes on every relay that answered, 4 of 6.
-The two holdouts are access problems and also can't serve the viewer's existing
-queries when in that state, so they don't change the design.**
+## Viewer read behavior (during and after migration)
 
-**2. A manifest is one replaceable event.** If it's absent from every relay the
-viewer reaches, the whole collection vanishes from discovery. Mitigations: publish
-manifests to all six relays; the featured list keeps known collections visible
-regardless; and because `d` = `c`, a lost manifest is always rebuildable from the
-cards. Untested until implementation.
+- **Dual-read.** The viewer accepts both v2 cards (collection label) and legacy v1
+  cards (`c` tag + `event_date`), merging into one slug set. Legacy support is dropped
+  only after every card is confirmed migrated (see `MIGRATION-v2.md` §5).
+- **Dedup by `pubkey:d`,** newest `created_at` wins; on a same-second tie, the card
+  carrying a collection label (v2) wins. Different pubkeys with the same `d` **coexist**
+  — that is the dispute mechanism, unchanged from v1.
+- Display date is always the full-precision `event_date` tag; the `YYYY`/`YYYY-MM`
+  buckets are query shadows and never the display source.
 
-**3. Two membership sources can disagree.** If manifests carried `a` tags to cards
-*and* cards carried `c`, the lists drift the moment a card is published without a
-manifest edit. That staleness is permanent maintenance. Resolution: only `c` counts.
-The cost: other NIP-51 clients will show the set as empty, and the free reverse
-lookup ("which collections hold this card" via an `#a` filter) is forfeited. Neither
-has a use today. Revisit only if one appears.
+## The walls (where this breaks, and status)
 
-**4. The marker string is squattable and permanent.** Anyone can publish a 30004
-wearing `t=wiki-timechain` — by design; the viewer is an open instrument and the
-Contribute section invites exactly this. The guard is shape validation, not
-identity: drop manifests whose `d` isn't a kebab slug, and drop collections whose
-card query returns nothing parseable. Renaming the marker later costs one edit per
-manifest (small), but every deployed viewer must agree on the string — so it gets
-decided once, here, before the first manifest is published.
+1. **Relays honoring the `#t` marker filter.** Single-letter `t` is indexed by every
+   relay that answers at all; the four reachable relays honor tag filters exactly.
+   Passes.
+2. **Marker is squattable and permanent.** By design — the viewer is an open
+   instrument. Guard is the membership gate (shape), not identity. `wikitimechain`,
+   one word, is the forever choice; renaming later means re-signing every card.
+3. **`#l` range-enumeration hits relay value-caps.** A decade of months = 120 values,
+   over some relays' per-filter limits. Mitigated by the **year bucket** (a decade =
+   10 values) and, for our corpus size, by client-side filtering. Never ship a naive
+   enumerate-every-month REQ.
+4. **No author allowlist.** Anyone can inject a junk collection or a fake card that
+   passes the gate. Unchanged from the v1 sieve; the real answer (rank-by-follows) is
+   deferred. Accepted, not solved.
+5. **Discovery-window drift.** Softened versus v1: the indexed `#t` fetch no longer
+   competes with the global 30818 stream, so our small corpus sits well inside the
+   window. Still bounded by `limit` if wikitimechain traffic ever grows large; the
+   union across relays is the mitigation.
 
-**5. Rival manifests for the same slug.** NIP-51 sets are per-author: a stranger can
-publish their own `d=tonopah-rezoning` manifest with a different title. That is
-PeriodO's model — a collection is a claim by a source — and long-term the fix is
-ranking claims by follows. Today: first-seen wins, and the featured list pins ours.
-Accepted, not solved.
+## Frozen decisions (v2)
 
-**6. Publish-side dependency.** Nothing changes until the manifests exist, and they
-are published from the Forge side (bunker-signed), not from this repo — the viewer
-never writes cards or manifests per CLAUDE.md (its only writes are the visitor's
-own reactions and comments). Backfill is exactly two events:
-`d=bitcoin-arbitrary-data` (`type=history`) and `d=tonopah-rezoning` (`type=land`).
-No card is republished. **Softened by layer zero:** discovery now works before any
-manifest exists — the manifests upgrade titles and types rather than gate the
-feature.
+- Marker: `["t","wikitimechain"]` — lowercase, one word, no `#`. **Forever.**
+- Namespaces: `wikitimechain.collection` / `wikitimechain.date` /
+  `wikitimechain.location` — one name everywhere; no `timechain.*` split.
+- Collection identity: NIP-32 self-label, replacing the v1 `c` tag.
+- Date buckets: year **and** month, both values in `wikitimechain.date`
+  (`2026` + `2026-07`); no separate year namespace (value length self-distinguishes).
+  Buckets encode *known* precision only — year-only cards emit no month bucket.
+- Approximate dates: one canonical `APPROXIMATE DATE: … — placed at <event_date>.`
+  line (uppercase prefix = grep anchor); controlled precision clauses or a quoted
+  source period; placement day 01 for month-known, 01-01 for year-only.
+- Location: full ISO→named ladder to the event's true scope; required when a card has
+  a location; a placeless timeline is valid (e.g. `bitcoin-arbitrary-data`).
+- Geohash: optional `g` prefix rungs, point-events-only, never a jurisdiction centroid.
+- Topics: freeform lowercase `t`, deliberately unspecced.
+- Membership gate: `#t` + `event_date` + collection label. Labels are discovery, the
+  gate is truth; never trust a bare `#l` because the namespace isn't indexed.
+- Manifests (kind 30004): **dropped.** v2 is labels-only.
 
-**7. The discovery window drifts.** Layer zero's open pull is capped by `limit`,
-and relays return newest-first. Today our cards are a large share of a small
-corpus; as the shared 30818 namespace grows, a collection whose newest card is
-older than the window silently falls out of heuristic discovery. Mitigations: the
-union across six relays' separate windows, the featured list, and manifests — a
-manifest-declared collection needs no window at all. This wall is why manifests
-stay worth publishing even with layer zero running.
+---
 
-## Decisions frozen by this document
+### Appendix — superseded from v1
 
-- Layer zero discovery: presence of `event_date` + `c` on a 30818 card is the
-  membership signature. No card-count threshold. Discovery approximate (window),
-  membership exact (per-slug `#c` query). Manifest metadata overrides inferred
-  metadata; the sieve is permanent, not a stopgap. **Implemented 2026-07-21.**
-- No hardcoded collection list at all — the earlier "featured stays pinned"
-  layer was dropped when layer zero shipped; a sieve probe confirmed the wild
-  namespace contributes zero false timelines today.
-- Marker: `["t","wiki-timechain"]` — **proposed, not yet frozen; freeze before the
-  first manifest is published.**
-- Type values: open set; `land`, `law`, `proposition`, `history` known today.
-- Membership: `c` on cards only; manifests carry no member pointers.
-- Rival manifests: first-seen wins.
-- The earlier idea of a NIP-32 label on every card is demoted to optional later
-  hardening — it is only needed for a one-query "all land cards across every
-  collection," which nothing asks for yet.
+- v1 discovery: `c` tag + `event_date` sieve → **replaced** by the `#t` marker + the
+  `wikitimechain.collection` label. `c` is read only during the dual-read transition.
+- v1 marker `t=wiki-timechain` (for manifests) → **replaced** by `t=wikitimechain`.
+- v1 kind-30004 manifest layer, marker-freeze, rival-manifest first-seen-wins →
+  **dropped** with the manifest layer.
+- v1's demotion of NIP-32 per-card labels → **reversed**; labels are now the scheme.
