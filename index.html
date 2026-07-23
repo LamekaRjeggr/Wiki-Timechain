@@ -182,11 +182,58 @@
   /* inside a contested vcard: same marginalia signature, per-version ownership */
   .mtl .vcard .mcmts{grid-column:auto;margin:9px 0 0}
   /* reaction charge (kind 7): glyph·count pairs — meaning rides the glyph SHAPE, the
-     viewer defines none of it. Amber is aesthetic only. Read-only until checkpoint 2b. */
-  .mtl .mrct{font-family:var(--mono);font-size:11px;padding:3px 0}
+     viewer defines none of it. Amber is aesthetic only. */
+  .mtl .mrct{font-family:var(--mono);font-size:11px;padding:3px 0;
+    display:flex;align-items:center;flex-wrap:wrap;gap:4px}
   .mtl .rg{color:var(--rail);margin-right:8px}
   .mtl .mcmt-t .sep{color:var(--faint);margin-right:6px}
   .mtl .mcmt-rct{margin-left:8px;font-size:10.5px}
+
+  /* ── write side (checkpoint 2b): the tap ── */
+  /* the + button: pressed state = FILLED amber + title text, never hue alone */
+  .mtl .tapbtn{font-family:var(--mono);font-size:13px;line-height:1;cursor:pointer;
+    width:26px;height:22px;border-radius:6px;background:var(--panel-2);
+    border:1px solid var(--border);color:var(--dim);padding:0;margin-right:6px;
+    transition:color .12s,border-color .12s}
+  .mtl .tapbtn:hover{color:var(--rail);border-color:var(--rail-dim)}
+  .mtl .tapbtn:disabled{opacity:.5;cursor:default}
+  .mtl .tapbtn.mine{background:var(--rail);border-color:var(--rail);color:#181203;
+    font-weight:700}
+  .oktally{color:var(--dim);font-size:10.5px;margin-left:2px}
+  .oktally.err{color:#ffb27a}          /* orange + text, never red */
+  /* the always-available key chip (minted keys only) */
+  .keychip{position:fixed;right:14px;bottom:14px;z-index:40;cursor:pointer;
+    font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel);
+    border:1px solid var(--border);border-radius:20px;padding:7px 13px;
+    max-width:78vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .keychip.hot{color:var(--rail);border-color:var(--rail-dim)}
+  .keychip:hover{border-color:var(--rail)}
+  /* birth-certificate popup — ceremony AFTER the reward */
+  #bcert{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+    justify-content:center;padding:18px}
+  #bcert .bc-back{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+  #bcert .bc-card{position:relative;background:var(--panel);border:1px solid var(--rail-dim);
+    border-radius:14px;padding:22px 24px;max-width:460px;width:100%;
+    box-shadow:0 18px 60px rgba(0,0,0,.5)}
+  #bcert h3{margin:0 0 10px;font-size:17px;color:var(--rail);font-weight:650}
+  #bcert p{margin:0 0 14px;font-size:13.5px;line-height:1.65;color:#c6c8ce}
+  #bcert .bc-row{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+  #bcert .bc-k{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:74px;
+    flex:none;text-align:right}
+  #bcert code{font-family:var(--mono);font-size:11px;color:#d7d9df;background:var(--panel-2);
+    border:1px solid var(--border-soft);border-radius:6px;padding:6px 8px;flex:1;
+    overflow-wrap:anywhere;line-height:1.5}
+  #bcert .bc-copy{font-family:var(--mono);font-size:10.5px;color:var(--dim);cursor:pointer;
+    background:transparent;border:1px solid var(--border);border-radius:6px;
+    padding:5px 9px;flex:none}
+  #bcert .bc-copy:hover{color:var(--text);border-color:var(--rail-dim)}
+  #bcert .bc-copy.did{color:var(--rail);border-color:var(--rail)}
+  #bcert .bc-warn{font-size:12px;color:#ffb27a;margin-top:12px}
+  #bcert .bc-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  #bcert .bc-btns button{font-size:12.5px;cursor:pointer;border-radius:7px;padding:8px 15px}
+  #bcert .bc-saved{background:var(--rail);border:1px solid var(--rail);color:#181203;font-weight:600}
+  #bcert .bc-later{background:transparent;border:1px solid var(--border);color:var(--dim)}
+  #bcert .bc-later:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -212,9 +259,12 @@
 
     <section class="contribute">
       <h2>Add to the record</h2>
-      <p>This page only <em>reads</em>. The timelines live on public nostr relays, so
-        contributing happens from any nostr client that can publish wiki events — you
-        don't need permission from this site, and this site can't stop you. That's the point.</p>
+      <p>This page <em>reads</em> the record. The only thing it ever writes is what you
+        tap out yourself — a reaction signed by your own key (comments will follow the
+        same path). It never writes a card, and it never asks for your secret key.
+        The timelines live on public nostr relays, so contributing happens from any
+        nostr client that can publish wiki events — you don't need permission from
+        this site, and this site can't stop you. That's the point.</p>
 
       <h3>1 · Get a nostr identity</h3>
       <p>A nostr account is just a keypair — no signup, no email. Start at
@@ -281,7 +331,7 @@ const RELAYS = [
 ];
 const KIND = 30818;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
-const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments (read-only for now)
+const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
 
 // ═══════════════ state ═══════════════
 const events   = new Map();     // pubkey:d → newest 30818 (replaceable per author)
@@ -373,7 +423,7 @@ function b32polymod(vals){
   }
   return chk;
 }
-function npub(hex){
+function bech32(hrp, hex){                 // npub for pubkeys, nsec for minted secrets
   const data = [];
   for (let i=0;i<hex.length;i+=2) data.push(parseInt(hex.slice(i,i+2),16));
   // convert 8-bit → 5-bit
@@ -381,7 +431,7 @@ function npub(hex){
   for (const b of data){ acc=(acc<<8)|b; bits+=8;
     while(bits>=5){ bits-=5; out.push((acc>>bits)&31); } }
   if (bits>0) out.push((acc<<(5-bits))&31);
-  const hrp="npub", exp=[];
+  const exp=[];
   for (const c of hrp) exp.push(c.charCodeAt(0)>>5);
   exp.push(0);
   for (const c of hrp) exp.push(c.charCodeAt(0)&31);
@@ -389,6 +439,7 @@ function npub(hex){
   const chk=[]; for (let i=0;i<6;i++) chk.push((pm>>5*(5-i))&31);
   return hrp+"1"+out.concat(chk).map(v=>B32[v]).join("");
 }
+const npub = hex => bech32("npub", hex);
 
 function authorLabel(pk){
   const p = profiles.get(pk);
@@ -687,6 +738,8 @@ function bindTaps(){                                      // gap expanders + com
   if (tapsBound) return;
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
+    const b = e.target.closest(".tapbtn");
+    if (b && !b.disabled){ tapCard(b.dataset.coord, b.dataset.e, b.dataset.p, b); return; }
     const t = e.target.closest(".mcmt-t");
     if (t && t.dataset.coord){
       const c = t.dataset.coord;
@@ -713,21 +766,25 @@ function renderTimeline(entries){
     wantCardReactions(coord);
   }));
 
-  // margin block for one card version: reaction charge + comments. Empty string when
-  // uncharged AND uncommented. Charged comments lift to the top of the thread.
+  // margin block for one card version: the tap + reaction charge + comments. The tap
+  // line renders on EVERY card (it's the affordance — checkpoint 2b); comments still
+  // show nothing at zero. Charged comments lift to the top of the thread.
   const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(g)} ${n}</span>`).join("");
   const marginBlock = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
     const w = id => reactions.get(id)?.size || 0;          // a comment's total charge
     const cs = [...(comments.get(coord)?.values() || [])]
       .sort((a,b) => (w(b.id) - w(a.id)) || (a.created_at - b.created_at));
-    const chHtml = glyphs(charge(coord));
-    if (!cs.length && !chHtml) return "";
+    const mine = myPk && reactions.get(coord)?.has(myPk);
+    const rctLine = `<div class="mrct">` +
+      `<button class="tapbtn${mine ? " mine" : ""}" type="button" data-coord="${esc(coord)}"` +
+      ` data-e="${esc(ev.id)}" data-p="${esc(ev.pubkey)}"` +
+      ` title="${mine ? "you reacted +" : "react +"}">+</button>` +
+      glyphs(charge(coord)) + tallyHtml(coord) + `</div>`;
     if (!cs.length)
-      return `<div class="mcmts"><div class="mrct">${chHtml}</div></div>`;
+      return `<div class="mcmts">${rctLine}</div>`;
     const open = expandedCmts.has(coord);
-    return `<div class="mcmts"><div class="mcmt-t" data-coord="${esc(coord)}">` +
-      (chHtml ? chHtml + `<span class="sep">·</span>` : "") +
+    return `<div class="mcmts">${rctLine}<div class="mcmt-t" data-coord="${esc(coord)}">` +
       `◦ ${cs.length} comment${cs.length===1?"":"s"}` +
       `<span class="go">${open ? "collapse ▴" : "read ▾"}</span></div>` +
       (open ? cs.map(c => {
@@ -811,6 +868,233 @@ function renderTimeline(entries){
   bindTaps();
 }
 
+// ═══════════════ write side — checkpoint 2b: the tap ═══════════════
+// The viewer's only writes, ever: reactions (and, come 2c, comments) the visitor
+// taps out, signed by the visitor's own key. Cards stay read-only forever.
+// Kept apart from the render code above on purpose.
+
+const tallies  = new Map();     // published event id → {ok,no,sent,done} — the honest OK tally
+const coordTap = new Map();     // card coord → event id of my latest tap on it
+const tapErr   = new Map();     // card coord → short error text (signer declined, …)
+let myPk = null;                // my pubkey once a signer produced one — lights .mine
+let certForId = null;           // event id whose first accept triggers the birth certificate
+
+const SK_KEY = "wtc:sk", SAVED_KEY = "wtc:saved", UNSAVED_N = "wtc:unsaved", CERT_SEEN = "wtc:cert";
+
+// margin-line tally text for one card — rendered by marginBlock
+function tallyHtml(coord){
+  const err = tapErr.get(coord);
+  if (err) return `<span class="oktally err">⚠ ${esc(err)}</span>`;
+  const t = tallies.get(coordTap.get(coord));
+  if (!t) return "";
+  if (!t.ok && !t.no && !t.done) return `<span class="oktally">publishing…</span>`;
+  return `<span class="oktally${t.done && !t.ok ? " err" : ""}">accepted by ${t.ok} of ${t.sent} relay${t.sent === 1 ? "" : "s"}</span>`;
+}
+
+// ── secp256k1 + BIP-340 schnorr, hand-rolled — powers the MINTED starter key only
+//    (NIP-07 extensions sign for themselves). Verified against the official BIP-340
+//    test vectors: node .htest/schnorr.mjs. Affine BigInt math: slow-ish, but this
+//    signs one tiny event per tap, not a block. ──
+const CURVE_P = 2n**256n - 2n**32n - 977n;
+const CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+const G = [0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,
+           0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n];
+const fmod = (a, m) => ((a % m) + m) % m;
+function finv(a, m){                       // modular inverse (extended euclid)
+  let [r0, r1, s0, s1] = [fmod(a, m), m, 1n, 0n];
+  while (r1 !== 0n){ const q = r0 / r1; [r0, r1] = [r1, r0 - q*r1]; [s0, s1] = [s1, s0 - q*s1]; }
+  return fmod(s0, m);
+}
+function padd(A, B){                       // point add (null = point at infinity)
+  if (!A) return B; if (!B) return A;
+  if (A[0] === B[0] && fmod(A[1] + B[1], CURVE_P) === 0n) return null;
+  const l = A[0] === B[0]
+    ? fmod(3n*A[0]*A[0] * finv(2n*A[1], CURVE_P), CURVE_P)
+    : fmod((B[1]-A[1]) * finv(B[0]-A[0], CURVE_P), CURVE_P);
+  const x = fmod(l*l - A[0] - B[0], CURVE_P);
+  return [x, fmod(l*(A[0]-x) - A[1], CURVE_P)];
+}
+function pmul(Pt, k){                      // double-and-add
+  let R = null, A = Pt;
+  while (k > 0n){ if (k & 1n) R = padd(R, A); A = padd(A, A); k >>= 1n; }
+  return R;
+}
+const hexToBytes = h => Uint8Array.from(h.match(/../g) || [], x => parseInt(x, 16));
+const bytesToHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+const bytesToInt = b => BigInt("0x" + (bytesToHex(b) || "0"));
+const intTo32   = i => hexToBytes(i.toString(16).padStart(64, "0"));
+const bcat = (...bs) => { const o = new Uint8Array(bs.reduce((n,b) => n + b.length, 0));
+  let at = 0; for (const b of bs){ o.set(b, at); at += b.length; } return o; };
+const sha256 = async b => new Uint8Array(await crypto.subtle.digest("SHA-256", b));
+async function taggedHash(tag, ...msgs){
+  const th = await sha256(new TextEncoder().encode(tag));
+  return sha256(bcat(th, th, ...msgs));
+}
+
+function mintKey(){                        // fresh secret key, uniform in [1, n)
+  let d = 0n;
+  while (d === 0n || d >= CURVE_N) d = bytesToInt(crypto.getRandomValues(new Uint8Array(32)));
+  return d.toString(16).padStart(64, "0");
+}
+function xonlyPub(skHex){
+  return pmul(G, bytesToInt(hexToBytes(skHex)))[0].toString(16).padStart(64, "0");
+}
+async function schnorrSign(msgHex, skHex, auxHex){   // auxHex fixed only by the test harness
+  const m  = hexToBytes(msgHex);
+  const d0 = bytesToInt(hexToBytes(skHex));
+  const Pt = pmul(G, d0);
+  const d  = (Pt[1] & 1n) ? CURVE_N - d0 : d0;       // BIP-340: even-y secret
+  const aux = auxHex ? hexToBytes(auxHex) : crypto.getRandomValues(new Uint8Array(32));
+  const t = d ^ bytesToInt(await taggedHash("BIP0340/aux", aux));
+  const rand = await taggedHash("BIP0340/nonce", intTo32(t), intTo32(Pt[0]), m);
+  const k0 = fmod(bytesToInt(rand), CURVE_N);
+  if (k0 === 0n) throw new Error("bad nonce");
+  const R = pmul(G, k0);
+  const k = (R[1] & 1n) ? CURVE_N - k0 : k0;
+  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge", intTo32(R[0]), intTo32(Pt[0]), m)), CURVE_N);
+  return bytesToHex(bcat(intTo32(R[0]), intTo32(fmod(k + e*d, CURVE_N))));
+}
+
+// NIP-01 id + signature for a minted-key event
+async function signWithMint(tmpl, skHex){
+  const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
+  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+  ev.id = bytesToHex(await sha256(new TextEncoder().encode(ser)));
+  ev.sig = await schnorrSign(ev.id, skHex);
+  return ev;
+}
+
+// ── the signer seam: everything that writes asks getSigner() and nothing else.
+//    NIP-07 extension if present; else the minted localStorage starter key —
+//    two implementations behind one interface. ──
+let signerP = null;
+function getSigner(){
+  if (!signerP){
+    signerP = (async () => {
+      if (window.nostr){
+        const pk = await window.nostr.getPublicKey();
+        return { via:"nip07", pubkey: pk, sign: t => window.nostr.signEvent(t) };
+      }
+      let sk = localStorage.getItem(SK_KEY);
+      if (!sk){ sk = mintKey(); localStorage.setItem(SK_KEY, sk); }
+      return { via:"mint", pubkey: xonlyPub(sk), sign: t => signWithMint(t, sk) };
+    })();
+    signerP.catch(() => { signerP = null; });    // a declined NIP-07 prompt can retry
+  }
+  return signerP;
+}
+
+// ── publish over the already-open sockets; count OK frames and tell the truth ──
+function publish(ev){
+  const t = { ok:0, no:0, sent:0, done:false };
+  tallies.set(ev.id, t);
+  sockets.forEach(ws => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify(["EVENT", ev]));
+    t.sent++;
+  });
+  setTimeout(() => { t.done = true; certMaybe(ev.id); scheduleRender(); }, 6000);
+  setTimeout(() => { tallies.delete(ev.id); scheduleRender(); }, 20000);
+}
+
+// ── the tap ──
+async function tapCard(coord, eid, pk, btn){
+  if (btn) btn.disabled = true;
+  tapErr.delete(coord);
+  try {
+    const s = await getSigner();
+    const ev = await s.sign({
+      kind: REACTION_KIND,
+      created_at: Math.floor(Date.now() / 1000),
+      content: "+",                                        // proof-of-life: one character
+      tags: [["a", coord], ["e", eid], ["p", pk], ["k", String(KIND)]]
+    });
+    myPk = ev.pubkey;
+    if (s.via === "mint" && !localStorage.getItem(CERT_SEEN)) certForId = ev.id;
+    coordTap.set(coord, ev.id);
+    ingestReaction(ev);                                    // reward first: the glyph lights now
+    publish(ev);
+    if (s.via === "mint") bumpUnsaved();
+  } catch {
+    tapErr.set(coord, "signer declined — tap to retry");
+    scheduleRender();
+  }
+}
+
+// ── ceremony after: the birth certificate ──
+function certMaybe(id){
+  if (!certForId || id !== certForId) return;
+  certForId = null;
+  showCert(true);
+}
+function bumpUnsaved(){
+  if (localStorage.getItem(SAVED_KEY)) return;
+  localStorage.setItem(UNSAVED_N, String((parseInt(localStorage.getItem(UNSAVED_N), 10) || 0) + 1));
+  renderKeyChip();
+}
+
+function showCert(firstTime){
+  const sk = localStorage.getItem(SK_KEY);
+  if (!sk) return;
+  localStorage.setItem(CERT_SEEN, "1");
+  const nsecStr = bech32("nsec", sk), npubStr = bech32("npub", xonlyPub(sk));
+  let el = document.getElementById("bcert");
+  if (!el){ el = document.createElement("div"); el.id = "bcert"; document.body.appendChild(el); }
+  el.innerHTML = `<div class="bc-back"></div><div class="bc-card">` +
+    `<h3>${firstTime ? "That was your first nostr event." : "Your nostr key"}</h3>` +
+    `<p>This key signed it. It was minted in this browser and lives only here until you ` +
+    `save it somewhere safe — it works in any nostr client.</p>` +
+    `<div class="bc-row"><span class="bc-k">npub · public</span><code>${esc(npubStr)}</code>` +
+    `<button class="bc-copy" type="button" data-copy="${esc(npubStr)}">copy</button></div>` +
+    `<div class="bc-row"><span class="bc-k">nsec · SECRET</span><code>${esc(nsecStr)}</code>` +
+    `<button class="bc-copy" type="button" data-copy="${esc(nsecStr)}">copy</button></div>` +
+    `<p class="bc-warn">⚠ The nsec IS the identity — whoever holds it is you. Don't paste ` +
+    `it into websites; this page never asks for it back.</p>` +
+    `<div class="bc-btns"><button class="bc-saved" type="button">I saved it</button>` +
+    `<button class="bc-later" type="button">later</button></div></div>`;
+  el.querySelectorAll(".bc-copy").forEach(b => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
+    b.classList.add("did"); b.textContent = "copied ✓";
+    setTimeout(() => { b.classList.remove("did"); b.textContent = "copy"; }, 1600);
+  }));
+  const close = () => { el.remove(); renderKeyChip(); };
+  el.querySelector(".bc-later").addEventListener("click", close);
+  el.querySelector(".bc-back").addEventListener("click", close);
+  el.querySelector(".bc-saved").addEventListener("click", () => {
+    localStorage.setItem(SAVED_KEY, "1");
+    close();
+  });
+}
+
+// ── the always-available key chip (minted keys only; NIP-07 users hold their own) ──
+const chipEl = document.createElement("button");
+chipEl.className = "keychip"; chipEl.type = "button"; chipEl.style.display = "none";
+chipEl.addEventListener("click", () => showCert(false));
+document.body.appendChild(chipEl);
+function renderKeyChip(){
+  if (!localStorage.getItem(SK_KEY)){ chipEl.style.display = "none"; return; }
+  chipEl.style.display = "";
+  if (localStorage.getItem(SAVED_KEY)){
+    chipEl.classList.remove("hot");
+    chipEl.textContent = "⚿ your key";
+    chipEl.title = "view your nostr key";
+  } else {
+    const n = parseInt(localStorage.getItem(UNSAVED_N), 10) || 0;
+    chipEl.classList.add("hot");
+    chipEl.textContent = n ? `⚿ ${n} event${n === 1 ? " rides" : "s ride"} on this unsaved key`
+                           : "⚿ unsaved key";
+    chipEl.title = "this key exists only in this browser — view and save it";
+  }
+}
+// a key minted on an earlier visit: light the chip and the .mine states on load
+if (localStorage.getItem(SK_KEY)){
+  try { myPk = xonlyPub(localStorage.getItem(SK_KEY)); } catch {}
+  renderKeyChip();
+}
+
+// test hook — headless harness only, no runtime consumer
+window.__wtc = { schnorrSign, xonlyPub, bech32, signWithMint };
+
 // ═══════════════ relay connections ═══════════════
 function connect(url){
   let ws;
@@ -841,6 +1125,14 @@ function connect(url){
       if (data[1] === "prof")  ingestProfile(data[2]);
       if (data[1] === "cmt")   ingestComment(data[2]);
       if (data[1] === "rct")   ingestReaction(data[2]);
+    }
+    if (data[0] === "OK"){                     // a relay's verdict on something we published
+      const t = tallies.get(data[1]);
+      if (t){
+        data[2] ? t.ok++ : t.no++;
+        if (data[2]) certMaybe(data[1]);       // first accept → the birth certificate
+        scheduleRender();
+      }
     }
     // EOSE: keep subscriptions open for live edits
   };
