@@ -181,6 +181,12 @@
   .mtl .mcmt-body p:last-child{margin-bottom:0}
   /* inside a contested vcard: same marginalia signature, per-version ownership */
   .mtl .vcard .mcmts{grid-column:auto;margin:9px 0 0}
+  /* reaction charge (kind 7): glyph·count pairs — meaning rides the glyph SHAPE, the
+     viewer defines none of it. Amber is aesthetic only. Read-only until checkpoint 2b. */
+  .mtl .mrct{font-family:var(--mono);font-size:11px;padding:3px 0}
+  .mtl .rg{color:var(--rail);margin-right:8px}
+  .mtl .mcmt-t .sep{color:var(--faint);margin-right:6px}
+  .mtl .mcmt-rct{margin-left:8px;font-size:10.5px}
 </style>
 </head>
 <body>
@@ -275,6 +281,7 @@ const RELAYS = [
 ];
 const KIND = 30818;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
+const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments (read-only for now)
 
 // ═══════════════ state ═══════════════
 const events   = new Map();     // pubkey:d → newest 30818 (replaceable per author)
@@ -284,6 +291,9 @@ const sockets  = [];
 const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
 const comments = new Map();     // card coord (30818:pubkey:d) → Map(comment id → kind-1111)
 const cmtSubs  = new Set();     // coords whose comments we've asked for — grows, never shrinks
+const reactions = new Map();    // target (card coord | comment id) → Map(pubkey → newest kind-7)
+const rctA     = new Set();     // card coords whose reactions we've asked for (#a) — grow-only
+const rctE     = new Set();     // comment ids whose reactions we've asked for (#e) — grow-only
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
 let activeC   = null;           // no collection until discovery finds one
@@ -293,6 +303,7 @@ let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
 let cmtTimer = null;
+let rctTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const expandedCmts = new Set();          // card coords whose comment thread is open
 
@@ -467,6 +478,7 @@ function ingestComment(ev){
   const byId = comments.get(A[1]) || comments.set(A[1], new Map()).get(A[1]);
   if (byId.has(ev.id)) return;
   byId.set(ev.id, ev);
+  wantCommentReactions(ev.id);
   if (!profiles.has(ev.pubkey)){
     profiles.set(ev.pubkey, { name:null, fetched:false });
     scheduleProfileFetch();
@@ -492,6 +504,69 @@ function scheduleCommentFetch(){
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","cmt"]));
       ws.send(JSON.stringify(["REQ","cmt",{ kinds:[COMMENT_KIND], "#A":[...cmtSubs] }]));
+    });
+  }, 250);
+}
+
+// Reactions (kind 7, NIP-25): charge. Card reactions arrive by `a` coord (survives the
+// author editing the card); comment reactions by `e` id. One vote per pubkey per target —
+// newest created_at wins, so a changed mind replaces instead of stacking.
+function ingestReaction(ev){
+  if (!ev || ev.kind !== REACTION_KIND) return;
+  const eTag = ev.tags.find(t => t[0] === "e" && rctE.has(t[1]));
+  const aTag = ev.tags.find(t => t[0] === "a" && rctA.has(t[1]));
+  const target = eTag ? eTag[1] : aTag ? aTag[1] : null;   // comment beats card: most specific
+  if (!target) return;
+  const byPk = reactions.get(target) || reactions.set(target, new Map()).get(target);
+  const prev = byPk.get(ev.pubkey);
+  if (prev && prev.created_at >= ev.created_at) return;
+  byPk.set(ev.pubkey, ev);
+  scheduleRender();
+}
+
+// glyph → count for one target, heaviest first, capped at 3 glyphs shown.
+// "" and "+" collapse to "+" (NIP-25 default like); anything else displays as sent.
+// The viewer never defines what a glyph MEANS — shape carries it (colorblind-safe).
+function charge(target){
+  const byPk = reactions.get(target);
+  if (!byPk || !byPk.size) return [];
+  const n = new Map();
+  for (const ev of byPk.values()){
+    const c = String(ev.content ?? "").trim();
+    const g = (c === "" || c === "+") ? "+" : [...c].slice(0,8).join("");
+    n.set(g, (n.get(g) || 0) + 1);
+  }
+  return [...n.entries()].sort((a,b) => b[1] - a[1]).slice(0,3);
+}
+
+// Reaction pulls mirror the comment sub: grow-only target sets, one open "rct" sub per
+// socket carrying two filters (#a cards, #e comments), debounced resend as the sets grow.
+function wantCardReactions(coord){
+  if (rctA.has(coord)) return;
+  rctA.add(coord);
+  scheduleReactionFetch();
+}
+function wantCommentReactions(id){
+  if (rctE.has(id)) return;
+  rctE.add(id);
+  scheduleReactionFetch();
+}
+function rctFilters(){
+  const f = [];
+  if (rctA.size) f.push({ kinds:[REACTION_KIND], "#a":[...rctA] });
+  if (rctE.size) f.push({ kinds:[REACTION_KIND], "#e":[...rctE] });
+  return f;
+}
+function scheduleReactionFetch(){
+  if (rctTimer) return;
+  rctTimer = setTimeout(() => {
+    rctTimer = null;
+    const f = rctFilters();
+    if (!f.length) return;
+    sockets.forEach(ws => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(["CLOSE","rct"]));
+      ws.send(JSON.stringify(["REQ","rct", ...f]));
     });
   }, 250);
 }
@@ -632,23 +707,36 @@ function renderTimeline(entries){
   // the spine has no selection, so comment laziness is per-COLLECTION: subscribe
   // every version's coord in one batch (bounded — collections are tens of cards).
   // What it buys: real counts on the toggles instead of a mute affordance.
-  entries.forEach(e => e.evs.forEach(ev =>
-    wantComments(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))));
+  entries.forEach(e => e.evs.forEach(ev => {
+    const coord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
+    wantComments(coord);
+    wantCardReactions(coord);
+  }));
 
-  // marginalia block for one card version — empty string when it has no comments
-  const cmtBlock = (ev, d) => {
+  // margin block for one card version: reaction charge + comments. Empty string when
+  // uncharged AND uncommented. Charged comments lift to the top of the thread.
+  const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(g)} ${n}</span>`).join("");
+  const marginBlock = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
+    const w = id => reactions.get(id)?.size || 0;          // a comment's total charge
     const cs = [...(comments.get(coord)?.values() || [])]
-      .sort((a,b) => a.created_at - b.created_at);
-    if (!cs.length) return "";
+      .sort((a,b) => (w(b.id) - w(a.id)) || (a.created_at - b.created_at));
+    const chHtml = glyphs(charge(coord));
+    if (!cs.length && !chHtml) return "";
+    if (!cs.length)
+      return `<div class="mcmts"><div class="mrct">${chHtml}</div></div>`;
     const open = expandedCmts.has(coord);
     return `<div class="mcmts"><div class="mcmt-t" data-coord="${esc(coord)}">` +
+      (chHtml ? chHtml + `<span class="sep">·</span>` : "") +
       `◦ ${cs.length} comment${cs.length===1?"":"s"}` +
       `<span class="go">${open ? "collapse ▴" : "read ▾"}</span></div>` +
-      (open ? cs.map(c =>
-        `<div class="mcmt"><div class="mcmt-who">${authorLink(c.pubkey)}` +
-        `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span></div>` +
-        `<div class="mcmt-body">${renderContent(c.content || "")}</div></div>`).join("") : "") +
+      (open ? cs.map(c => {
+        const cch = glyphs(charge(c.id));
+        return `<div class="mcmt"><div class="mcmt-who">${authorLink(c.pubkey)}` +
+          `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span>` +
+          (cch ? `<span class="mcmt-rct">${cch}</span>` : "") + `</div>` +
+          `<div class="mcmt-body">${renderContent(c.content || "")}</div></div>`;
+      }).join("") : "") +
       `</div>`;
   };
 
@@ -698,7 +786,7 @@ function renderTimeline(entries){
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
           `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` +
           `<div class="cbody">${renderContent(ev.content || "")}</div>` +
-          cmtBlock(ev, e.d) + `</div>`
+          marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
         `<span><span class="k">kind</span> 30818</span></div>` +
@@ -713,7 +801,7 @@ function renderTimeline(entries){
         `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
         `<span><span class="k">d</span> ${esc(e.d)}</span>` +
         `<span><span class="k">kind</span> 30818</span></div>` +
-        `</div>${cmtBlock(ev, e.d)}</div>`;
+        `</div>${marginBlock(ev, e.d)}</div>`;
     }
   });
 
@@ -741,6 +829,9 @@ function connect(url){
       ws.send(JSON.stringify(["REQ","wtc",{ kinds:[KIND], "#c": [...slugs] }]));
     if (cmtSubs.size)
       ws.send(JSON.stringify(["REQ","cmt",{ kinds:[COMMENT_KIND], "#A": [...cmtSubs] }]));
+    const rf = rctFilters();
+    if (rf.length)
+      ws.send(JSON.stringify(["REQ","rct", ...rf]));
   };
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
@@ -749,6 +840,7 @@ function connect(url){
       if (data[1] === "wtc")   ingest(data[2]);
       if (data[1] === "prof")  ingestProfile(data[2]);
       if (data[1] === "cmt")   ingestComment(data[2]);
+      if (data[1] === "rct")   ingestReaction(data[2]);
     }
     // EOSE: keep subscriptions open for live edits
   };
