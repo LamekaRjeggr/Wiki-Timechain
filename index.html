@@ -284,26 +284,37 @@
         this site, and this site can't stop you. That's the point.</p>
 
       <h3>1 · Get a nostr identity</h3>
-      <p>A nostr account is just a keypair — no signup, no email. Start at
-        <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>
+      <p>A keypair is the whole membership process — no signup, no email, no one to
+        approve you. Make one at
+        <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>,
         or read <a href="https://nostr.how" target="_blank" rel="noopener noreferrer">nostr.how</a>
-        for a walkthrough. Guard your secret key (<code>nsec</code>) — it can't be reset.
-        Use a signer extension or app rather than pasting it into websites.</p>
+        first. From that moment you can put things on this record and nobody — including
+        whoever runs this page — can take them off. Guard your secret key
+        (<code>nsec</code>): it can't be reset, and it <em>is</em> the identity. Use a
+        signer extension or app rather than pasting it into websites.</p>
 
       <h3>2 · Publish a card</h3>
       <p>An entry is a <b>kind 30818</b> wiki event
         (<a href="https://github.com/nostr-protocol/nips/blob/master/54.md" target="_blank"
-            rel="noopener noreferrer">NIP-54</a>). Wiki clients such as
+            rel="noopener noreferrer">NIP-54</a>) that labels itself as belonging here
+        (<a href="https://github.com/nostr-protocol/nips/blob/master/32.md" target="_blank"
+            rel="noopener noreferrer">NIP-32</a>). General wiki clients such as
         <a href="https://wikifreedia.xyz" target="_blank" rel="noopener noreferrer">wikifreedia.xyz</a>
         or <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
-        can publish them. A card that this page can place on a timeline carries these tags:</p>
+        publish 30818s but won't add the timeline tags — use anything that lets you set
+        tags yourself. A card this page can place on a rail carries:</p>
 <pre>
 kind: 30818
 tags:
-  d           2026-my-entry-slug          (identity — one entry, editable by you)
-  title       2026 · Short entry name
+  d           my-entry-slug               (identity — one entry, editable by you; no date in it)
+  title       Short entry name            (no leading year — the rail already shows the date)
   event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail)
-  c           &lt;collection&gt;                (which timeline — a NEW value starts a new one)
+  t           wikitimechain               (the discovery marker — every card carries it)
+  L           wikitimechain.collection
+  l           &lt;collection-slug&gt;   wikitimechain.collection   (which timeline)
+  L           wikitimechain.date
+  l           2026                wikitimechain.date
+  l           2026-07             wikitimechain.date
 content:
   One factual sentence about what happened.
 
@@ -311,19 +322,31 @@ content:
 </pre>
       <p>Keep the content to verifiable facts with a primary source. The timeline shows
         who published every card — your entry stands on your signature. There is no
-        registration step for a timeline: this page discovers collections from the cards
-        themselves (any card with an <code>event_date</code> and a <code>c</code> tag),
-        so publishing the first card of a new <code>c</code> value is all it takes.</p>
+        registration step for a timeline: a collection <em>is</em> its slug, so publishing
+        the first card carrying a new <code>wikitimechain.collection</code> value is all it
+        takes to start one, and it appears here beside the rest.</p>
 
-      <h3>3 · Dispute a card</h3>
+      <h3>3 · Or build your own reader</h3>
+      <p>This page is one client, not the record. One request boots another:
+        <code>{"kinds":[30818],"#t":["wikitimechain"],"limit":500}</code> — group what
+        comes back by its collection label, sort by <code>event_date</code>, draw. Exact
+        membership for one timeline is <code>{"kinds":[30818],"#l":["&lt;slug&gt;"]}</code>.
+        No manifest to fetch, no index to register with. The full tag scheme is in
+        <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
+           target="_blank" rel="noopener noreferrer">CONVENTION.md</a>.</p>
+
+      <h3>4 · Dispute a card</h3>
       <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
         <code>d</code> tag</b> and your correction. Nothing is overwritten — both
         versions appear side by side on the rail, each signed by its author, and readers
         judge for themselves. Disputes are additions, not deletions.</p>
 
-      <h3>Verify everything</h3>
-      <p>Every card links to its author — click a publisher's name to inspect their full
-        history on <a href="https://njump.me" target="_blank" rel="noopener noreferrer">njump.me</a>.
+      <h3>Don't trust, verify.</h3>
+      <p>Nothing here is vouched for — not by this page, and not by the marker on a card.
+        Anyone can wear the tag, so every card still has to earn its place: a real date, a
+        collection it claims, a source you can check, and a key you can look up. Click any
+        publisher's name to read their full history on
+        <a href="https://njump.me" target="_blank" rel="noopener noreferrer">njump.me</a>.
         This site has no accounts, no moderators, and no server: it renders whatever the
         relays hold, and the relays hold whatever people sign.</p>
     </section>
