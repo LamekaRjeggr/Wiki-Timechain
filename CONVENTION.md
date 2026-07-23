@@ -172,6 +172,31 @@ collection); no UI should assume server-side multi-axis AND.
 - Display date is always the full-precision `event_date` tag; the `YYYY`/`YYYY-MM`
   buckets are query shadows and never the display source.
 
+## Publishing, and building a client
+
+Nothing here is owned. There is no registry to join, no key to be added to, no
+permission step. Two things follow.
+
+**To publish.** Sign a kind-30818 with the required tags above — marker, `event_date`,
+a `wikitimechain.collection` label — from any key, to any relay this viewer reads.
+A collection *is* its slug: publish the first card carrying a new slug and the
+collection exists; every conforming viewer will show it beside ours. Republishing the
+same `d` from the same key edits that card; the same `d` from a different key is a
+second, coexisting version — that is the dispute mechanism, not a collision.
+
+**To build a client.** One REQ boots you:
+`{"kinds":[30818],"#t":["wikitimechain"],"limit":500}`. Group what passes the gate by
+its collection label, sort by `event_date`, render. Exact membership for one collection
+is `{"kinds":[30818],"#l":["<slug>"]}` — then re-check the gate, because `#l` is
+value-only (below). That is the entire protocol; there is no manifest to fetch and no
+index to register with.
+
+### Don't trust, verify.
+
+The marker is bait, the labels are hints, and neither is proof. Run the gate on every
+event you accept, whoever sent it and whatever it claims — that is what makes an open
+marker safe to use. A client that skips the check inherits everyone else's junk.
+
 ## The walls (where this breaks, and status)
 
 1. **Relays honoring the `#t` marker filter.** Single-letter `t` is indexed by every
@@ -184,9 +209,12 @@ collection); no UI should assume server-side multi-axis AND.
    over some relays' per-filter limits. Mitigated by the **year bucket** (a decade =
    10 values) and, for our corpus size, by client-side filtering. Never ship a naive
    enumerate-every-month REQ.
-4. **No author allowlist.** Anyone can inject a junk collection or a fake card that
-   passes the gate. Unchanged from the v1 sieve; the real answer (rank-by-follows) is
-   deferred. Accepted, not solved.
+4. **No author allowlist — on purpose.** Anyone who publishes a card that passes the
+   gate is in, no permission asked. That is the offer, not a leak: a stranger can start
+   a collection on their own key today and every wikitimechain viewer will find it. The
+   cost of that openness is that junk and fakes also pass the gate. The answer is
+   ranking, not gatekeeping (rank-by-follows, deferred) — see *Publishing, and building
+   a client* above.
 5. **Discovery-window drift.** Softened versus v1: the indexed `#t` fetch no longer
    competes with the global 30818 stream, so our small corpus sits well inside the
    window. Still bounded by `limit` if wikitimechain traffic ever grows large; the
