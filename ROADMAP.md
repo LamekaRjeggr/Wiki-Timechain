@@ -12,6 +12,9 @@ line: later checkpoints don't rewrite earlier ones.
   scoped to one author's signed version (`A` = `30818:pubkey:d`), collapsed
   `◦ N comments` toggle under the card, expand in place. A real comment is
   live on the relays and renders on the public page.
+- **Reactions are shipped through 2b**: the read side (2a) and the tap (2b)
+  are both live. A real kind-7 `+` on the Taproot card renders from the
+  relays. Next rung: 2c, the comment compose unlock.
 
 ## The shape (decided)
 
@@ -60,12 +63,15 @@ as glyph·count pairs on the margin line (one vote per pubkey per target,
 newest wins; `""`/`+` collapse to `+`); charged comments lift-sort to the
 top of the thread. No writes.
 
-**2b — the tap.** `+` glyph on each card. The viewer's first write ever:
-`getSigner()` (NIP-07-or-mint), publish kind-7 over the already-open relay
-sockets, honest OK tally, then the birth-certificate popup. Unsaved-key
-counter starts here, counting every event signed by the unsaved key. The
-README/manifesto "this page only reads" sentence gets its honest amendment
-here. Keep write code tiny and separate from render code.
+**2b — the tap. SHIPPED 2026-07-23.** `+` glyph on each card's margin line.
+The viewer's first write ever: `getSigner()` (NIP-07-or-mint — the minted
+key is a hand-rolled BIP-340 schnorr signer verified in-page against the
+official test vectors), publish kind-7 over the already-open relay sockets,
+honest OK tally inline, then the birth-certificate popup on first relay
+accept. The unsaved-key chip counts every event riding on an unsaved minted
+key; "I saved it" quiets it. The manifesto sentence got its honest
+amendment. Write code lives in its own section, apart from render code.
+Cards only — comment tap targets arrive with the ladder in 2c.
 
 **2c — the unlock.** Compose box opens only for identities that have reacted
 to that card. Same NIP-22 tag shape as the proven test comment, same signer,
