@@ -54,10 +54,11 @@ card doesn't modify it; cards stay read-only as documents.
 
 ## Checkpoints
 
-**2a — reaction read.** One more grow-only sub beside `"cmt"`: kind-7s by
-`#a` (card coords) + `#e` (comment ids). Counts on cards and comments;
-lift-sort so charged comments surface first. No writes. Ships alone, useful
-alone.
+**2a — reaction read. SHIPPED 2026-07-22.** One more grow-only sub beside
+`"cmt"`: kind-7s by `#a` (card coords) + `#e` (comment ids). Charge renders
+as glyph·count pairs on the margin line (one vote per pubkey per target,
+newest wins; `""`/`+` collapse to `+`); charged comments lift-sort to the
+top of the thread. No writes.
 
 **2b — the tap.** `+` glyph on each card. The viewer's first write ever:
 `getSigner()` (NIP-07-or-mint), publish kind-7 over the already-open relay
