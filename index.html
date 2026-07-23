@@ -70,111 +70,6 @@
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
-  /* ── proportional timeline band ── */
-  .band-wrap{position:relative;margin-top:18px;border:1px solid var(--border);
-    border-radius:10px;background:var(--panel);overflow:hidden;
-    cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
-  .band-wrap.dragging{cursor:grabbing}
-  .band{position:relative}
-  .rail{position:absolute;left:0;right:0;height:2px;
-    background:linear-gradient(90deg,var(--rail-dim),var(--rail),var(--rail-dim))}
-  .gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--faint);opacity:.45}
-  .gridline.month{opacity:.18}
-  .gridlabel{position:absolute;bottom:4px;transform:translateX(-50%);
-    font-size:10px;color:var(--dim)}
-  .gridlabel.month{color:var(--faint)}
-
-  .node{position:absolute;width:12px;height:12px;border-radius:999px;
-    background:var(--rail);transform:translate(-50%,-50%);cursor:pointer;
-    box-shadow:0 0 0 3px var(--panel),0 0 12px rgba(255,176,46,.45)}
-  .node:hover{box-shadow:0 0 0 3px var(--panel),0 0 16px rgba(255,176,46,.9)}
-  .node.selected{background:var(--accent);width:14px;height:14px;
-    box-shadow:0 0 0 3px var(--panel),0 0 14px rgba(74,163,255,.8)}
-  /* contested versions: square nodes, so the difference survives any palette */
-  .node.contested{border-radius:2px}
-  /* upcoming events (event_date beyond today): larger hollow cyan ring, not filled disc.
-     three redundant channels — fill (hollow), size (bigger), hue (cyan) — so it survives
-     any palette and reads for a red-green colorblind viewer even if cyan≈blue */
-  .node.future{width:15px;height:15px;background:var(--panel);border:2px solid var(--future);
-    box-shadow:0 0 0 3px var(--panel),0 0 12px rgba(47,214,230,.4)}
-  .node.future:hover{box-shadow:0 0 0 3px var(--panel),0 0 16px rgba(47,214,230,.85)}
-  .node.future.selected{width:17px;height:17px;background:var(--panel);border-color:var(--accent)}
-  .spine{position:absolute;width:2px;background:var(--rail-dim);transform:translateX(-50%)}
-  /* leader stem: node stays on the rail, its label is displaced into a free lane and
-     this thin line links the two. length = how deep the label had to go to avoid a collision */
-  .stem{position:absolute;width:0;border-left:1px solid var(--rail-dim);
-    transform:translateX(-50%);pointer-events:none;opacity:.7}
-  .stem.future{border-left-color:var(--future);opacity:.55}
-  .stem.selected{border-left-color:var(--accent);opacity:.9}
-
-  /* the present moment on the rail — bold amber threshold; the future span past it is
-     washed cyan (reinforces the hollow cyan future nodes — a zone, not just dots) */
-  .nowzone{position:absolute;top:0;bottom:0;right:0;background:rgba(47,214,230,.06);
-    pointer-events:none;z-index:0}
-  .nowline{position:absolute;top:0;bottom:0;width:0;
-    border-left:2px solid var(--rail);opacity:.85;z-index:1}
-  .nowlabel{position:absolute;top:2px;transform:translateX(-50%);font-size:9px;
-    letter-spacing:.12em;text-transform:uppercase;color:var(--rail);pointer-events:none;
-    background:var(--panel);border:1px solid var(--rail-dim);border-radius:10px;padding:2px 7px}
-
-  .nlabel{position:absolute;transform:translateX(-50%);font-size:10.5px;color:var(--dim);
-    white-space:nowrap;pointer-events:none;max-width:150px;overflow:hidden;
-    text-overflow:ellipsis;text-align:center}
-  .nlabel b{color:var(--text);font-weight:500}
-
-  .band-hint{position:absolute;top:6px;right:10px;font-size:10px;color:var(--faint);
-    pointer-events:none}
-  .zoombtns{position:absolute;top:6px;left:10px;display:flex;gap:4px}
-  .zoombtns button{width:26px;height:26px;border:1px solid var(--border);border-radius:6px;
-    background:var(--bg);color:var(--dim);font-size:14px;cursor:pointer;line-height:1}
-  .zoombtns button:hover{color:var(--text);border-color:var(--rail-dim)}
-  .edges{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);
-    padding:6px 4px 0}
-
-  /* ── detail card ── */
-  .detail{margin-top:18px}
-  .card{border:1px solid var(--border);background:var(--panel);
-    border-radius:10px;padding:20px 22px}
-  .cmeta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-  .ctitle{font-size:18px;font-weight:650;line-height:1.3;letter-spacing:-.01em;
-    margin-right:auto}
-  .badge{font-size:11px;font-weight:500;border:1px solid var(--border);border-radius:999px;
-    padding:3px 10px;color:var(--dim);letter-spacing:.02em}
-  .badge.date{color:var(--rail);border-color:var(--rail-dim);
-    font-family:var(--mono);font-weight:400}
-  .badge.contested{color:#ffb27a;border-color:#7a4a1f}   /* orange + text, never hue-only */
-  .badge.upcoming{color:var(--rail);border-color:var(--rail-dim);
-    text-transform:uppercase;letter-spacing:.08em;font-size:10px}  /* text carries it, not hue */
-  .cbody{font-size:15px;line-height:1.7;color:#d7d9df}
-  .cbody p{margin:0 0 10px}
-  .cbody p:last-child{margin-bottom:0}
-  .cfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--border-soft);
-    font-size:12px;color:var(--dim);display:flex;gap:18px;flex-wrap:wrap;
-    font-family:var(--mono)}
-  .cfoot .k{color:var(--faint);margin-right:2px}
-  .versions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
-  .versions button{border:1px solid var(--border);background:transparent;color:var(--dim);
-    border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;
-    transition:color .12s,border-color .12s}
-  .versions button:hover{color:var(--text);border-color:var(--rail-dim)}
-  .versions button.cur{border-color:var(--accent);color:var(--accent);
-    background:rgba(74,163,255,.08)}
-  .detail-hint{color:var(--dim);font-size:12.5px;text-align:center;padding:18px 0}
-
-  /* ── comments: marginalia under the detail card — notes ABOUT the record, never
-     part of it. Indent + faint left rule keep them visually subordinate to the
-     signed card above. (kind 1111, NIP-22 — read-only here) */
-  .comments{margin:10px 0 0 18px;padding-left:16px;border-left:2px solid var(--border)}
-  .chead{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--faint);margin:2px 0 4px}
-  .cmt{padding:8px 0}
-  .cmt + .cmt{border-top:1px solid var(--border-soft)}
-  .cmt-who{font-size:11.5px;font-family:var(--mono);color:var(--dim)}
-  .cmt-when{color:var(--faint);margin-left:8px}
-  .cmt-body{font-size:13.5px;line-height:1.6;color:#b9bcc4;margin-top:3px}
-  .cmt-body p{margin:0 0 6px}
-  .cmt-body p:last-child{margin-bottom:0}
-
   .msg{margin:26px 0;text-align:center;color:var(--dim);font-size:13px;line-height:1.7}
   .msg.err{color:#ffb27a}          /* orange, not red — meaning also in text */
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--faint);
@@ -195,21 +90,19 @@
   .contribute pre{padding:16px 18px;overflow-x:auto;line-height:1.7;color:#c6c8ce}
 
   @media (max-width:640px){
-    .nlabel,.stem{display:none}                        /* labels collide on phones */
-    .nlabel.selected-label,.stem.selected{display:block}  /* keep the selected one + its stem */
     h1{font-size:17px}
   }
 
-  /* ── mobile vertical spine-column (≤640px) ──
-     the rail's two jobs split apart: TIME → vertical scroll, DISTANCE → gap height.
+  /* ── vertical spine-column timeline (the only view, all widths) ──
+     the old rail's two jobs split apart: TIME → vertical scroll, DISTANCE → gap height.
      content lives ON the rail (no detail pane), so there's nothing to tap-to-reveal.
-     editorial serif here (Georgia fallback — zero-CDN); desktop stays sans. */
-  .mtl{font-family:Georgia,"Times New Roman",serif;padding:6px 2px 4px}
+     editorial serif (Georgia fallback — zero-CDN). Capped to a reading measure and
+     centered so it doesn't sprawl on a wide desktop screen. */
+  .mtl{font-family:Georgia,"Times New Roman",serif;padding:6px 2px 4px;
+    max-width:720px;margin:18px auto 0}
   .mtl .track{position:relative;padding:6px 6px 6px 0}
-  .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border);transform:none}
-  /* reset every prop the desktop rail's .node dot leaks in (width/height/radius/bg/transform/shadow) */
-  .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px;
-    width:auto;height:auto;border-radius:0;background:none;transform:none;box-shadow:none;cursor:default}
+  .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border)}
+  .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px}
   .mtl .date{padding-top:15px;text-align:right;padding-right:16px}
   .mtl .date .y{font-family:var(--mono);font-size:13px;color:var(--text)}
   .mtl .date .m{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
@@ -264,14 +157,17 @@
     color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:#9aa0ab}
-  /* footer parity with the desktop detail card: exact date · author → njump · d · kind */
-  .mtl .cfoot{margin-top:11px;padding-top:10px;gap:11px 14px;font-size:11px}
+  /* footer: exact date · author → njump · d · kind (self-contained; the old shared
+     base .cfoot rule was removed with the horizontal detail card) */
+  .mtl .cfoot{display:flex;flex-wrap:wrap;margin-top:11px;padding-top:10px;
+    border-top:1px solid var(--border-soft);gap:11px 14px;font-size:11px;
+    color:var(--dim);font-family:var(--mono)}
+  .mtl .cfoot .k{color:var(--faint);margin-right:2px}
   .mtl .contest .cfoot{margin-left:6px}
   .mtl .cfoot .fdate{color:var(--rail)}
   /* comments on the spine: marginalia below the card box, collapsed to a count so the
      proportional gap-rhythm survives; expanding pushes rows down like a gap expander.
-     Distinct class names on purpose — the desktop .comments/.cmt rules are global and
-     would leak (the .node lesson). Shown only when a card HAS comments. */
+     Shown only when a card HAS comments. */
   .mtl .mcmts{grid-column:2;margin:2px 0 0 6px;padding-left:12px;
     border-left:2px solid var(--border)}
   .mtl .mcmt-t{font-family:var(--mono);font-size:11px;color:var(--dim);
@@ -307,7 +203,6 @@
 
   <main>
     <div id="timeline-area"></div>
-    <div class="detail" id="detail"></div>
 
     <section class="contribute">
       <h2>Add to the record</h2>
@@ -394,15 +289,12 @@ RELAYS.forEach(r => relayState.set(r, "connecting"));
 let activeC   = null;           // no collection until discovery finds one
 let userPicked = false;         // true once the visitor clicks a tab (stops URL override)
 const wantedC = new URLSearchParams(location.search).get("c");  // ?c=slug deep link
-let selected  = null;           // selected event id
-let view      = null;           // {lo,hi} fractional years; null = fit to data
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
 let cmtTimer = null;
-const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height (mobile)
-const expandedCmts = new Set();          // card coords whose comment thread is open (mobile)
-const isMobile = () => window.innerWidth <= 640;
+const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
+const expandedCmts = new Set();          // card coords whose comment thread is open
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -426,7 +318,6 @@ copyBtn.addEventListener("click", async () => {
   setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = COPY_LABEL; }, 1600);
 });
 const areaEl   = document.getElementById("timeline-area");
-const detailEl = document.getElementById("detail");
 
 // ═══════════════ helpers ═══════════════
 function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t[1] : ""; }
@@ -583,9 +474,10 @@ function ingestComment(ev){
   scheduleRender();
 }
 
-// Lazy: a card's comments are first pulled when the card is selected. The coord
-// set only grows (same shape as slugs→wtc) and rides one "cmt" sub per socket,
-// kept open so new comments on an already-viewed card arrive live.
+// Comments are pulled per-collection: renderTimeline subscribes every rendered
+// card's coord in one batch (bounded — collections are tens of cards), so the toggles
+// can show real counts. The coord set only grows (same shape as slugs→wtc) and rides
+// one "cmt" sub per socket, kept open so new comments arrive live.
 function wantComments(coord){
   if (cmtSubs.has(coord)) return;
   cmtSubs.add(coord);
@@ -627,15 +519,6 @@ function entriesOf(c){
   }).sort((a,b) => a.frac - b.frac);
 }
 
-// data-derived default window: fit the collection's own span, padded
-function fitView(entries){
-  if (!entries.length){ const y = new Date().getUTCFullYear(); return { lo:y-1, hi:y+1 }; }
-  let lo = Math.min(...entries.map(e => e.frac));
-  let hi = Math.max(...entries.map(e => e.frac));
-  const pad = Math.max((hi-lo)*0.08, 0.4);
-  return { lo: lo-pad, hi: hi+pad };
-}
-
 // ═══════════════ render: status + tabs ═══════════════
 function slugName(c){ return c.replaceAll("-"," "); }
 
@@ -655,7 +538,7 @@ function renderStatus(){
 // one selection path shared by the tab buttons and the dropdown
 function selectCollection(c){
   if (activeC === c) return;
-  activeC = c; userPicked = true; selected = null; view = null;
+  activeC = c; userPicked = true;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
@@ -679,15 +562,8 @@ function renderTabs(){
   tabsEl.appendChild(sel);
 }
 
-// ═══════════════ render: timeline band ═══════════════
-const BAND_H = 220, RAIL_Y = 110, SLOT = 40;
+// ═══════════════ render ═══════════════
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function fmtEdge(v, span){
-  if (span >= 4) return String(Math.round(v));
-  const y = Math.floor(v), m = Math.min(11, Math.floor((v-y)*12));
-  return y + " " + MONTHS[m];
-}
-function slotOrder(n){ const o=[0]; for(let k=1;o.length<n;k++){ o.push(k); if(o.length<n) o.push(-k); } return o; }
 
 function render(){
   // deep link wins until the visitor picks a tab; honored once its slug is discovered
@@ -704,276 +580,18 @@ function render(){
     areaEl.innerHTML = allDown
       ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
       : `<div class="msg"><span class="spinner"></span>${anyUp?"listening for timelines…":"connecting to relays…"}</div>`;
-    detailEl.innerHTML = "";
     return;
   }
 
-  // phones get the vertical spine-column (time↓, distance=gap); the rail is desktop-only
-  if (isMobile()){ renderMobile(entries); return; }
-
-  const v = view || fitView(entries);
-  const lo = v.lo, hi = v.hi, span = hi - lo;
-  const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
-
-  let html = `
-    <div class="band-wrap" id="bandwrap">
-      <div class="band" id="band" style="height:${BAND_H}px"></div>
-      <div class="zoombtns">
-        <button id="zin"  title="zoom in">+</button>
-        <button id="zout" title="zoom out">−</button>
-        <button id="zfit" title="fit all">⊡</button>
-      </div>
-      <div class="band-hint">drag to pan · scroll or pinch to zoom</div>
-    </div>
-    <div class="edges"><span>${esc(fmtEdge(lo,span))}</span><span>${esc(fmtEdge(hi,span))}</span></div>`;
-  areaEl.innerHTML = html;
-  const band = document.getElementById("band");
-
-  // rail
-  const rail = document.createElement("div");
-  rail.className = "rail"; rail.style.top = RAIL_Y + "px"; band.appendChild(rail);
-
-  // gridlines: years always, months when zoomed in
-  const yStep = span > 34 ? 4 : span > 17 ? 2 : 1;
-  for (let y = Math.ceil(lo); y <= Math.floor(hi); y++){
-    const gx = (y-lo)/span; if (gx<0||gx>1) continue;
-    const g = document.createElement("div"); g.className="gridline"; g.style.left=(gx*100)+"%"; band.appendChild(g);
-    if (y % yStep) continue;
-    const gl = document.createElement("div"); gl.className="gridlabel"; gl.style.left=(gx*100)+"%";
-    gl.textContent = span > 8 ? "'"+String(y).slice(2) : String(y); band.appendChild(gl);
-  }
-  if (span <= 3){
-    for (let y=Math.floor(lo); y<hi; y++) for (let m=1; m<12; m++){
-      const val = y + m/12; if (val < lo || val > hi) continue;
-      const gx = (val-lo)/span;
-      const g = document.createElement("div"); g.className="gridline month"; g.style.left=(gx*100)+"%"; band.appendChild(g);
-      if (span <= 1.5){
-        const gl = document.createElement("div"); gl.className="gridlabel month"; gl.style.left=(gx*100)+"%";
-        gl.textContent = MONTHS[m]; band.appendChild(gl);
-      }
-    }
-  }
-
-  // "now" divider + future wash: everything past it is scheduled, not yet happened.
-  // The zone is tinted cyan (reinforcing the hollow cyan future nodes) and the line is
-  // a bold amber threshold — amber present meets cyan future, two distinguishable hues.
-  const nx = (nowFrac - lo) / span;
-  if (nx <= 1){
-    const nz = document.createElement("div"); nz.className = "nowzone";
-    nz.style.left = (Math.max(0, nx)*100)+"%"; band.appendChild(nz);      // wash the future span
-    if (nx >= 0){                                                          // now is on-screen → draw the line
-      const nl = document.createElement("div"); nl.className = "nowline";
-      nl.style.left = (nx*100)+"%"; band.appendChild(nl);
-      const nlab = document.createElement("div"); nlab.className = "nowlabel";
-      nlab.style.left = (nx*100)+"%"; nlab.textContent = "now"; band.appendChild(nlab);
-    }
-  }
-
-  // place entries; contested d-tags get a spine column of version nodes
-  const vis = entries
-    .map(e => ({ ...e, x: (e.frac-lo)/span, future: e.frac > nowFrac }))
-    .filter(e => e.x >= -0.02 && e.x <= 1.02)
-    .map(e => ({ ...e, x: Math.max(0, Math.min(1, e.x)) }));
-
-  // Label anti-collision. Nodes stay pinned to the rail; only the LABEL is displaced into
-  // the nearest free lane (below preferred, then above, stepping outward) and a stem links
-  // it back to its node. Deterministic greedy interval-packing in pixel space — no physics,
-  // stable while you pan. Lanes run out at ±3; past that a label is dropped (node + hover
-  // title remain) unless it's the selected one. Contested d-tags keep their spine column.
-  const bandW = band.clientWidth || 900;
-  const laneOcc = {};                                  // lane key → occupied [a,b] px spans
-  const LANE_SEQ = [-1, 1, -2, 2, -3, 3];              // sign = side (−below/+above), |v| = depth
-  const laneFree = (k,a,b) => !(laneOcc[k]||[]).some(([c,d]) => a < d && c < b);
-  const laneTake = (k,a,b) => (laneOcc[k] ||= []).push([a,b]);
-
-  vis.forEach(e => {
-    if (e.contested){
-      const order = slotOrder(e.evs.length);
-      const smin = Math.min(...order), smax = Math.max(...order);
-      const yTop = RAIL_Y - smax*SLOT, yBot = RAIL_Y - smin*SLOT;
-      const sp = document.createElement("div"); sp.className="spine";
-      sp.style.left=(e.x*100)+"%"; sp.style.top=yTop+"px"; sp.style.height=(yBot-yTop)+"px";
-      band.appendChild(sp);
-      e.evs.forEach((ev,i) => placeNode(band, e, ev, e.x, order[i], true));
-      return;
-    }
-    const ev = e.evs[0], isSel = ev.id === selected;
-    const w  = Math.min(shortTitle(e.title).length * 6.6 + 12, 150);
-    const cx = e.x * bandW, a = cx - w/2 - 5, b = cx + w/2 + 5;
-    let lane = null;
-    for (const k of LANE_SEQ){ if (laneFree(k,a,b)){ lane = k; break; } }
-    if (lane !== null || isSel){
-      lane = lane ?? LANE_SEQ[0]; laneTake(lane, a, b);
-      placeLabel(band, e, ev, lane, isSel);
-    }
-    placeRailNode(band, e, ev, isSel);                 // node last, so it sits atop its stem
-  });
-
-  bindPanZoom(entries);
-  renderDetail(entries);
+  renderTimeline(entries);
 }
 
-function placeNode(band, entry, ev, x, slot, contested){
-  const y = RAIL_Y - slot*SLOT;
-  const node = document.createElement("div");
-  node.className = "node" + (contested?" contested":"") + (entry.future?" future":"") + (ev.id===selected?" selected":"");
-  node.style.left = (x*100)+"%"; node.style.top = y+"px";
-  node.title = entry.title + " · " + dateOf(ev);
-  node.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (didDrag) return;
-    selected = ev.id;
-    render();
-  });
-  band.appendChild(node);
-
-  const lab = document.createElement("div");
-  lab.className = "nlabel" + (ev.id===selected?" selected-label":"");
-  lab.style.left = (x*100)+"%";
-  lab.style.top = (slot >= 0 ? (y-22) : (y+10)) + "px";
-  lab.innerHTML = "<b>" + esc(shortTitle(entry.title)) + "</b>" +
-    (contested ? " <span>· " + authorLabel(ev.pubkey) + "</span>" : "");
-  band.appendChild(lab);
-}
-
-// a single node pinned to the rail (non-contested); its label rides a leader stem
-function placeRailNode(band, entry, ev, isSel){
-  const node = document.createElement("div");
-  node.className = "node" + (entry.future?" future":"") + (isSel?" selected":"");
-  node.style.left = (entry.x*100)+"%"; node.style.top = RAIL_Y+"px";
-  node.title = entry.title + " · " + dateOf(ev);
-  node.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (didDrag) return;
-    selected = ev.id; render();
-  });
-  band.appendChild(node);
-}
-
-// place the displaced label in its assigned lane + draw the stem back to the rail
-const LABEL_H = 14, LANE_FIRST = 24, LANE_STEP = 19;
-function placeLabel(band, entry, ev, lane, isSel){
-  const above = lane > 0, off = LANE_FIRST + (Math.abs(lane)-1)*LANE_STEP;
-  const labTop = above ? (RAIL_Y - off - LABEL_H) : (RAIL_Y + off);
-
-  const stem = document.createElement("div");
-  stem.className = "stem" + (entry.future?" future":"") + (isSel?" selected":"");
-  stem.style.left = (entry.x*100)+"%";
-  if (above){ stem.style.top = (labTop+LABEL_H)+"px"; stem.style.height = (RAIL_Y-labTop-LABEL_H)+"px"; }
-  else      { stem.style.top = RAIL_Y+"px";           stem.style.height = (labTop-RAIL_Y)+"px"; }
-  band.appendChild(stem);
-
-  const lab = document.createElement("div");
-  lab.className = "nlabel" + (isSel?" selected-label":"");
-  lab.style.left = (entry.x*100)+"%"; lab.style.top = labTop+"px";
-  lab.innerHTML = "<b>" + esc(shortTitle(entry.title)) + "</b>";
-  band.appendChild(lab);
-}
 function shortTitle(t){
-  // titles follow "YYYY · name"; the rail already shows time, so drop the year prefix
+  // titles follow "YYYY · name"; the date column already shows time, so drop the year prefix
   return String(t).replace(/^\d{4}\s*·\s*/, "");
 }
 
-// ═══════════════ pan / zoom (pointer + wheel + pinch) ═══════════════
-// Listeners live on the STABLE #timeline-area, bound once. render() replaces the band's
-// innerHTML every frame, so anything bound to #bandwrap would be destroyed mid-drag — the
-// pointer capture and move-listener must sit on a node that survives the re-render.
-let didDrag = false, panBound = false, panEntries = null;
-function bindPanZoom(entries){
-  panEntries = entries;                          // handlers always read the current set
-  if (panBound) return;
-  panBound = true;
-  const area = areaEl;
-
-  const bounds = () => {
-    const fit = fitView(panEntries);
-    return { fit, MIN:0.05, MAX:Math.max(fit.hi-fit.lo,2)*3,
-             LO:fit.lo-(fit.hi-fit.lo), HI:fit.hi+(fit.hi-fit.lo) };
-  };
-  const ensure = () => { if (!view) view = { ...fitView(panEntries) }; };
-  const clamp = (lo,hi) => {
-    const b = bounds();
-    let span = Math.min(Math.max(hi-lo, b.MIN), b.MAX);
-    if (lo < b.LO) lo = b.LO;
-    if (lo + span > b.HI) lo = b.HI - span;
-    return { lo, hi: lo+span };
-  };
-  let raf = null;
-  const rr = () => { if (raf) return; raf = requestAnimationFrame(() => { raf=null; render(); }); };
-  const rect = () => (document.getElementById("bandwrap") || area).getBoundingClientRect();
-  const zoomAt = (fx, f) => {
-    ensure();
-    const cx = view.lo + fx*(view.hi-view.lo);
-    view = clamp(cx-(cx-view.lo)*f, cx+(view.hi-cx)*f);
-    rr();
-  };
-
-  area.addEventListener("wheel", e => {
-    if (!e.target.closest(".band-wrap")) return;
-    e.preventDefault();
-    const r = rect();
-    zoomAt(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), Math.pow(1.0018, e.deltaY));
-  }, { passive:false });
-
-  // zoom buttons are recreated each render — delegate off the stable container
-  area.addEventListener("click", e => {
-    const btn = e.target.closest(".zoombtns button"); if (!btn) return;
-    e.stopPropagation();
-    if (btn.id === "zin")  zoomAt(0.5, 0.6);
-    else if (btn.id === "zout") zoomAt(0.5, 1/0.6);
-    else if (btn.id === "zfit"){ view = null; render(); }
-  });
-
-  // pointers: 1 = pan, 2 = pinch
-  const pts = new Map();
-  let drag = null, pinch = null;
-  const setGrab = on => document.getElementById("bandwrap")?.classList.toggle("dragging", on);
-  area.addEventListener("pointerdown", e => {
-    if (e.target.closest(".zoombtns")) return;
-    if (!e.target.closest(".band-wrap")) return;
-    pts.set(e.pointerId, e.clientX);
-    if (pts.size === 1){
-      ensure();
-      drag = { x:e.clientX, lo:view.lo, hi:view.hi, moved:false, id:e.pointerId };
-    } else if (pts.size === 2){
-      ensure();
-      drag = null;
-      const [a,b] = [...pts.values()];
-      pinch = { d0: Math.abs(a-b), lo:view.lo, hi:view.hi };
-    }
-  });
-  area.addEventListener("pointermove", e => {
-    if (!pts.has(e.pointerId)) return;
-    pts.set(e.pointerId, e.clientX);
-    const r = rect();
-    if (pinch && pts.size === 2){
-      const [a,b] = [...pts.values()];
-      const d1 = Math.max(20, Math.abs(a-b));
-      const f = pinch.d0 / d1;                          // spread fingers → zoom in
-      const cx = pinch.lo + ((a+b)/2 - r.left)/r.width * (pinch.hi-pinch.lo);
-      view = clamp(cx-(cx-pinch.lo)*f, cx+(pinch.hi-cx)*f);
-      didDrag = true; rr();
-    } else if (drag && e.pointerId === drag.id){
-      const dx = e.clientX - drag.x;
-      if (!drag.moved && Math.abs(dx) < 4) return;
-      if (!drag.moved){ try { area.setPointerCapture(drag.id); } catch {} }  // capture on the STABLE node
-      drag.moved = true; didDrag = true; setGrab(true);
-      const shift = -dx/r.width * (drag.hi-drag.lo);
-      view = clamp(drag.lo+shift, drag.hi+shift);
-      rr();
-    }
-  });
-  const up = e => {
-    pts.delete(e.pointerId);
-    if (pts.size < 2) pinch = null;
-    if (drag && e.pointerId === drag.id){ drag = null; setGrab(false); }
-    if (!pts.size) setTimeout(() => { didDrag = false; }, 0);
-  };
-  area.addEventListener("pointerup", up);
-  area.addEventListener("pointercancel", up);
-}
-
-// ═══════════════ render: mobile vertical spine-column ═══════════════
+// ═══════════════ render: vertical spine-column ═══════════════
 // Time is the scroll axis; proportional distance rotates into the whitespace BETWEEN
 // cards. Cards sit on the rail, so there is no tap-to-reveal (and no drag/tap race — the
 // bug that started this). Long silences collapse to a labeled marker, expandable in place.
@@ -990,7 +608,7 @@ function humanSpan(g){
 }
 
 let tapsBound = false;
-function bindMobileTaps(){                                // gap expanders + comment toggles
+function bindTaps(){                                      // gap expanders + comment toggles
   if (tapsBound) return;
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
@@ -1008,8 +626,7 @@ function bindMobileTaps(){                                // gap expanders + com
   });
 }
 
-function renderMobile(entries){
-  detailEl.innerHTML = "";                                // content lives on the rail now
+function renderTimeline(entries){
   const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
 
   // the spine has no selection, so comment laziness is per-COLLECTION: subscribe
@@ -1103,63 +720,7 @@ function renderMobile(entries){
   if (nowShown) html += `</div>`;                          // close .futurezone
   html += `</div></div>`;
   areaEl.innerHTML = html;
-  bindMobileTaps();
-}
-
-// ═══════════════ render: detail card ═══════════════
-function renderDetail(entries){
-  if (!selected){
-    detailEl.innerHTML = `<div class="detail-hint">select a point on the timeline to read its card</div>`;
-    return;
-  }
-  let entry = null, ev = null;
-  for (const e of entries){
-    const hit = e.evs.find(x => x.id === selected);
-    if (hit){ entry = e; ev = hit; break; }
-  }
-  if (!ev){ selected = null; detailEl.innerHTML = ""; return; }
-
-  // comments scope to THIS author's version of the card — switching versions
-  // switches marginalia (you comment on a signed claim, not on a date)
-  const coord = KIND + ":" + ev.pubkey + ":" + entry.d;
-  wantComments(coord);
-  const cs = [...(comments.get(coord)?.values() || [])]
-    .sort((a,b) => a.created_at - b.created_at);
-  const cmtHtml = `
-    <div class="comments">
-      <div class="chead">${cs.length ? cs.length + " comment" + (cs.length===1?"":"s") : "no comments yet"}</div>
-      ${cs.map(c =>
-        `<div class="cmt"><div class="cmt-who">${authorLink(c.pubkey)}` +
-        `<span class="cmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span></div>` +
-        `<div class="cmt-body">${renderContent(c.content || "")}</div></div>`
-      ).join("")}
-    </div>`;
-
-  const versions = entry.evs.length > 1
-    ? `<div class="versions">` + entry.evs.map(v =>
-        `<button class="${v.id===selected?"cur":""}" data-id="${esc(v.id)}">${authorLabel(v.pubkey)} · ${esc(dateOf(v))}</button>`
-      ).join("") + `</div>`
-    : "";
-
-  detailEl.innerHTML = `
-    <div class="card">
-      <div class="cmeta">
-        <span class="ctitle">${esc(tag(ev,"title") || entry.d)}</span>
-        <span class="badge date">${esc(dateOf(ev))}</span>
-        ${yearFrac(dateOf(ev)) > yearFrac(new Date().toISOString().slice(0,10)) ? `<span class="badge upcoming">upcoming</span>` : ""}
-        ${entry.contested ? `<span class="badge contested">contested · ${entry.evs.length} versions</span>` : ""}
-      </div>
-      <div class="cbody">${renderContent(ev.content || "")}</div>
-      ${versions}
-      <div class="cfoot">
-        <span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>
-        <span><span class="k">d</span> ${esc(entry.d)}</span>
-        <span><span class="k">kind</span> 30818</span>
-      </div>
-    </div>${cmtHtml}`;
-
-  detailEl.querySelectorAll(".versions button").forEach(b =>
-    b.addEventListener("click", () => { selected = b.dataset.id; render(); }));
+  bindTaps();
 }
 
 // ═══════════════ relay connections ═══════════════
@@ -1194,13 +755,6 @@ function connect(url){
   ws.onerror = () => { relayState.set(url,"down"); renderStatus(); };
   ws.onclose = () => { if (relayState.get(url) !== "up") relayState.set(url,"down"); renderStatus(); };
 }
-
-// switch renderers when the viewport crosses the mobile boundary (rotate / resize)
-let wasMobile = isMobile();
-window.addEventListener("resize", () => {
-  const m = isMobile();
-  if (m !== wasMobile){ wasMobile = m; render(); }
-});
 
 // ═══════════════ go ═══════════════
 render();
