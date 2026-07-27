@@ -115,6 +115,7 @@
   .mtl .date{padding-top:15px;text-align:right;padding-right:16px}
   .mtl .date .y{font-family:var(--mono);font-size:13px;color:var(--text)}
   .mtl .date .m{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
+  .mtl .date .dy{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:1px}
   .mtl .dot{position:absolute;left:59px;top:19px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--accent);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
@@ -1032,8 +1033,10 @@ function renderTimeline(entries){
     const future = e.frac > nowFrac;
     const yr = String(e.date).slice(0,4);
     const moIdx = Math.max(0, Math.min(11, (parseInt(String(e.date).slice(5,7),10) || 1) - 1));
+    const day = String(e.date).slice(8,10);
     const dateCol = `<div class="date"><div class="y">${esc(yr)}</div>` +
-                    `<div class="m">${MONTHS[moIdx].toUpperCase()}</div></div>`;
+                    `<div class="m">${MONTHS[moIdx].toUpperCase()}</div>` +
+                    (day ? `<div class="dy">${esc(day)}</div>` : "") + `</div>`;
 
     if (e.contested){
       html += `<div class="node">${dateCol}<span class="cdot"></span>` +
