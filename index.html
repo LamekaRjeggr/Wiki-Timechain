@@ -49,10 +49,19 @@
   .relaydot.up{background:var(--rail)}
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
-  /* filter picker row */
-  .tabs{margin-top:16px;display:flex;justify-content:center}
+  /* filter picker row: axis chips over the value dropdown */
+  .tabs{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
 
-  /* grouped filter dropdown: timelines / places / topics */
+  /* axis chips — selection carries on background + border + text lightness, never hue */
+  .axes{display:flex;gap:4px}
+  .axis{background:transparent;border:1px solid transparent;color:var(--dim);
+    border-radius:7px;padding:5px 11px;font-size:12px;font-family:inherit;
+    font-weight:500;cursor:pointer}
+  .axis:hover{color:var(--text)}
+  .axis.on{background:var(--panel);border-color:var(--border);color:var(--text)}
+  .axis .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
+
+  /* the selected axis's values */
   .picker{background:var(--panel);border:1px solid var(--border);color:var(--text);
     border-radius:8px;padding:9px 36px 9px 14px;font-size:13px;font-family:inherit;
     font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;
@@ -395,6 +404,10 @@ let activeF   = null;           // no filter until discovery finds a card
 let userPicked = false;         // true once the visitor picks (stops URL override)
 const _q = new URLSearchParams(location.search);   // deep links: ?c=slug | ?l=rung | ?t=topic
 const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Boolean) || null;
+// Reaching that one filter takes two steps: a chip picks the AXIS, the dropdown holds
+// that axis's values. Chips run broad → narrow, and a cold visitor lands on the broad end.
+const AXES = [["t","topics"],["l","places"],["c","timelines"]];
+let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
@@ -751,22 +764,22 @@ function renderStatus(){
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
-// one selection path shared by the picker and the in-card collection links
+// one selection path shared by the chips, the dropdown, and the in-card collection links.
+// The chip follows the filter rather than steering it, so an `in <collection>` tap and a
+// `?l=` deep link both light the right chip with no extra state.
 function selectF(f){
+  activeAxis = axisOf(f);
   if (activeF === f) return;
   activeF = f; userPicked = true;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
 
-// The picker is a grouped view of every filterable value the cards in memory carry —
-// derived fresh each render from the tags themselves, nothing baked. Places print as
-// the jurisdiction ladder (indent = rung depth); values are shown verbatim.
-function renderTabs(){
-  tabsEl.innerHTML = "";
-  copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
-  if (!slugs.size) return;                         // status line shows "connecting…"
-
+// Every filterable value the cards in memory carry, per axis — derived fresh each render
+// from the tags themselves, nothing baked. Values that match no entry are dropped, so an
+// axis with nothing to say loses its chip. Places print as the jurisdiction ladder
+// (indent = rung depth); values are shown verbatim.
+function vocab(){
   const placeNs = new Map(), topics = new Set();
   for (const ev of events.values())
     for (const t of ev.tags){
@@ -776,28 +789,45 @@ function renderTabs(){
   const depth = v => placeNs.get(v) === "ISO-3166-1" ? 0
                    : placeNs.get(v) === "ISO-3166-2" ? 1
                    : v.split("-").length - 1;       // kebab rungs are parent-prefixed
+  const live = opts => opts.filter(([f]) => entriesOf(f).length);
+  return {
+    t: live([...topics].sort().map(v => ["t:" + v, v])),
+    l: live([...placeNs.keys()]
+      .sort((a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)  // parent-prefix ⇒ ladder order
+      .map(v => ["l:" + v, "  ".repeat(depth(v)) + v])),
+    c: live([...slugs].sort().map(c => ["c:" + c, slugName(c)])),
+  };
+}
+
+function renderTabs(V){
+  tabsEl.innerHTML = "";
+  copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
+  if (!slugs.size) return;                         // status line shows "connecting…"
+
+  const axes = document.createElement("div");
+  axes.className = "axes";
+  for (const [a, label] of AXES){
+    if (!V[a].length) continue;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "axis" + (a === activeAxis ? " on" : "");
+    b.innerHTML = `${label}<span class="n">${V[a].length}</span>`;
+    // switching axis lands on that vocabulary's first value — a different axis than the
+    // one showing, so selectF never short-circuits
+    b.addEventListener("click", () => { if (a !== activeAxis) selectF(V[a][0][0]); });
+    axes.appendChild(b);
+  }
+  tabsEl.appendChild(axes);
 
   const sel = document.createElement("select");
   sel.className = "picker";
-  const group = (label, opts) => {
-    const g = document.createElement("optgroup");
-    g.label = label;
-    for (const [f, text] of opts){
-      const n = entriesOf(f).length;
-      if (!n) continue;
-      const o = document.createElement("option");
-      o.value = f;
-      o.textContent = `${text}  (${n})`;
-      if (f === activeF) o.selected = true;
-      g.appendChild(o);
-    }
-    if (g.children.length) sel.appendChild(g);
-  };
-  group("timelines", [...slugs].sort().map(c => ["c:" + c, slugName(c)]));
-  group("places", [...placeNs.keys()]
-    .sort((a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)  // parent-prefix ⇒ ladder order
-    .map(v => ["l:" + v, "  ".repeat(depth(v)) + v]));
-  group("topics", [...topics].sort().map(v => ["t:" + v, v]));
+  for (const [f, text] of V[activeAxis]){
+    const o = document.createElement("option");
+    o.value = f;
+    o.textContent = `${text}  (${entriesOf(f).length})`;
+    if (f === activeF) o.selected = true;
+    sel.appendChild(o);
+  }
   sel.addEventListener("change", () => selectF(sel.value));
   tabsEl.appendChild(sel);
 }
@@ -806,11 +836,14 @@ function renderTabs(){
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function render(){
+  const V = vocab();
+  // an axis with no live values shows no chip, so never sit on one
+  if (!V[activeAxis].length) activeAxis = (AXES.find(([a]) => V[a].length) || ["t"])[0];
   // deep link wins until the visitor picks; honored once it matches a discovered card
-  if (!userPicked && wantedF && entriesOf(wantedF).length) activeF = wantedF;
-  else if (activeF === null && slugs.size) activeF = "c:" + [...slugs].sort()[0];
+  if (!userPicked && wantedF && entriesOf(wantedF).length){ activeF = wantedF; activeAxis = axisOf(wantedF); }
+  else if (activeF === null && V[activeAxis].length) activeF = V[activeAxis][0][0];
   renderStatus();
-  renderTabs();
+  renderTabs(V);
 
   const entries = activeF ? entriesOf(activeF) : [];
 

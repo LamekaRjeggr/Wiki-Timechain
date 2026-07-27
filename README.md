@@ -12,13 +12,17 @@ Any dated event with a source link fits naturally on the rail.
 
 Timelines are discovered automatically, not hardcoded — the viewer pulls
 30818 events from relays and groups any that carry a date and a collection
-tag. Pick one from the dropdown and it shows up. Add a new card to a new
+tag. Pick one from the picker and it shows up. Add a new card to a new
 collection and it appears there too — no fixed list, no publish-side
 registration.
 
 ## Navigating
 
-Choose a timeline from the collection dropdown. Time runs down the page:
+Pick what to read in two steps: the chips choose an axis — **topics**,
+**places**, or **timelines** — and the dropdown below holds that axis's
+values. One filter at a time; the axes never combine. A place or topic
+interleaves several timelines onto one spine, and each card there names the
+story it came from. Time runs down the page:
 scroll is the time axis, and the whitespace between cards is proportional
 to the real gap between events — long silences collapse to a `⋯ N years`
 marker you can expand in place. A bold amber rule marks *now*; anything
