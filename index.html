@@ -396,16 +396,14 @@ const rctA     = new Set();     // card coords whose reactions we've asked for (
 const rctE     = new Set();     // comment ids whose reactions we've asked for (#e) — grow-only
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
-// The picker holds ONE filter at a time — "axis:value". Axes: c = collection (a curated
-// story), l = place (one jurisdiction-ladder rung), t = topic. Time is deliberately NOT
-// an axis here: it is already rendered as scroll position. Axes never AND (the relays
-// can't either — CONVENTION.md "Axes don't compose"); one filter, one spine.
-let activeF   = null;           // no filter until discovery finds a card
+// The spine always shows ONE timeline (a collection) — never a merge. The chips don't
+// filter, they ORGANIZE: the same catalog of timelines grouped by topic, by place, or
+// flat. Time is deliberately NOT an axis here: it is already rendered as scroll
+// position. (CONVENTION.md "Axes don't compose" — and here they never reach the spine.)
+let activeF   = null;           // "c:<slug>" once discovery finds a card
 let userPicked = false;         // true once the visitor picks (stops URL override)
 const _q = new URLSearchParams(location.search);   // deep links: ?c=slug | ?l=rung | ?t=topic
 const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Boolean) || null;
-// Reaching that one filter takes two steps: a chip picks the AXIS, the dropdown holds
-// that axis's values. Chips run broad → narrow, and a cold visitor lands on the broad end.
 const AXES = [["t","topics"],["l","places"],["c","timelines"]];
 let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
@@ -733,8 +731,7 @@ function scheduleRender(){
 function matching(f){
   return [...events.values()].filter(ev => matchesF(ev, f));
 }
-// group a filter's events by d-tag: one entry per d, versions within. A non-collection
-// filter can span collections — the entries merge onto one spine, interleaved by date.
+// group a filter's events by d-tag: one entry per d, versions within
 function entriesOf(f){
   const byD = new Map();
   for (const ev of matching(f)){
@@ -764,38 +761,46 @@ function renderStatus(){
     `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
-// one selection path shared by the chips, the dropdown, and the in-card collection links.
-// The chip follows the filter rather than steering it, so an `in <collection>` tap and a
-// `?l=` deep link both light the right chip with no extra state.
+// one selection path: everything the picker can choose is a collection. The chip is
+// NOT derived from the selection — it is its own state, "how you're browsing".
 function selectF(f){
-  activeAxis = axisOf(f);
   if (activeF === f) return;
   activeF = f; userPicked = true;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
 
-// Every filterable value the cards in memory carry, per axis — derived fresh each render
-// from the tags themselves, nothing baked. Values that match no entry are dropped, so an
-// axis with nothing to say loses its chip. Places print as the jurisdiction ladder
-// (indent = rung depth); values are shown verbatim.
+// The same catalog of timelines, organized three ways. Each axis is a list of
+// [heading, items] groups (heading null = flat); every item selects a collection.
+// Grouped by topic a timeline appears under each topic it carries; grouped by place
+// it appears exactly ONCE — under its most specific rung, so the ladder's parent
+// rungs don't repeat it. Derived fresh each render from the tags, nothing baked.
 function vocab(){
-  const placeNs = new Map(), topics = new Set();
-  for (const ev of events.values())
-    for (const t of ev.tags){
-      if (t[0] === "l" && PLACE_NS.includes(t[2]) && !placeNs.has(t[1])) placeNs.set(t[1], t[2]);
-      if (t[0] === "t" && t[1] !== MARKER) topics.add(t[1]);
-    }
-  const depth = v => placeNs.get(v) === "ISO-3166-1" ? 0
-                   : placeNs.get(v) === "ISO-3166-2" ? 1
-                   : v.split("-").length - 1;       // kebab rungs are parent-prefixed
-  const live = opts => opts.filter(([f]) => entriesOf(f).length);
+  const cs = [...slugs].sort().filter(c => entriesOf("c:" + c).length);
+  const depth = (v, ns) => ns === "ISO-3166-1" ? 0
+                         : ns === "ISO-3166-2" ? 1
+                         : v.split("-").length - 1;   // kebab rungs are parent-prefixed
+  const byTopic = new Map(), byPlace = new Map();
+  const put = (m, k, c) => (m.get(k) || m.set(k, []).get(k)).push(c);
+  for (const c of cs){
+    const topics = new Set(), places = new Map();     // rung value → namespace
+    for (const ev of matching("c:" + c))
+      for (const t of ev.tags){
+        if (t[0] === "t" && t[1] !== MARKER) topics.add(t[1]);
+        if (t[0] === "l" && PLACE_NS.includes(t[2])) places.set(t[1], t[2]);
+      }
+    for (const tp of topics) put(byTopic, tp, c);
+    const deepest = [...places.keys()]
+      .sort((a,b) => depth(b, places.get(b)) - depth(a, places.get(a)))[0];
+    if (deepest) put(byPlace, deepest, c);
+  }
+  const items = list => list.map(c => ["c:" + c, slugName(c)]);
   return {
-    t: live([...topics].sort().map(v => ["t:" + v, v])),
-    l: live([...placeNs.keys()]
+    t: [...byTopic.keys()].sort().map(tp => [tp, items(byTopic.get(tp))]),
+    l: [...byPlace.keys()]
       .sort((a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)  // parent-prefix ⇒ ladder order
-      .map(v => ["l:" + v, "  ".repeat(depth(v)) + v])),
-    c: live([...slugs].sort().map(c => ["c:" + c, slugName(c)])),
+      .map(v => [v, items(byPlace.get(v))]),
+    c: cs.length ? [[null, items(cs)]] : [],
   };
 }
 
@@ -804,6 +809,7 @@ function renderTabs(V){
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
   if (!slugs.size) return;                         // status line shows "connecting…"
 
+  const flat = a => V[a].flatMap(([,its]) => its);
   const axes = document.createElement("div");
   axes.className = "axes";
   for (const [a, label] of AXES){
@@ -811,22 +817,33 @@ function renderTabs(V){
     const b = document.createElement("button");
     b.type = "button";
     b.className = "axis" + (a === activeAxis ? " on" : "");
-    b.innerHTML = `${label}<span class="n">${V[a].length}</span>`;
-    // switching axis lands on that vocabulary's first value — a different axis than the
-    // one showing, so selectF never short-circuits
-    b.addEventListener("click", () => { if (a !== activeAxis) selectF(V[a][0][0]); });
+    b.innerHTML = `${label}<span class="n">${a === "c" ? flat(a).length : V[a].length}</span>`;
+    b.addEventListener("click", () => {
+      if (a === activeAxis) return;
+      activeAxis = a; userPicked = true;
+      // reorganizing shouldn't change the spine — keep the selection if this grouping
+      // carries it, land on its first timeline only when it doesn't
+      const its = flat(a);
+      its.some(([f]) => f === activeF) ? render() : selectF(its[0][0]);
+    });
     axes.appendChild(b);
   }
   tabsEl.appendChild(axes);
 
   const sel = document.createElement("select");
   sel.className = "picker";
-  for (const [f, text] of V[activeAxis]){
-    const o = document.createElement("option");
-    o.value = f;
-    o.textContent = `${text}  (${entriesOf(f).length})`;
-    if (f === activeF) o.selected = true;
-    sel.appendChild(o);
+  let marked = false;                              // a timeline can sit under two topics
+  for (const [heading, its] of V[activeAxis]){
+    const box = heading
+      ? sel.appendChild(Object.assign(document.createElement("optgroup"), {label: heading}))
+      : sel;
+    for (const [f, text] of its){
+      const o = document.createElement("option");
+      o.value = f;
+      o.textContent = `${text}  (${entriesOf(f).length})`;
+      if (!marked && f === activeF){ o.selected = true; marked = true; }
+      box.appendChild(o);
+    }
   }
   sel.addEventListener("change", () => selectF(sel.value));
   tabsEl.appendChild(sel);
@@ -837,11 +854,14 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 function render(){
   const V = vocab();
-  // an axis with no live values shows no chip, so never sit on one
+  // an axis with no live groups shows no chip, so never sit on one
   if (!V[activeAxis].length) activeAxis = (AXES.find(([a]) => V[a].length) || ["t"])[0];
-  // deep link wins until the visitor picks; honored once it matches a discovered card
-  if (!userPicked && wantedF && entriesOf(wantedF).length){ activeF = wantedF; activeAxis = axisOf(wantedF); }
-  else if (activeF === null && V[activeAxis].length) activeF = V[activeAxis][0][0];
+  // deep link wins until the visitor picks. ?c= is the shareable form; legacy ?l=/?t=
+  // land on the first timeline in that group, right chip lit — never a merged spine.
+  const want = !userPicked && wantedF
+    ? [...new Set(matching(wantedF).map(collectionSlug))].sort() : [];
+  if (want.length){ activeF = "c:" + want[0]; activeAxis = axisOf(wantedF); }
+  else if (activeF === null && V[activeAxis].length) activeF = V[activeAxis][0][1][0][0];
   renderStatus();
   renderTabs(V);
 
@@ -885,8 +905,6 @@ function bindTaps(){                                      // gap expanders + com
   if (tapsBound) return;
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
-    const col = e.target.closest(".incol");
-    if (col){ e.preventDefault(); selectF("c:" + col.dataset.c); return; }
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b); return; }
     const s = e.target.closest(".cmp-send");
@@ -917,13 +935,6 @@ function bindTaps(){                                      // gap expanders + com
 
 function renderTimeline(entries){
   const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
-  // under a place/topic filter the spine interleaves collections, so each card names
-  // its story — a tap on the name narrows the filter to that collection
-  const merged = activeF && axisOf(activeF) !== "c";
-  const inChip = ev => merged
-    ? `<span><span class="k">in</span> <a class="incol" data-c="${esc(collectionSlug(ev))}"` +
-      ` href="?c=${esc(collectionSlug(ev))}">${esc(slugName(collectionSlug(ev)))}</a></span>`
-    : "";
 
   // the spine has no selection, so comment laziness is per-COLLECTION: subscribe
   // every version's coord in one batch (bounded — collections are tens of cards).
@@ -1037,7 +1048,6 @@ function renderTimeline(entries){
           marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
-        inChip(e.evs[0]) +
         `<span><span class="k">kind</span> 30818</span></div>` +
         `</div></div>`;
     } else {
@@ -1049,7 +1059,6 @@ function renderTimeline(entries){
         `<div class="cfoot"><span class="fdate">${esc(dateOf(ev))}</span>` +
         `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
         `<span><span class="k">d</span> ${esc(e.d)}</span>` +
-        inChip(ev) +
         `<span><span class="k">kind</span> 30818</span></div>` +
         `</div>${marginBlock(ev, e.d)}</div>`;
     }

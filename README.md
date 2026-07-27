@@ -18,11 +18,10 @@ registration.
 
 ## Navigating
 
-Pick what to read in two steps: the chips choose an axis — **topics**,
-**places**, or **timelines** — and the dropdown below holds that axis's
-values. One filter at a time; the axes never combine. A place or topic
-interleaves several timelines onto one spine, and each card there names the
-story it came from. Time runs down the page:
+The chips organize the same list of timelines three ways — by **topic**, by
+**place**, or flat — and the dropdown below picks one. Whatever the grouping,
+the spine always shows a single timeline, never a merge; under places each
+timeline is filed once, at its most specific rung. Time runs down the page:
 scroll is the time axis, and the whitespace between cards is proportional
 to the real gap between events — long silences collapse to a `⋯ N years`
 marker you can expand in place. A bold amber rule marks *now*; anything
