@@ -127,6 +127,95 @@ Rules:
   a fact. This keeps `#l` date queries honest.
 - An exactly-known date carries **no** `APPROXIMATE DATE:` line at all.
 
+## Sourcing, and cards about scheduled events
+
+Content-only conventions — **no tag changes.** All of it is the `Label: value`
+paragraph shape the cards already use, so the viewer's tiny djot pass renders it
+with no new syntax.
+
+### One source line, scoped per claim
+
+A card usually rests on more than one source: a photographed notice for the dates, a
+government page for the procedure. The failure mode is a single `Source:` line that
+supports half of what the card says — a reader who follows it finds the source does
+not say what the card claims it said. That is worse than no citation, because it
+looks checked.
+
+One source ⇒ `Source:` unchanged. More than one ⇒ **one `Sources:` line, each source
+prefixed by the claim it carries:**
+
+```
+Sources: date and time - [posted zoning sign](https://blossom.primal.net/<sha256>.jpg),
+photographed from the public right-of-way 2026-05-29. Commission's role and venue -
+[Maricopa County P&Z Commission](https://www.maricopa.gov/383/Planning-Zoning-Commission),
+which "makes recommendations to the Board of Supervisors on rezoning ... and
+comprehensive plans."
+```
+
+One block, not one heading per source. Two `Source:` headings read as a bibliography
+and crowd a card that has six blocks total.
+
+### If a source has a URL, its name *is* the link
+
+`[label](url)` — never a bare URL beside a plain name (djot does not autolink, so a
+bare URL is dead text). This applies to a photograph exactly as it does to a document.
+
+A **blossom URL is the sha256 of the file**, so citing a photo by its blossom link is a
+content-addressed citation: anyone can hash what they download and confirm it is the
+image you shot. A swapped or re-edited photo lands on a different URL and the link
+breaks instead of silently lying. Prefer it to "photographed on site."
+
+### Embed when the card is *about* the image; link when it only *cites* it
+
+| Form | Use when |
+|---|---|
+| `![alt](url)` | the image is the event — a photographed notice on the card recording that it was posted |
+| `[label](url)` in `Sources:` | the card draws a fact from an image that belongs to another card |
+
+The same photo embedded on every card that leans on it is the main way a spine turns
+into a wall of pictures. Embed it once, on the card that owns it.
+
+### `When:` / `Where:` — scheduled events
+
+A card announcing a hearing, meeting, deadline or vote carries two lines, placed
+**immediately above `Source:`/`Sources:`** — the last of the substance, just before the
+provenance:
+
+```
+When: 2026-08-06, 9:30 AM MST
+Where: Board of Supervisors' Auditorium, 205 W. Jefferson St., Phoenix AZ 85003;
+virtual by registration with Planning & Development.
+```
+
+- **`Where:`, never `Location:`.** `Location:` already describes the *subject's* place
+  (the parcel). `Where:` is the *meeting's* place. On a card about a Tonopah parcel
+  heard in downtown Phoenix these are different facts and must not share a label.
+- **State the timezone every time.** A permanent record is read from anywhere.
+- **Don't narrate the schedule in the prose too.** Once the block exists, the lead
+  sentence says what the meeting *is* and who decides; the block says when and where.
+  Saying the date twice is the most common way these cards get bloated.
+
+**If the date moves, publish a new card — never edit this one.** A `When:` line records
+what a source said the schedule was, as of that source's date; it is not a promise about
+the future. The reschedule is itself an event on the spine, and the original card stays
+true, because it was always a claim about what was posted. Same `d` rules as anywhere:
+disambiguate the new card with a qualifier.
+
+### Cards for things that have not happened yet
+
+`APPROXIMATE DATE:` covers a *past* event whose date is coarse. An **anticipated** event
+is the opposite problem — a date and contents that are guesses — and it must say so:
+
+```
+Status: anticipated - this card records an expectation, not an event.
+A later card will record it as it actually happened.
+```
+
+Everything unsourced in such a card is labelled unsourced in place (`No posting date has
+been announced by the county; the estimate is not sourced.`), and the `Source:` line
+records what was checked and when. An anticipated card is superseded by a real one, not
+deleted — nothing here is ever deleted.
+
 ## Revisions and diffs — showing what a document used to say
 
 When a collection tracks a document through versions, a card can carry the change itself
@@ -288,6 +377,14 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
 - Approximate dates: one canonical `APPROXIMATE DATE: … — placed at <event_date>.`
   line (uppercase prefix = grep anchor); controlled precision clauses or a quoted
   source period; placement day 01 for month-known, 01-01 for year-only.
+- Sourcing: `Source:` for one, one `Sources:` line scoped per claim for several; a
+  source with a URL *is* a link; embed an image only on the card it is about, link it
+  elsewhere.
+- Scheduled events: `When:` / `Where:` immediately above the source line, timezone
+  always explicit, `Where:` never spelled `Location:`. A schedule change is **a new
+  card, not an edit.**
+- Anticipated events: a `Status: anticipated` line, unsourced estimates labelled as
+  such in place; superseded by a real card, never deleted.
 - Location: full ISO→named ladder to the event's true scope; required when a card has
   a location; a placeless timeline is valid (e.g. `bitcoin-arbitrary-data`).
 - Geohash: optional `g` prefix rungs, point-events-only, never a jurisdiction centroid.
