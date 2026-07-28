@@ -224,9 +224,12 @@
   /* inside a contested vcard: same marginalia signature, per-version ownership */
   .mtl .vcard .mcmts{grid-column:auto;margin:9px 0 0}
   /* reaction charge (kind 7): glyph·count pairs — meaning rides the glyph SHAPE, the
-     viewer defines none of it. Amber is aesthetic only. */
+     viewer defines none of it. Amber is aesthetic only. The stance row sits INSIDE
+     the card box, at its bottom. */
   .mtl .mrct{font-family:var(--mono);font-size:11px;padding:3px 0;
     display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+  .mtl .card .mrct{margin-top:9px;padding:0}
+  .mtl .vcard .mrct{margin-top:9px;padding:8px 0 0;border-top:1px solid var(--border-soft)}
   .mtl .rg{color:var(--rail);margin-right:8px}
   .mtl .mcmt-t .sep{color:var(--faint);margin-right:6px}
   .mtl .mcmt-rct{margin-left:8px;font-size:10.5px}
@@ -346,10 +349,11 @@
         it lives only in this browser until you save it from the key chip.</p>
 
       <h3>2 · React, then comment</h3>
-      <p>Tap <code>+</code> on a card to sign a reaction with your key. Reacting unlocks
-        the comment box on that card — a margin note, signed by you, stored on the same
-        relays that hold the card. Reactions and margin notes are the whole write side
-        this page has.</p>
+      <p>Tap <code>+</code>, <code>=</code>, or <code>−</code> at the bottom of a card to
+        sign a reaction with your key. One vote per card: tapping a different glyph
+        replaces your last. Reacting unlocks the comment box on that card — a margin
+        note, signed by you, stored on the same relays that hold the card. Reactions and
+        margin notes are the whole write side this page has.</p>
 
       <details class="dev">
       <summary>Dev · publish a card, build a reader</summary>
@@ -789,19 +793,23 @@ function ingestReaction(ev){
   scheduleRender();
 }
 
-// glyph → count for one target, heaviest first, capped at 3 glyphs shown.
-// "" and "+" collapse to "+" (NIP-25 default like); anything else displays as sent.
-// The viewer never defines what a glyph MEANS — shape carries it (colorblind-safe).
+// one reaction event → its glyph. "" and "+" collapse to "+" (NIP-25 default like);
+// anything else displays as sent. The viewer never defines what a glyph MEANS —
+// shape carries it (colorblind-safe).
+function glyphOf(ev){
+  const c = String(ev.content ?? "").trim();
+  return (c === "" || c === "+") ? "+" : [...c].slice(0,8).join("");
+}
+// glyph → count for one target, heaviest first (display caps live at the render site)
 function charge(target){
   const byPk = reactions.get(target);
   if (!byPk || !byPk.size) return [];
   const n = new Map();
   for (const ev of byPk.values()){
-    const c = String(ev.content ?? "").trim();
-    const g = (c === "" || c === "+") ? "+" : [...c].slice(0,8).join("");
+    const g = glyphOf(ev);
     n.set(g, (n.get(g) || 0) + 1);
   }
-  return [...n.entries()].sort((a,b) => b[1] - a[1]).slice(0,3);
+  return [...n.entries()].sort((a,b) => b[1] - a[1]);
 }
 
 // Reaction pulls mirror the comment sub: grow-only target sets, one open "rct" sub per
@@ -1020,7 +1028,7 @@ function bindTaps(){                                      // gap expanders + com
   tapsBound = true;
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
-    if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b); return; }
+    if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b.dataset.g, b); return; }
     const dv = e.target.closest(".ds");
     if (dv){                                              // diff view switch, per card, in the URL
       dv.dataset.v === "p" ? plainCards.add(dv.dataset.d) : plainCards.delete(dv.dataset.d);
@@ -1073,20 +1081,26 @@ function renderTimeline(entries){
   // bottom of the open thread, ghosted until this identity has reacted — the
   // read → react → comment ladder shown by behavior, not copy (checkpoint 2c).
   const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(g)} ${n}</span>`).join("");
+  // three stances, one vote: your newest tap replaces the last (ingest keeps newest
+  // per pubkey). Wire glyph for dislike is ASCII "-" (NIP-25 interop); displays "−".
+  const STANCES = ["+", "=", "-"];
+  const disp = g => g === "-" ? "−" : g;
   const pill = (target, eid, pk, k, cls) => {
     const ch = charge(target);
-    const p = ch.find(([g]) => g === "+");
-    const mine = myPk && reactions.get(target)?.has(myPk);
-    return `<button class="tapbtn${cls}${mine ? " mine" : ""}" type="button" data-t="${esc(target)}"` +
-      ` data-e="${esc(eid)}" data-p="${esc(pk)}" data-k="${k}"` +
-      ` title="${mine ? "you reacted +" : "react +"}">+${p ? "&#8201;" + p[1] : ""}</button>` +
-      glyphs(ch.filter(([g]) => g !== "+"));
+    const count = g => (ch.find(([x]) => x === g) || [])[1];
+    const myEv = myPk && reactions.get(target)?.get(myPk);
+    const myG = myEv ? glyphOf(myEv) : null;
+    return STANCES.map(g =>
+      `<button class="tapbtn${cls}${myG === g ? " mine" : ""}" type="button" data-t="${esc(target)}"` +
+      ` data-e="${esc(eid)}" data-p="${esc(pk)}" data-k="${k}" data-g="${esc(g)}"` +
+      ` title="${myG === g ? "you reacted " : "react "}${disp(g)}">${disp(g)}${count(g) ? "&#8201;" + count(g) : ""}</button>`
+    ).join("") +
+    glyphs(ch.filter(([g]) => !STANCES.includes(g)).slice(0,3));
   };
   const gateGlyph = (coord, pk) => {
     const ev = reactions.get(coord)?.get(pk);
     if (!ev) return "";
-    const c = String(ev.content ?? "").trim();
-    const g = (c === "" || c === "+") ? "+" : [...c].slice(0,8).join("");
+    const g = disp(glyphOf(ev));
     return `<span class="gateg" title="reacted ${esc(g)} to this card">${esc(g)}</span>`;
   };
   const composeBlock = (coord, rootPk) => {
@@ -1098,18 +1112,22 @@ function renderTimeline(entries){
       ` data-p="${esc(rootPk)}"${unlocked && draft.trim() ? "" : " disabled"}>sign &amp; send</button>` +
       tallyHtml(cmtSent.get(coord), cmtErr.get(coord)) + `</div></div>`;
   };
+  // the card's stance row — rendered INSIDE the card box, at its bottom
+  const rctRow = (ev, d) => {
+    const coord = KIND + ":" + ev.pubkey + ":" + d;
+    return `<div class="mrct">` + pill(coord, ev.id, ev.pubkey, String(KIND), "") +
+      tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>`;
+  };
   const marginBlock = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
     const w = id => reactions.get(id)?.size || 0;          // a comment's total charge
     const cs = [...(comments.get(coord)?.values() || [])]
       .sort((a,b) => (w(b.id) - w(a.id)) || (a.created_at - b.created_at));
-    const rctLine = `<div class="mrct">` + pill(coord, ev.id, ev.pubkey, String(KIND), "") +
-      tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>`;
     const open = expandedCmts.has(coord);
     const toggle = `<div class="mcmt-t" data-coord="${esc(coord)}">` +
       (cs.length ? `◦ ${cs.length} comment${cs.length===1?"":"s"}` : `◦ comment`) +
       `<span class="go">${open ? "collapse ▴" : cs.length ? "read ▾" : "write ▾"}</span></div>`;
-    return `<div class="mcmts">${rctLine}${toggle}` +
+    return `<div class="mcmts">${toggle}` +
       (open ? cs.map(c =>
         `<div class="mcmt"><div class="mcmt-who">${gateGlyph(coord, c.pubkey)}${authorLink(c.pubkey)}` +
         `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span>` +
@@ -1168,7 +1186,7 @@ function renderTimeline(entries){
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
           `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` + diffBar(ev, e.d) +
           `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
-          marginBlock(ev, e.d) + `</div>`
+          rctRow(ev, e.d) + marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
         `<span><span class="k">kind</span> 30818</span></div>` +
@@ -1183,7 +1201,7 @@ function renderTimeline(entries){
         `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
         `<span><span class="k">d</span> ${esc(e.d)}</span>` +
         `<span><span class="k">kind</span> 30818</span></div>` +
-        `</div>${marginBlock(ev, e.d)}</div>`;
+        rctRow(ev, e.d) + `</div>${marginBlock(ev, e.d)}</div>`;
     }
   });
 
@@ -1333,18 +1351,22 @@ function publish(ev){
 }
 
 // ── the tap: one handler for cards and comments. A card's target is its coord;
-//    a comment IS its own target (target === eid ⇒ plain #e reaction) ──
-async function tapTarget(target, eid, pk, k, btn){
+//    a comment IS its own target (target === eid ⇒ plain #e reaction).
+//    g is the stance glyph ("+", "=", "-") — one vote, newest replaces ──
+async function tapTarget(target, eid, pk, k, g, btn){
   if (btn) btn.disabled = true;
   tapErr.delete(target);
   try {
     const s = await getSigner();
     const tags = [["e", eid], ["p", pk], ["k", k]];
     if (target !== eid) tags.unshift(["a", target]);       // card taps ride the coord — they survive edits
+    // strictly newer than my previous vote on this target, so a same-second stance
+    // switch survives the newest-wins dedup here and on every other client
+    const prev = (myPk && reactions.get(target)?.get(myPk)?.created_at) || 0;
     const ev = await s.sign({
       kind: REACTION_KIND,
-      created_at: Math.floor(Date.now() / 1000),
-      content: "+",                                        // proof-of-life: one character
+      created_at: Math.max(Math.floor(Date.now() / 1000), prev + 1),
+      content: g || "+",                                   // the stance: one character
       tags
     });
     myPk = ev.pubkey;
