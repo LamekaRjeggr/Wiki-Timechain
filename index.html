@@ -372,7 +372,19 @@ content:
         <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
            target="_blank" rel="noopener noreferrer">CONVENTION.md</a>.</p>
 
-      <h3>4 · Dispute a card</h3>
+      <h3>4 · Show a document changing</h3>
+      <p>If your timeline follows a document through versions, a card can carry the change
+        instead of describing it. Tag the version you revised with NIP-54's <code>fork</code>
+        marker — <code>["a","30818:&lt;pubkey&gt;:&lt;their-d&gt;","","fork"]</code> — and mark
+        the text in djot: <code>{-removed-}</code>, <code>{+added+}</code>. A mark alone on its
+        own line becomes a gutter row; a mark inside a sentence stays inline. Readers get a
+        <b>as passed / what changed</b> switch on any card that carries both. No extra tag,
+        and it works in any timeline. Keep removals in their own paragraph block —
+        <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
+           target="_blank" rel="noopener noreferrer">CONVENTION.md</a> has the reason and the
+        rule about not diffing more finely than a reader can follow.</p>
+
+      <h3>5 · Dispute a card</h3>
       <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
         <code>d</code> tag</b> and your correction. Nothing is overwritten — both
         versions appear side by side on the rail, each signed by its author, and readers

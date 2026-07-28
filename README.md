@@ -29,6 +29,25 @@ below it is scheduled, not history. **⧉ Copy link** copies a shareable URL
 to whatever timeline you're viewing — opening it drops the recipient
 straight onto that collection.
 
+## Documents that change
+
+When a timeline follows a document through versions, a card can carry the
+change rather than describe it. A card tags the version it revises with
+[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)'s `fork`
+marker and marks the text in djot — `{-removed-}`, `{+added+}`. A mark alone
+on its own line renders as a **gutter row** (a rule and a `−`/`+`, the diff
+idiom); a mark inside a sentence stays inline. Any card carrying both gets a
+key and an **as passed / what changed** switch, whose state travels in the URL
+so a link can open either view.
+
+There is no new tag for this — the fork marker and the djot marks are both
+already in the format. It works in any timeline. What it buys: a version card
+in *as passed* reconstructs the clean document it was diffed from, so one card
+holds both the text and its history. The
+[convention](CONVENTION.md#revisions-and-diffs--showing-what-a-document-used-to-say)
+covers the authoring rules, including the one that matters most — don't diff
+more finely than a reader can follow.
+
 ## Reactions and comments
 
 Cards carry reactions ([NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)

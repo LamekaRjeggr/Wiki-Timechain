@@ -127,6 +127,62 @@ Rules:
   a fact. This keeps `#l` date queries honest.
 - An exactly-known date carries **no** `APPROXIMATE DATE:` line at all.
 
+## Revisions and diffs — showing what a document used to say
+
+When a collection tracks a document through versions, a card can carry the change itself
+rather than describing it. **No new tag.** Two things you already have do the work.
+
+**The declaration is NIP-54's `fork` marker.** A card that revises another tags the one it
+came from — the addressable coordinate, and the concrete event id it was built against:
+
+```json
+["a", "30818:<pubkey>:<the-d-it-revises>", "", "fork"],
+["e", "<event id of that version>", "", "fork"]
+```
+
+**The change itself is djot's insert/delete**, which NIP-54 already mandates as the content
+format: `{-removed-}` and `{+added+}`. The braces are required.
+
+Fork marker **and** marks in the content is what earns a card the diff treatment. Either
+alone is just a card.
+
+### Granularity is the whole craft
+
+| Mark | Renders as | Use when |
+|---|---|---|
+| Alone on its own line(s) | a **gutter row** — rule + `−`/`+`, the diff idiom | a whole clause, subsection or paragraph came or went |
+| Inside a sentence | inline — struck, or tinted for an addition | a phrase changed and the sentence still reads |
+
+The failure mode is marking at too fine a grain. A rewritten paragraph diffed word by word
+is confetti: every third word marked, nothing legible, and the reader learns less than from
+one sentence of plain prose. Measure before you mark — if a subsection's old and new text
+share well under half their words, it was **rewritten**, not edited. Say so in a sentence and
+leave it unmarked. Honest prose beats an unreadable diff.
+
+Conversely, don't put a whole line inside a mark when the text belongs to a continuous
+document — that pulls it out into a gutter row and shatters the read into hunks. Mark from
+*after* the subsection letter so the document stays a document.
+
+### Authoring rule: removals go in their own block
+
+Readers get a per-card switch, **as passed** / **what changed**, whose state is per-card and
+in the URL (`&plain=<d>`). "As passed" strips the marks and drops any paragraph block whose
+marks are **all removals**, so whatever prose introduced them goes with them instead of
+dangling over nothing. A mixed block — a document marked inline — survives and reconstructs
+the clean text.
+
+So: a "here is what was cut" block holds *only* removals. Never mix.
+
+### Verify by reconstruction, not by eye
+
+A marked card asserts two documents. Check both, mechanically:
+
+- strip the `{-…-}`, unwrap the `{+…+}` → must equal the **newer** document, character for character
+- strip the `{+…+}`, unwrap the `{-…-}` → must equal the **older** one
+
+A card that fails either is claiming a change that did not happen. Build the marked text
+*from* the source documents programmatically — never retype a quoted document by hand.
+
 ## Discovery & the membership gate
 
 The viewer subscribes `{"kinds":[30818], "#t":["wikitimechain"], limit:500}` — one
