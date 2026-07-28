@@ -123,6 +123,8 @@
     padding:13px 15px;margin:8px 0}
   .mtl .card h4{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .cbody{margin-top:7px;font-size:14px;line-height:1.55;color:#c6c8ce}
+  .mtl .cbody del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
+  .mtl .cbody ins{text-decoration:underline;text-decoration-thickness:1px;color:var(--text)}
   .mtl .cbody p{margin:0 0 8px}
   .mtl .cbody p:last-child{margin-bottom:0}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
@@ -480,12 +482,14 @@ function esc(s){
     .replaceAll('"',"&quot;").replaceAll("'","&#39;");
 }
 
-// tiny djot-ish renderer: paragraphs + [label](url) links (what the cards use)
+// tiny djot-ish renderer: paragraphs + [label](url) links + {-del-}/{+ins+} (what the cards use)
 function renderContent(text){
   return esc(text).split(/\n\s*\n/).map(p =>
     "<p>" + p
       .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
         '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\{-([^]*?)-\}/g,"<del>$1</del>")   // djot insert/delete: struck + underlined,
+      .replace(/\{\+([^]*?)\+\}/g,"<ins>$1</ins>") // decoration not hue, so it survives any vision
       .replace(/\n/g,"<br>") + "</p>"
   ).join("");
 }
