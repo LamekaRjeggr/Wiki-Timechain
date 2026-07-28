@@ -91,6 +91,11 @@
   .contribute h2{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
     color:var(--rail);margin:0 0 18px}
   .contribute h2:not(:first-child){margin-top:46px}
+  .contribute details.dev{margin-top:46px;border:1px solid var(--border-soft);
+    border-radius:8px;padding:0 18px 6px;background:var(--panel)}
+  .contribute details.dev summary{cursor:pointer;font-size:12px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:13px 0}
+  .contribute details.dev[open] summary{border-bottom:1px solid var(--border-soft)}
   .contribute h3{font-size:15px;font-weight:600;margin:26px 0 8px;color:var(--text)}
   .contribute p,.contribute li{font-size:14px;line-height:1.75;color:#c6c8ce}
   .contribute ol{padding-left:22px}
@@ -324,7 +329,7 @@
       <p>This page only writes what you tap out — a reaction, or a margin comment once
         you've reacted, each signed by your own key. It never asks for your secret key.
         Cards come from outside: any client that lets you set tags yourself can publish
-        the format below.</p>
+        the format in the dev notes below.</p>
 
       <h2>Add to the record</h2>
       <h3>1 · Get a nostr identity</h3>
@@ -336,8 +341,19 @@
         whoever runs this page — can take them off. Guard your secret key
         (<code>nsec</code>): it can't be reset, and it <em>is</em> the identity. Use a
         signer extension or app rather than pasting it into websites.</p>
+      <p>No extension? Tap a reaction anyway — the page generates a keypair in your
+        browser and signs with it. That's a real nostr identity, usable in any client;
+        it lives only in this browser until you save it from the key chip.</p>
 
-      <h3>2 · Publish a card</h3>
+      <h3>2 · React, then comment</h3>
+      <p>Tap <code>+</code> on a card to sign a reaction with your key. Reacting unlocks
+        the comment box on that card — a margin note, signed by you, stored on the same
+        relays that hold the card. Reactions and margin notes are the whole write side
+        this page has.</p>
+
+      <details class="dev">
+      <summary>Dev · publish a card, build a reader</summary>
+      <h3>Publish a card</h3>
       <p>An entry is a <b>kind 30818</b> wiki event
         (<a href="https://github.com/nostr-protocol/nips/blob/master/54.md" target="_blank"
             rel="noopener noreferrer">NIP-54</a>) that labels itself as belonging here
@@ -370,7 +386,7 @@ content:
         the first card carrying a new <code>wikitimechain.collection</code> value is all it
         takes to start one, and it appears here beside the rest.</p>
 
-      <h3>3 · Or build your own reader</h3>
+      <h3>Build your own reader</h3>
       <p>This page is one client, not the record. One request boots another:
         <code>{"kinds":[30818],"#t":["wikitimechain"],"limit":500}</code> — group what
         comes back by its collection label, sort by <code>event_date</code>, draw. Exact
@@ -379,7 +395,7 @@ content:
         <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
            target="_blank" rel="noopener noreferrer">CONVENTION.md</a>.</p>
 
-      <h3>4 · Show a document changing</h3>
+      <h3>Show a document changing</h3>
       <p>If your timeline follows a document through versions, a card can carry the change
         instead of describing it. Tag the version you revised with NIP-54's <code>fork</code>
         marker — <code>["a","30818:&lt;pubkey&gt;:&lt;their-d&gt;","","fork"]</code> — and mark
@@ -391,11 +407,12 @@ content:
            target="_blank" rel="noopener noreferrer">CONVENTION.md</a> has the reason and the
         rule about not diffing more finely than a reader can follow.</p>
 
-      <h3>5 · Dispute a card</h3>
+      <h3>Dispute a card</h3>
       <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
         <code>d</code> tag</b> and your correction. Nothing is overwritten — both
         versions appear side by side on the rail, each signed by its author, and readers
         judge for themselves. Disputes are additions, not deletions.</p>
+      </details>
     </section>
   </main>
 
