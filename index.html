@@ -123,8 +123,32 @@
     padding:13px 15px;margin:8px 0}
   .mtl .card h4{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .cbody{margin-top:7px;font-size:14px;line-height:1.55;color:#c6c8ce}
-  .mtl .cbody del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
-  .mtl .cbody ins{text-decoration:underline;text-decoration-thickness:1px;color:var(--text)}
+  /* ── diff marks. Scoped to nothing: comments render through the same pass. ──
+     A whole-line mark becomes a gutter row (rule + −/+); marks inside a sentence
+     stay inline. Position and glyph carry the meaning, decoration and lightness
+     only reinforce it — legible in any vision, and it survives a screenshot. */
+  del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
+  ins{text-decoration:none;color:var(--text);border-radius:2px;padding:0 3px;
+    background:rgba(255,176,46,.16)}   /* tint, no outline — an outline per line-fragment
+    turns a multi-line insertion into a stack of boxes. Distinct from links: those are blue. */
+  .dgut{margin:0 0 8px;border-left:2px solid #565b66}
+  .dgut.add{border-left-color:var(--rail-dim)}
+  .drow{display:flex;gap:9px;padding:3px 0 3px 10px}
+  .dm{flex:0 0 auto;font-family:var(--mono);font-size:15px;font-weight:600;
+    color:#8b909b;user-select:none}     /* the glyph IS the meaning — don't let it whisper */
+  .dgut.add .dm,.dkey .dm.add{color:var(--rail)}
+  .dtx{flex:1 1 auto;color:var(--dim)}                /* removed text: dimmed, NOT struck —
+    a 60-word legal paragraph is unreadable through a strike; the gutter says it's gone */
+  .dgut.add .dtx{color:var(--text)}
+  .dbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:9px;
+    font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.02em}
+  .dtog{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .ds{background:transparent;border:0;border-right:1px solid var(--border);cursor:pointer;
+    font-family:var(--mono);font-size:11px;color:var(--dim);padding:3px 9px;line-height:1.5}
+  .ds:last-child{border-right:0}
+  .ds:hover{color:var(--text)}
+  .ds.on{background:var(--rail);color:#181203}       /* on-state = fill + dark ink, not hue */
+  .dkey .dm{margin-left:4px}
   .mtl .cbody p{margin:0 0 8px}
   .mtl .cbody p:last-child{margin-bottom:0}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
@@ -408,6 +432,10 @@ let activeF   = null;           // "c:<slug>" once discovery finds a card
 let userPicked = false;         // true once the visitor picks (stops URL override)
 const _q = new URLSearchParams(location.search);   // deep links: ?c=slug | ?l=rung | ?t=topic
 const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Boolean) || null;
+// diff cards showing "as passed" (removals hidden). Per-card by `d`, and in the URL — so a
+// link lands the reader on the view you meant. Deliberately NOT a page-wide switch: a global
+// one lets a page be silently put in a state where nothing was ever removed, then screenshot.
+const plainCards = new Set((_q.get("plain") || "").split(",").filter(Boolean));
 const AXES = [["t","topics"],["l","places"],["c","timelines"]];
 let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
@@ -425,8 +453,9 @@ const copyBtn  = document.getElementById("copylink");
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","l","t"].forEach(a => u.searchParams.delete(a));
+  ["c","l","t","plain"].forEach(a => u.searchParams.delete(a));
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
+  if (plainCards.size) u.searchParams.set("plain", [...plainCards].join(","));
   return u;
 }
 const COPY_LABEL = "⧉ Copy link";
@@ -483,15 +512,67 @@ function esc(s){
 }
 
 // tiny djot-ish renderer: paragraphs + [label](url) links + {-del-}/{+ins+} (what the cards use)
-function renderContent(text){
-  return esc(text).split(/\n\s*\n/).map(p =>
-    "<p>" + p
-      .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-      .replace(/\{-([^]*?)-\}/g,"<del>$1</del>")   // djot insert/delete: struck + underlined,
-      .replace(/\{\+([^]*?)\+\}/g,"<ins>$1</ins>") // decoration not hue, so it survives any vision
-      .replace(/\n/g,"<br>") + "</p>"
-  ).join("");
+// A mark standing alone on its own line(s) becomes a gutter row — the diff idiom, and the
+// only form that stays readable when the removed text is a whole legal subsection. A mark
+// inside a sentence stays inline. `plain` = the "as passed" view: marks drop out, and a
+// block that is ONLY removals (with whatever prose introduces them) drops whole, so the
+// introduction never dangles over nothing.
+const MARK = /\{([-+])([^]*?)\1\}/g;
+function renderContent(text, plain){
+  const inline = s => s
+    .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\{-([^]*?)-\}/g, plain ? "" : "<del>$1</del>")
+    .replace(/\{\+([^]*?)\+\}/g, plain ? "$1" : "<ins>$1</ins>")
+    .replace(/ {2,}/g, plain ? " " : "$&");    // a lifted-out deletion leaves a double space
+
+  return esc(text).split(/\n\s*\n/).map(block => {
+    // standalone = starts a line and ends one; everything else is left to the inline pass
+    const solo = [], kinds = new Set();
+    for (const m of block.matchAll(MARK)){
+      const e = m.index + m[0].length;
+      kinds.add(m[1]);
+      if ((m.index === 0 || block[m.index-1] === "\n") && (e === block.length || block[e] === "\n"))
+        solo.push({s: m.index, e, k: m[1] === "+" ? "add" : "rem", t: m[2]});
+    }
+    if (plain && kinds.has("-") && !kinds.has("+")) return "";   // removals-only block: nothing survives it
+    let out = "", cur = 0, gut = null;
+    const para = s => { s = s.replace(/^\n+|\n+$/g,""); if (s) out += "<p>" + inline(s).replace(/\n/g,"<br>") + "</p>"; };
+    const flushG = () => { if (gut){
+      out += `<div class="dgut ${gut.k}">` + gut.rows.map(r =>
+        `<div class="drow"><span class="dm">${gut.k === "add" ? "+" : "−"}</span>` +
+        `<div class="dtx">${inline(r)}</div></div>`).join("") + `</div>`;
+      gut = null; } };
+    for (const x of solo){
+      const gap = block.slice(cur, x.s);
+      if (gap.trim()){ flushG(); para(gap); }        // whitespace between rows keeps the group
+      if (plain){ flushG(); if (x.k === "add") para(x.t); }   // as passed: additions ARE the text
+      else { if (gut && gut.k !== x.k) flushG(); (gut ||= {k: x.k, rows: []}).rows.push(x.t); }
+      cur = x.e;
+    }
+    if (block.slice(cur).trim()){ flushG(); para(block.slice(cur)); }
+    flushG();
+    return out;
+  }).join("");
+}
+
+// A card carrying a NIP-54 `fork` marker is a revision of another card. That marker is the
+// whole schema — no new tag: fork + marks in the content earns the diff bar, in any collection.
+const hasMarks = ev => /\{-[^]*-\}|\{\+[^]*\+\}/.test(ev.content || "");
+function forkOf(ev){
+  const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+  return a ? (a[1].split(":")[2] || "") : "";
+}
+function diffBar(ev, d){
+  if (!hasMarks(ev)) return "";
+  const off = plainCards.has(d), f = forkOf(ev);
+  const btn = (v, label, on) =>
+    `<button class="ds${on ? " on" : ""}" type="button" data-d="${esc(d)}" data-v="${v}">${label}</button>`;
+  return `<div class="dbar">` +
+    (f ? `<span>revises <span class="mono">${esc(f)}</span></span>` : "") +
+    `<span class="dtog">${btn("m","what changed",!off)}${btn("p","as passed",off)}</span>` +
+    (off ? "" : `<span class="dkey"><span class="dm">−</span> removed<span class="dm add">+</span> added</span>`) +
+    `</div>`;
 }
 
 function dateOf(ev){
@@ -913,6 +994,13 @@ function bindTaps(){                                      // gap expanders + com
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b); return; }
+    const dv = e.target.closest(".ds");
+    if (dv){                                              // diff view switch, per card, in the URL
+      dv.dataset.v === "p" ? plainCards.add(dv.dataset.d) : plainCards.delete(dv.dataset.d);
+      history.replaceState(null, "", timelineUrl());
+      render();
+      return;
+    }
     const s = e.target.closest(".cmp-send");
     if (s && !s.disabled){
       sendComment(s.dataset.coord, s.dataset.p, s.closest(".cmp").querySelector(".cmp-ta"), s);
@@ -1051,8 +1139,8 @@ function renderTimeline(entries){
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
-          `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` +
-          `<div class="cbody">${renderContent(ev.content || "")}</div>` +
+          `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` + diffBar(ev, e.d) +
+          `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
           marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
@@ -1062,8 +1150,8 @@ function renderTimeline(entries){
       const ev = e.evs[0];
       html += `<div class="node">${dateCol}<span class="dot${future?" future":""}"></span>` +
         `<div class="card"><h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
-        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        `<div class="cbody">${renderContent(ev.content || "")}</div>` +
+        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` + diffBar(ev, e.d) +
+        `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
         `<div class="cfoot"><span class="fdate">${esc(dateOf(ev))}</span>` +
         `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
         `<span><span class="k">d</span> ${esc(e.d)}</span>` +
