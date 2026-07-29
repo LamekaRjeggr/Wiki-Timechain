@@ -121,21 +121,31 @@
   /* the 64px first column is deliberately EMPTY. The date used to live here and is now on
      the card's own tab; the column stays because the spine, the dots, the gap dashline and
      the now-chip are all keyed to 64px — and because the empty gutter is where the drum goes. */
-  .mtl .dot{position:absolute;left:59px;top:15px;width:12px;height:12px;border-radius:50%;
+  .mtl .dot{position:absolute;left:59px;top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--accent);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
   .mtl .card{grid-column:2;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
      part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
-     card's own padding edge so it reads as cut from the card rather than sat inside it. */
-  .mtl .ctab{display:flex;align-items:center;gap:10px;width:fit-content;
-    margin:-13px 0 10px -15px;padding:6px 13px 5px 15px;
-    background:var(--panel-2);border-right:1px solid var(--border);
-    border-bottom:1px solid var(--border);border-radius:11px 0 10px 0;
+     card's own padding edge so it reads as cut from the card rather than sat inside it.
+     The right end SLOPES (clip-path, replacing the right border) — the angle is what makes
+     it read as a tab rather than a chip, and it's why the right padding is oversized.
+     Baseline alignment, not centre: the date is half again the size of the rest. */
+  .mtl .ctab{display:flex;align-items:baseline;gap:10px;width:fit-content;
+    max-width:calc(100% + 15px);                   /* +15 = the left bleed; never wider than the card */
+    margin:-13px 0 10px -15px;padding:6px 28px 5px 15px;
+    background:var(--panel-2);border-bottom:1px solid var(--border);
+    border-radius:11px 0 0 0;white-space:nowrap;   /* a wrapped tab stops being a tab */
+    clip-path:polygon(0 0,calc(100% - 17px) 0,100% 100%,0 100%);
     font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .mtl .ctab .td{color:var(--rail)}                 /* the date keeps the amber it had in the footer */
-  .mtl .ctab .sl{color:var(--faint)}
+  .mtl .ctab .td{font-size:16.5px;color:var(--rail);flex:none}  /* the date keeps the footer's amber */
+  .mtl .ctab .sl{color:var(--faint);flex:none}
+  .mtl .ctab .by{overflow:hidden;text-overflow:ellipsis}   /* a long name truncates; the date never does */
+  @media (max-width:640px){                        /* the measure gets narrow before the tab does */
+    .mtl .ctab{gap:8px;padding-right:22px;clip-path:polygon(0 0,calc(100% - 13px) 0,100% 100%,0 100%)}
+    .mtl .ctab .td{font-size:14px}
+  }
   .mtl .card h4{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .cbody{margin-top:7px;font-size:14px;line-height:1.55;color:#c6c8ce}
   /* ── diff marks. Scoped to nothing: comments render through the same pass. ──
@@ -190,7 +200,7 @@
     font-family:var(--mono);font-size:12px}
   .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
   /* contested: diamond node + amber brace + badge — shape+label carry it, never hue alone */
-  .mtl .cdot{position:absolute;left:59px;top:15px;width:12px;height:12px;background:var(--bg);
+  .mtl .cdot{position:absolute;left:59px;top:17px;width:12px;height:12px;background:var(--bg);
     border:2px solid var(--rail);transform:rotate(45deg);z-index:2}
   .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
   .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
@@ -350,20 +360,21 @@
      on-screen extent, so it never runs beside the header or the prose below */
   .limb.off{display:none}
   #limbtop{top:12px} #limbbot{bottom:12px}
-  /* ── slim mode (<900px): the instrument survives, the prose captions don't ──
-     it lives in the gutter left of the spine, which is empty at every width now that the
-     date column carries nothing. That's ~72px on a phone — enough that the year tabs come
-     back and only the "now" caption goes, since the now-line already says it in cyan. The
-     chips still drop their year: the count is the information, and the card tab says the date. */
+  /* ── slim mode (<900px): the instrument survives, the labels don't ──
+     40px in the gutter left of the spine. Emptying the date column freed more room than
+     that, and the drum was briefly widened to 72px to take it — rolled back: the gutter
+     staying quiet is worth more than a second year label. The ticks need no reading room
+     so they stay; the year tabs and the "now" caption need room there isn't, so they go.
+     The chips drop their year for the same reason — the count is the information, and the
+     card's own tab says the date. */
   @media (max-width:899px){
-    #drum{width:72px}
+    #drum{width:40px}
     #drum .band{right:0}
     #drum .axle{left:3px}
     #drum .head .ln{width:26px;left:3px}
     #drum .tick{left:8px}
     #drum .tick.gapmark{left:3px}
-    #drum .tab{left:3px;width:20px}
-    #drum .tab b{left:24px}
+    #drum .tab{display:none}
     #drum .now{left:2px;width:34px}
     #drum .now i{display:none}
     .limb{left:4px;font-size:10px;padding:2px 6px}
@@ -1270,7 +1281,7 @@ function renderTimeline(entries){
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
         `<div class="card"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
-        `<span class="sl">/</span><span>by ${authorLink(ev.pubkey)}</span></div>` +
+        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
         `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` + diffBar(ev, e.d) +
         `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
