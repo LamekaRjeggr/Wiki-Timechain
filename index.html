@@ -118,15 +118,24 @@
   .mtl .track{position:relative;padding:6px 6px 6px 0}
   .mtl .spine{position:absolute;left:64px;top:8px;bottom:8px;width:2px;background:var(--border)}
   .mtl .node{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px}
-  .mtl .date{padding-top:15px;text-align:right;padding-right:16px}
-  .mtl .date .y{font-family:var(--mono);font-size:13px;color:var(--text)}
-  .mtl .date .m{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
-  .mtl .date .dy{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:1px}
-  .mtl .dot{position:absolute;left:59px;top:19px;width:12px;height:12px;border-radius:50%;
+  /* the 64px first column is deliberately EMPTY. The date used to live here and is now on
+     the card's own tab; the column stays because the spine, the dots, the gap dashline and
+     the now-chip are all keyed to 64px — and because the empty gutter is where the drum goes. */
+  .mtl .dot{position:absolute;left:59px;top:15px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--accent);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
-  .mtl .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  .mtl .card{grid-column:2;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
+  /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
+     part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
+     card's own padding edge so it reads as cut from the card rather than sat inside it. */
+  .mtl .ctab{display:flex;align-items:center;gap:10px;width:fit-content;
+    margin:-13px 0 10px -15px;padding:6px 13px 5px 15px;
+    background:var(--panel-2);border-right:1px solid var(--border);
+    border-bottom:1px solid var(--border);border-radius:11px 0 10px 0;
+    font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .mtl .ctab .td{color:var(--rail)}                 /* the date keeps the amber it had in the footer */
+  .mtl .ctab .sl{color:var(--faint)}
   .mtl .card h4{margin:0;font-size:16px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .cbody{margin-top:7px;font-size:14px;line-height:1.55;color:#c6c8ce}
   /* ── diff marks. Scoped to nothing: comments render through the same pass. ──
@@ -181,7 +190,7 @@
     font-family:var(--mono);font-size:12px}
   .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
   /* contested: diamond node + amber brace + badge — shape+label carry it, never hue alone */
-  .mtl .cdot{position:absolute;left:59px;top:19px;width:12px;height:12px;background:var(--bg);
+  .mtl .cdot{position:absolute;left:59px;top:15px;width:12px;height:12px;background:var(--bg);
     border:2px solid var(--rail);transform:rotate(45deg);z-index:2}
   .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
   .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
@@ -199,14 +208,8 @@
     color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:#9aa0ab}
-  /* footer: exact date · author → njump · d · kind (self-contained; the old shared
-     base .cfoot rule was removed with the horizontal detail card) */
-  .mtl .cfoot{display:flex;flex-wrap:wrap;margin-top:11px;padding-top:10px;
-    border-top:1px solid var(--border-soft);gap:11px 14px;font-size:11px;
-    color:var(--dim);font-family:var(--mono)}
-  .mtl .cfoot .k{color:var(--faint);margin-right:2px}
-  .mtl .contest .cfoot{margin-left:6px}
-  .mtl .cfoot .fdate{color:var(--rail)}
+  /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
+     every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
   /* comments on the spine: marginalia below the card box, collapsed to a count so the
      proportional gap-rhythm survives; expanding pushes rows down like a gap expander.
      Shown only when a card HAS comments. */
@@ -347,19 +350,20 @@
      on-screen extent, so it never runs beside the header or the prose below */
   .limb.off{display:none}
   #limbtop{top:12px} #limbbot{bottom:12px}
-  /* ── slim mode (<900px): the instrument survives, the labels don't ──
-     everything shifts into the ~40px of dead gutter left of the date column. The year
-     tabs and the "now" caption need reading room there is none of, so they go; the ticks
-     don't need any, so they stay. The chips lose their year for the same reason — the
-     count is the information, and the date column already says which year you're in. */
+  /* ── slim mode (<900px): the instrument survives, the prose captions don't ──
+     it lives in the gutter left of the spine, which is empty at every width now that the
+     date column carries nothing. That's ~72px on a phone — enough that the year tabs come
+     back and only the "now" caption goes, since the now-line already says it in cyan. The
+     chips still drop their year: the count is the information, and the card tab says the date. */
   @media (max-width:899px){
-    #drum{width:40px}
+    #drum{width:72px}
     #drum .band{right:0}
     #drum .axle{left:3px}
     #drum .head .ln{width:26px;left:3px}
     #drum .tick{left:8px}
     #drum .tick.gapmark{left:3px}
-    #drum .tab{display:none}
+    #drum .tab{left:3px;width:20px}
+    #drum .tab b{left:24px}
     #drum .now{left:2px;width:34px}
     #drum .now i{display:none}
     .limb{left:4px;font-size:10px;padding:2px 6px}
@@ -1048,8 +1052,6 @@ function renderTabs(V){
 }
 
 // ═══════════════ render ═══════════════
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
 function render(){
   const V = vocab();
   // an axis with no live groups shows no chip, so never sit on one
@@ -1247,16 +1249,14 @@ function renderTimeline(entries){
 
     const future = e.frac > nowFrac;
     const yr = String(e.date).slice(0,4);
-    const moIdx = Math.max(0, Math.min(11, (parseInt(String(e.date).slice(5,7),10) || 1) - 1));
-    const day = String(e.date).slice(8,10);
-    const dateCol = `<div class="date"><div class="y">${esc(yr)}</div>` +
-                    `<div class="m">${MONTHS[moIdx].toUpperCase()}</div>` +
-                    (day ? `<div class="dy">${esc(day)}</div>` : "") + `</div>`;
+    // the node carries its year and address as data: the drum reads the year without
+    // scraping rendered text, and `d` stays recoverable now that nothing prints it
+    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}"`;
 
     if (e.contested){
-      html += `<div class="node">${dateCol}<span class="cdot"></span>` +
+      html += `<div class="node"${nodeAttrs}><span class="cdot"></span>` +
         `<div class="contest"><div class="cbrace"></div>` +
-        `<div class="cbadge">◆ contested · ${e.evs.length} versions</div>` +
+        `<div class="cbadge">${esc(e.date)} · ◆ contested · ${e.evs.length} versions</div>` +
         e.evs.map((ev, vi) =>
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
@@ -1265,19 +1265,15 @@ function renderTimeline(entries){
           `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
           rctRow(ev, e.d) + marginBlock(ev, e.d) + `</div>`
         ).join("") +
-        `<div class="cfoot"><span><span class="k">d</span> ${esc(e.d)}</span>` +
-        `<span><span class="k">kind</span> 30818</span></div>` +
         `</div></div>`;
     } else {
       const ev = e.evs[0];
-      html += `<div class="node">${dateCol}<span class="dot${future?" future":""}"></span>` +
-        `<div class="card"><h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
+      html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
+        `<div class="card"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
+        `<span class="sl">/</span><span>by ${authorLink(ev.pubkey)}</span></div>` +
+        `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` + diffBar(ev, e.d) +
         `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
-        `<div class="cfoot"><span class="fdate">${esc(dateOf(ev))}</span>` +
-        `<span><span class="k">by</span> ${authorLink(ev.pubkey)}</span>` +
-        `<span><span class="k">d</span> ${esc(e.d)}</span>` +
-        `<span><span class="k">kind</span> 30818</span></div>` +
         rctRow(ev, e.d) + `</div>${marginBlock(ev, e.d)}</div>`;
     }
   });
@@ -1333,8 +1329,7 @@ function drumMeasure(){
     el.className = "tick" + (contested ? " contested" : rev ? " rev" : future ? " future" : "");
     if (!contested && !future) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
-    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested,
-                     yr: (n.querySelector(".date .y") || {}).textContent || "" });
+    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "" });
   });
   areaEl.querySelectorAll(".mtl .gap-c").forEach(g => {
     const el = document.createElement("div"); el.className = "tick gapmark";
