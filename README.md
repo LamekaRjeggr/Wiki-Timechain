@@ -130,4 +130,7 @@ Tools & references:
 
 ## License
 
-Public domain — do what you want with it.
+[CC0 1.0 Universal](LICENSE) — public domain dedication. Everything here, the viewer
+and the convention both: copy it, fork it, ship it, no attribution required. The
+convention text is deliberately under the same terms as the NIPs themselves, which are
+public domain, so it can be lifted into one without friction.
