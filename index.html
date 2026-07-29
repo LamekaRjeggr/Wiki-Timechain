@@ -15,7 +15,14 @@
     --rail:#ffb02e;          /* amber rail — colorblind-safe */
     --rail-dim:#5a4415;
     --accent:#4aa3ff;        /* blue links/selection — safe against amber */
-    --future:#2fd6e6;        /* cyan for upcoming nodes — reinforces hollow+size, not hue-alone */
+    /* TIME carries the hue: the past is ocher/sepia, what's ahead is neon cyan, and the
+       now-rule is the seam between them. Amber (--rail) stays the app's own chrome —
+       buttons, tallies, the birth certificate — so the timeline's colour is never a
+       control's colour. Warm-yellow vs cyan is the colourblind-safe axis. */
+    --past:#c98f3f;          /* ocher — a dated card, the rail behind you */
+    --past-dim:#4a3618;
+    --future:#28e5ff;        /* neon cyan — scheduled, not yet happened */
+    --future-dim:#134a55;
     --text:#e9eaee;
     --dim:#9296a0;
     --faint:#42454e;
@@ -122,7 +129,7 @@
      the card's own tab; the column stays because the spine, the dots, the gap dashline and
      the now-chip are all keyed to 64px — and because the empty gutter is where the drum goes. */
   .mtl .dot{position:absolute;left:59px;top:17px;width:12px;height:12px;border-radius:50%;
-    background:var(--bg);border:2px solid var(--accent);z-index:2}
+    background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
   .mtl .card{grid-column:2;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
@@ -139,7 +146,7 @@
     border-radius:11px 0 0 0;white-space:nowrap;   /* a wrapped tab stops being a tab */
     clip-path:polygon(0 0,calc(100% - 17px) 0,100% 100%,0 100%);
     font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .mtl .ctab .td{font-size:16.5px;color:var(--rail);flex:none}  /* the date keeps the footer's amber */
+  .mtl .ctab .td{font-size:16.5px;color:var(--past);flex:none}  /* the date IS the time channel */
   .mtl .ctab .sl{color:var(--faint);flex:none}
   .mtl .ctab .by{overflow:hidden;text-overflow:ellipsis}   /* a long name truncates; the date never does */
   @media (max-width:640px){                        /* the measure gets narrow before the tab does */
@@ -177,21 +184,25 @@
   .mtl .cbody p{margin:0 0 8px}
   .mtl .cbody p:last-child{margin-bottom:0}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--rail);vertical-align:1px;font-weight:400}
+    text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
   /* gaps: proportional spacer, or a collapsed marker for long silences */
   .mtl .gap{width:100%}
   .mtl .gap-c{position:relative;display:grid;grid-template-columns:64px 1fr;column-gap:16px;
     align-items:center;cursor:pointer}
-  /* present threshold: full-width amber rule; the chip bridges the spine (half over the
-     date column, half over the cards) — same crosshair the desktop now-line uses */
-  .mtl .nowdiv{position:relative;height:0;margin:16px 0 34px;border-top:2px solid var(--rail)}
+  /* present threshold: the SEAM. A zero-height box, so its two borders stack into one
+     2px rule whose upper half is the ocher past and lower half the cyan ahead — the
+     colour change is the information; the chip only names it. The chip bridges the
+     spine (half over the date column, half over the cards). */
+  .mtl .nowdiv{position:relative;height:0;margin:16px 0 34px;
+    border-top:1px solid var(--past);border-bottom:1px solid var(--future)}
   .mtl .nowchip{position:absolute;left:65px;top:0;transform:translate(-50%,-50%);
-    white-space:nowrap;background:var(--bg);border:1px solid var(--rail-dim);color:var(--rail);
+    white-space:nowrap;background:var(--bg);border:1px solid var(--future-dim);color:var(--future);
     font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
     padding:4px 12px;border-radius:20px}
-  /* now-section: cards wear an amber border matching the now marker — no fill wash */
+  /* now-section: cards wear a cyan border matching the seam's lower half — no fill wash */
   .mtl .futurezone .card,
-  .mtl .futurezone .vcard{border-color:var(--rail)}
+  .mtl .futurezone .vcard{border-color:var(--future-dim)}
+  .mtl .futurezone .ctab .td{color:var(--future)}   /* an unhappened date reads ahead, not behind */
   .mtl .gap-c .dashline{position:absolute;left:64px;top:0;bottom:0;width:2px;
     background:repeating-linear-gradient(var(--faint) 0 4px,transparent 4px 9px)}
   .mtl .gap-c .gdot{position:absolute;left:60px;top:calc(50% - 5px);width:10px;height:10px;
@@ -322,7 +333,7 @@
     pointer-events:none;user-select:none}
   #drum .band{position:absolute;left:0;right:70px;background:rgba(233,234,238,.035);
     border-top:1px solid rgba(233,234,238,.07);border-bottom:1px solid rgba(233,234,238,.07)}
-  #drum .axle{position:absolute;left:24px;top:0;bottom:0;width:2px;background:var(--rail-dim);
+  #drum .axle{position:absolute;left:24px;top:0;bottom:0;width:2px;background:var(--past-dim);
     opacity:.6;                     /* the axle is not the information — dimmed 40% */
     -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%);
     mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%)}
@@ -332,11 +343,12 @@
     border-top:4px solid transparent;border-bottom:4px solid transparent;
     border-left:6px solid var(--text)}
   /* tick vocabulary — size carries note length, shape carries kind, never hue alone */
-  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;background:var(--rail)}
-  #drum .tick.face{box-shadow:0 0 7px rgba(255,176,46,.6)}
+  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;background:var(--past)}
+  #drum .tick.face{box-shadow:0 0 7px rgba(201,143,63,.65)}
   #drum .tick.contested{width:9px!important;height:9px;border-radius:0}
   #drum .tick.rev{height:6px;border-radius:2px;   /* ONE card wearing a visible layer — not two notes */
-    background:linear-gradient(180deg,var(--rail) 0 62%,var(--future) 62% 100%)}
+    /* layered in LIGHTNESS, not a second hue — cyan on the drum now means "ahead" */
+    background:linear-gradient(180deg,var(--past) 0 62%,var(--past-dim) 62% 100%)}
   #drum .tick.future{background:transparent;border:2px solid var(--future);border-radius:50%;
     width:8px!important;height:8px}
   #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
@@ -347,7 +359,7 @@
     font-weight:400;color:var(--dim)}
   /* the now-line is not a note: full strip width, cyan, and it says its own name */
   #drum .now{position:absolute;left:4px;width:62px;height:2px;background:var(--future);
-    box-shadow:0 0 6px rgba(47,214,230,.55)}
+    box-shadow:0 0 7px rgba(40,229,255,.6)}
   #drum .now i{position:absolute;left:70px;top:-8px;font-style:normal;font-family:var(--mono);
     font-size:10px;color:var(--future)}
   /* hidden hemispheres, numbered — the only thing wrap costs you is a count */
