@@ -34,9 +34,13 @@ the user confirmed it works. Do not build a batch migrator; do not read `cards/`
   the 30828, PASS 2 sends the kind-5 delete. Backup: `index.html.bak-pre30828migrate-20260729`.
   Forge is served by plain `python3 -m http.server` on `:8788` over `~/forge` — **editing
   index.html IS deploying**, hard-refresh only. No git there; version by `.bak-<label>`.
-- **Uncommitted in THIS repo, not deployed:** `index.html` (the `KIND`/`READ_KINDS` split),
-  `tools/migrate-v2.mjs` (same split), and this doc (untracked). **Do not `git push`** until
-  cards are live on 30828 — pushing early renders the spine off the 30818 half only.
+- **The viewer is DEPLOYED** — `61ca5d9`, 2026-07-29. The old "do not push until cards are live"
+  rule is retired and was backwards in the end: with `READ_KINDS = [30828, 30818]` the shipped
+  viewer is the only one that can see a migrated card at all, and the *un*shipped one silently
+  drops every card whose 30818 has been deleted. Deploy first, migrate second.
+- **Git tracking was broken and is now fixed.** `branch.main.remote` had been set to the literal
+  string `branch.main.merge`, so a bare `git push` died with "no upstream branch". Repaired to
+  `origin` / `refs/heads/main`. If `git push` ever fails that way again, that is the cause.
 - **Fork order is forced:** `hcr2001-text-introduced` → `hcr2001-text-house-engrossed` →
   `hcr2001-text-final`. The `e` fork tag pins the target's concrete event id, so a child can
   only repin after its parent is migrated. The other 25 cards have no forks, any order.
@@ -177,7 +181,8 @@ Also: `CLAUDE.md` claims 31 live cards across 3 collections. It is **38 across 4
    is strictly newer than the original, so dedup prefers the new card. Forks in the order above.
 6. **Verify**, then **PASS 2 — delete the 30818s** (kind 5). NIP-09 is a *request*: after
    sending, `↻` and anything still answering is a relay that kept it. Expect survivors.
-7. **Deploy the viewer** (`git push`) once cards are live.
+7. ~~Deploy the viewer once cards are live.~~ **DONE `61ca5d9`** — and the ordering was wrong:
+   deploy has to come *first*, because a deleted 30818 is invisible to the old viewer.
 8. **Docs, last, once it's past tense** — fold into `CONVENTION.md`, then `README.md` (7 refs)
    and `CLAUDE.md` (5, plus the stale 31/3 card count). Historical refs stay as-is:
    `index.html:238` and the `CLAUDE.md` Rolodex note describe a footer that genuinely *did*
