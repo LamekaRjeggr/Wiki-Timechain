@@ -550,7 +550,11 @@ const RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine"
 ];
-const KIND = 30818;
+const KIND = 30828;             // the card kind we WRITE coords against (NIPs #2426: our own kind, not NIP-54's)
+// What we READ. 30818 is the pre-migration kind, kept so the spine never goes blank mid-republish:
+// dedup keys on `pubkey:d` WITHOUT the kind, so a 30828 card collapses with its 30818 original and
+// newest created_at wins. DROP 30818 once every card is republished.
+const READ_KINDS = [30828, 30818];
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
 const MARKER = "wikitimechain"; // convention-v2 global membership marker: ["t","wikitimechain"]
@@ -778,7 +782,7 @@ function authorLink(pk){
 // discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
 // gate stays client-side because relays index `l` by value only (CONVENTION.md, "the #l value-only caveat").
 function sieve(ev){
-  if (!ev || ev.kind !== KIND) return;
+  if (!ev || !READ_KINDS.includes(ev.kind)) return;
   const c = collectionSlug(ev);
   if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(tag(ev,"event_date"))) return;
   if (!slugs.has(c)){ slugs.add(c); scheduleMemberFetch(); }
@@ -798,13 +802,13 @@ function scheduleMemberFetch(){
       // #l is value-only-indexed, so a card wearing our slug as some other label
       // value could sneak in — same squatting exposure as v1's #c fetch, and our
       // slugs are distinct kebab names that won't collide with date/location values.
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:READ_KINDS, "#l": [...slugs] }]));
     });
   }, 400);
 }
 
 function ingest(ev){
-  if (!ev || ev.kind !== KIND) return;
+  if (!ev || !READ_KINDS.includes(ev.kind)) return;
   const d = tag(ev,"d"); if (!d) return;
   const key = ev.pubkey + ":" + d;
   const cur = events.get(key);
@@ -1745,9 +1749,9 @@ function connect(url){
     // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
+    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:READ_KINDS, "#t":[MARKER], limit:500 }]));
     if (slugs.size)
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:READ_KINDS, "#l": [...slugs] }]));
     if (cmtSubs.size)
       ws.send(JSON.stringify(["REQ","cmt",{ kinds:[COMMENT_KIND], "#A": [...cmtSubs] }]));
     const rf = rctFilters();

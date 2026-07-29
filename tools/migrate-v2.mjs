@@ -19,7 +19,11 @@
 
 const RELAYS = ["wss://relay.damus.io","wss://nos.lol","wss://relay.primal.net",
                 "wss://relay.mostr.pub","wss://relay.nostr.band","wss://nostr.wine"];
-const KIND = 30818, MARKER = "wikitimechain";
+// KIND = what we EMIT (our own kind, per NIPs #2426). READ_KINDS = what we FETCH and VERIFY:
+// 30818 stays so `fetch` still finds the pre-migration originals to rebuild from — the LIVE
+// event is the source of truth, never cards/ (see MIGRATION-30828.md). Drop 30818 once every
+// card is republished. Mirrors the same split in index.html.
+const KIND = 30828, READ_KINDS = [30828, 30818], MARKER = "wikitimechain";
 
 // Per-collection location policy (CONVENTION.md, jurisdiction ladder). Location is CATALOG data:
 // only add rungs that are TRUE for the card. Placeless collections get none.
@@ -53,8 +57,8 @@ async function pull(filter){
 }
 
 // a collection's live cards, found by legacy #c OR v2 collection label #l
-const fetchCollection = slug => pull({ kinds:[KIND], "#c":[slug] })
-  .then(async r => r.cards.length ? r : pull({ kinds:[KIND], "#l":[slug] }));
+const fetchCollection = slug => pull({ kinds:READ_KINDS, "#c":[slug] })
+  .then(async r => r.cards.length ? r : pull({ kinds:READ_KINDS, "#l":[slug] }));
 
 // build the v2 event template (unsigned; Forge/bunker adds pubkey/id/sig)
 function toV2(src, slug){
