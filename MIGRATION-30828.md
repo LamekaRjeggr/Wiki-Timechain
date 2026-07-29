@@ -1,25 +1,41 @@
 # Migration — kind 30818 → 30828
 
-**Status 2026-07-29: PASS 1 UNDERWAY — 4 of 29 cards done, and their 30818s already deleted.**
+**Status 2026-07-29: PASS 1 COMPLETE — all 29 in-scope cards are live on 30828.**
 
 Verified live against 6 relays, not bookkept:
 
-| collection | pass 1 | pass 2 |
+| collection | pass 1 | pass 2 (delete the 30818s) |
 |---|---|---|
-| `tonopah-310ac-411th-camelback-z260019-cpa260008` (4) | **DONE** | **DONE** — 30818 answers on nobody |
-| `hcr2001-fast-election-results` (19) | 0/19 | — |
-| `tonopah-incorporation` (6) | 0/6 | — |
+| `tonopah-310ac-411th-camelback-z260019-cpa260008` (4) | **DONE** | **DONE** — 0 survivors |
+| `hcr2001-fast-election-results` (19) | **DONE** | not started — 19 old events live |
+| `tonopah-incorporation` (6) | **DONE** | 1 of 6 (`rita-files-…` deleted) |
 
-`bitcoin-arbitrary-data` is out of scope for this migration. It is not counted anywhere below.
+`bitcoin-arbitrary-data` is out of scope for this migration. It is not counted anywhere above.
+Its 9 cards are the *only* remaining 30818s with no 30828 twin — see the `READ_KINDS` note below,
+because that fact now has a consequence.
 
-The 4 done cards verify clean: 17 tags each, `t wikitimechain` present, collection label +
-both date buckets + the full `ISO-3166-1`/`-2`/`.location` ladder carried over, content length
-unchanged. The delete was honored by all six relays — no survivors to dedup against. So the
-primitive is proven end to end, publish *and* delete, and the remaining 25 are the same motion.
+Every migrated card verifies clean: marker present, collection label + both date buckets + the
+full `ISO-3166-1`/`-2`/`.location` ladder carried over, content length unchanged.
 
-**Corrected count: 25 cards remain** (19 hcr2001 + 6 tonopah-incorporation), not the 28 stated
-earlier. Counted by collection label rather than by marker, so nothing is hiding behind a
-missing `t` tag.
+**The fork chain rewrote correctly** — verified against the live events, not assumed:
+`hcr2001-text-house-engrossed` carries `a = 30828:<pk>:hcr2001-text-introduced [fork]` with its
+`e` tag repinned to introduced's *new* event id, and `final` chains the same way to
+`house-engrossed`. That was the one step the tool could have silently botched.
+
+### Relay reality (measured, and it changes pass 2)
+
+| relay | holds all 29 on 30828? |
+|---|---|
+| nos.lol, relay.primal.net, relay.mostr.pub | **yes, 29/29** |
+| relay.damus.io | intermittent — 26/29 one run, 0/29 the next under our own query load; reads are flaky, not empty |
+| nostr.wine, nostr21.com | **0/29** — both are *paid* relays with restricted writes (NIP-11 `payment_required: true`). They never accepted the publishes. |
+
+The paid pair is **not** rejecting 30828 for being an unknown kind — that hypothesis was tested
+and disproved. It's payment. Which means two things for pass 2: the kind-5 deletes will also be
+refused there, so **those two relays will keep serving 30818 forever**, and they hold *only* the
+old copy — the 30828 twin was never accepted. Harmless in the merged viewer, since dedup collapses
+the survivor against its newer twin from the other relays. But it is the reason `READ_KINDS` must
+keep 30818 as long as the viewer wants those relays as sources at all.
 
 **Status 2026-07-29: tooling BUILT and confirmed working.**
 `CONVENTION.md` still describes the live corpus truthfully and is **not edited until the
@@ -187,7 +203,11 @@ Also: `CLAUDE.md` claims 31 live cards across 3 collections. It is **38 across 4
    and `CLAUDE.md` (5, plus the stale 31/3 card count). Historical refs stay as-is:
    `index.html:238` and the `CLAUDE.md` Rolodex note describe a footer that genuinely *did*
    print 30818, and rewriting them would falsify the record.
-9. **Drop 30818 from `READ_KINDS`** in both files — one-line retirement, after `verify` passes.
+9. **Drop 30818 from `READ_KINDS`** — one-line retirement, but **it is no longer free.** The nine
+   `bitcoin-arbitrary-data` cards were deliberately left on 30818, so dropping the read kind
+   deletes that whole collection *from the viewer* while leaving it live on the relays. Two ways
+   out, user's call: migrate the bitcoin cards after all, or accept the collection going dark on
+   the site. Until that's decided, `READ_KINDS` stays as it is — and it costs nothing to leave.
 10. **PR the kind into the NIPs README** kind table once cards are live on it.
 7. **Delete this doc** when everything above is past tense, per the `MIGRATION-v2.md` precedent.
 8. **PR the kind into the NIPs README** kind table once cards are live on it.
