@@ -1473,6 +1473,9 @@ let myPk = null;                // my pubkey once a signer produced one — ligh
 let certForId = null;           // event id whose first accept triggers the birth certificate
 
 const SK_KEY = "wtc:sk", SAVED_KEY = "wtc:saved", UNSAVED_N = "wtc:unsaved", CERT_SEEN = "wtc:cert";
+// "later" snoozes the nag chip. Not a permanent no: the next event the visitor signs puts
+// more at stake, so it re-earns the corner. Saving the key retires the nag for good.
+const CHIP_SNOOZE = "wtc:snooze";
 
 // honest tally text for one published event id — rendered by marginBlock
 function tallyHtml(id, err){
@@ -1657,6 +1660,7 @@ function certMaybe(id){
 }
 function bumpUnsaved(){
   if (localStorage.getItem(SAVED_KEY)) return;
+  localStorage.removeItem(CHIP_SNOOZE);              // a new event un-snoozes: the count changed
   localStorage.setItem(UNSAVED_N, String((parseInt(localStorage.getItem(UNSAVED_N), 10) || 0) + 1));
   renderKeyChip();
 }
@@ -1685,12 +1689,15 @@ function showCert(firstTime){
     b.classList.add("did"); b.textContent = "copied ✓";
     setTimeout(() => { b.classList.remove("did"); b.textContent = "copy"; }, 1600);
   }));
-  const close = () => { el.remove(); renderKeyChip(); };
-  el.querySelector(".bc-later").addEventListener("click", close);
-  el.querySelector(".bc-back").addEventListener("click", close);
+  // "later" (and dismissing by backdrop, which means the same thing) clears the corner too —
+  // a nag you can't put down is just furniture. Reopening the cert by hand doesn't re-snooze.
+  const close = snooze => { el.remove(); if (snooze) localStorage.setItem(CHIP_SNOOZE, "1"); renderKeyChip(); };
+  el.querySelector(".bc-later").addEventListener("click", () => close(true));
+  el.querySelector(".bc-back").addEventListener("click", () => close(true));
   el.querySelector(".bc-saved").addEventListener("click", () => {
     localStorage.setItem(SAVED_KEY, "1");
-    close();
+    localStorage.removeItem(CHIP_SNOOZE);            // saved: the chip goes calm, not away
+    close(false);
   });
 }
 
@@ -1707,6 +1714,7 @@ function renderKeyChip(){
     chipEl.textContent = "⚿ your key";
     chipEl.title = "view your nostr key";
   } else {
+    if (localStorage.getItem(CHIP_SNOOZE)){ chipEl.style.display = "none"; return; }
     const n = parseInt(localStorage.getItem(UNSAVED_N), 10) || 0;
     chipEl.classList.add("hot");
     chipEl.textContent = n ? `⚿ ${n} event${n === 1 ? " rides" : "s ride"} on this unsaved key`
