@@ -296,6 +296,75 @@
   #bcert .bc-saved{background:var(--rail);border:1px solid var(--rail);color:#181203;font-weight:600}
   #bcert .bc-later{background:transparent;border:1px solid var(--border);color:var(--dim)}
   #bcert .bc-later:hover{color:var(--text)}
+
+  /* ── the drum: the timeline wound on a cylinder, seen edge-on ──
+     A GAUGE, NOT A CONTROL. pointer-events:none everywhere — no click-jump, no drag,
+     no detent. The page is how you move; the drum only says where you are. Ticks are
+     projected from live page pixels each frame, so it can never disagree with the page.
+     Below 900px it goes SLIM rather than away: the ticks fit in the empty gutter left of
+     the date column, and only the labels (year tabs, "now") lose their room. */
+  /* 132px wide, but the instrument itself is the first 72 — the rest is label room the
+     vertical clip must not cut off (clip-path clips to the box on all four sides) */
+  #drum{position:fixed;top:0;left:0;bottom:0;width:132px;z-index:5;
+    pointer-events:none;user-select:none}
+  #drum .band{position:absolute;left:0;right:70px;background:rgba(233,234,238,.035);
+    border-top:1px solid rgba(233,234,238,.07);border-bottom:1px solid rgba(233,234,238,.07)}
+  #drum .axle{position:absolute;left:24px;top:0;bottom:0;width:2px;background:var(--rail-dim);
+    opacity:.6;                     /* the axle is not the information — dimmed 40% */
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%);
+    mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%)}
+  #drum .head{position:absolute;left:0;right:0;top:50%}
+  #drum .head .ln{position:absolute;left:6px;width:58px;height:1px;background:rgba(233,234,238,.4)}
+  #drum .head .tri{position:absolute;left:0;top:-4px;width:0;height:0;
+    border-top:4px solid transparent;border-bottom:4px solid transparent;
+    border-left:6px solid var(--text)}
+  /* tick vocabulary — size carries note length, shape carries kind, never hue alone */
+  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;background:var(--rail)}
+  #drum .tick.face{box-shadow:0 0 7px rgba(255,176,46,.6)}
+  #drum .tick.contested{width:9px!important;height:9px;border-radius:0}
+  #drum .tick.rev{height:6px;border-radius:2px;   /* ONE card wearing a visible layer — not two notes */
+    background:linear-gradient(180deg,var(--rail) 0 62%,var(--future) 62% 100%)}
+  #drum .tick.future{background:transparent;border:2px solid var(--future);border-radius:50%;
+    width:8px!important;height:8px}
+  #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
+    width:2px!important;height:14px;left:23px;border-radius:0}
+  /* Rolodex year tabs: the first card of a year, when the page has room to earn one */
+  #drum .tab{position:absolute;left:24px;width:44px;border-top:1px solid var(--faint)}
+  #drum .tab b{position:absolute;left:48px;top:-8px;font-family:var(--mono);font-size:10px;
+    font-weight:400;color:var(--dim)}
+  /* the now-line is not a note: full strip width, cyan, and it says its own name */
+  #drum .now{position:absolute;left:4px;width:62px;height:2px;background:var(--future);
+    box-shadow:0 0 6px rgba(47,214,230,.55)}
+  #drum .now i{position:absolute;left:70px;top:-8px;font-style:normal;font-family:var(--mono);
+    font-size:10px;color:var(--future)}
+  /* hidden hemispheres, numbered — the only thing wrap costs you is a count */
+  .limb{position:fixed;left:10px;z-index:6;font-family:var(--mono);font-size:11px;
+    color:var(--dim);background:var(--panel);border:1px solid var(--border);
+    border-radius:5px;padding:3px 8px;white-space:nowrap;pointer-events:none}
+  .limb b{color:var(--text);font-weight:600}
+  .limb.zero{opacity:.45}
+  /* the gauge belongs to the spine, not to the page — JS clips it to the spine's own
+     on-screen extent, so it never runs beside the header or the prose below */
+  .limb.off{display:none}
+  #limbtop{top:12px} #limbbot{bottom:12px}
+  /* ── slim mode (<900px): the instrument survives, the labels don't ──
+     everything shifts into the ~40px of dead gutter left of the date column. The year
+     tabs and the "now" caption need reading room there is none of, so they go; the ticks
+     don't need any, so they stay. The chips lose their year for the same reason — the
+     count is the information, and the date column already says which year you're in. */
+  @media (max-width:899px){
+    #drum{width:40px}
+    #drum .band{right:0}
+    #drum .axle{left:3px}
+    #drum .head .ln{width:26px;left:3px}
+    #drum .tick{left:8px}
+    #drum .tick.gapmark{left:3px}
+    #drum .tab{display:none}
+    #drum .now{left:2px;width:34px}
+    #drum .now i{display:none}
+    .limb{left:4px;font-size:10px;padding:2px 6px}
+    .limb .yr{display:none}
+  }
 </style>
 </head>
 <body>
@@ -419,6 +488,13 @@ content:
       </details>
     </section>
   </main>
+
+<div id="drum" aria-hidden="true">
+  <div class="band"></div><div class="axle"></div>
+  <div class="head"><div class="ln"></div><div class="tri"></div></div>
+</div>
+<div class="limb" id="limbtop" aria-hidden="true">↑ <b>0</b></div>
+<div class="limb" id="limbbot" aria-hidden="true">↓ <b>0</b></div>
 
 <script>
 "use strict";
@@ -995,6 +1071,7 @@ function render(){
     areaEl.innerHTML = allDown
       ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
       : `<div class="msg"><span class="spinner"></span>${anyUp?"listening for timelines…":"connecting to relays…"}</div>`;
+    drumMeasure();                                         // no spine on screen → no gauge
     return;
   }
 
@@ -1217,7 +1294,141 @@ function renderTimeline(entries){
     if (ta && !ta.disabled){ ta.focus(); ta.setSelectionRange(keep.s, keep.e); }
   }
   bindTaps();
+  drumMeasure();
 }
+
+// ═══════════════ the drum — a passive gauge for where you are on the page ═══════════════
+// Zero state and zero navigation. It holds no model of the timeline: every render it
+// re-reads the page's own pixels, and every frame it projects those pixels onto a
+// cylinder. So it cannot drift from the page, and touching it does nothing — the page
+// is how you move. Wrap is EARNED: a timeline short enough to fit the front arc hides
+// nothing, and only a long page grows the numbered limbs.
+
+const drumEl  = document.getElementById("drum");
+const limbTop = document.getElementById("limbtop"), limbBot = document.getElementById("limbbot");
+const drumBand = drumEl.querySelector(".band");
+const drumNow  = Object.assign(document.createElement("div"), { className: "now" });
+drumNow.innerHTML = "<i>now</i>";
+drumEl.appendChild(drumNow);
+
+const K = 10;                      // front arc ≈ K screens of page — the one personality knob
+const HALF = Math.PI / 2;
+const TAB_GAP = 550;               // page px a year must clear to earn a Rolodex tab
+let drumTicks = [], drumGaps = [], drumTabs = [], drumNowY = null, drumRaf = 0, drumSpan = null;
+
+const pageTop = el => el.getBoundingClientRect().top + scrollY;
+
+// measure: the page is the model, so read it — never keep a parallel layout in JS
+function drumMeasure(){
+  [...drumTicks, ...drumGaps, ...drumTabs].forEach(t => t.el.remove());
+  drumTicks = []; drumGaps = []; drumTabs = []; drumNowY = null;
+
+  areaEl.querySelectorAll(".mtl .node").forEach(n => {
+    const contested = !!n.querySelector(".cdot");
+    const future    = !!n.querySelector(".dot.future");
+    const rev       = !!n.querySelector(".dbar");           // this card carries edit marks
+    const chars = [...n.querySelectorAll(".cbody")].reduce((a, b) => a + b.textContent.length, 0);
+    const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
+    const el = document.createElement("div");
+    el.className = "tick" + (contested ? " contested" : rev ? " rev" : future ? " future" : "");
+    if (!contested && !future) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
+    drumEl.appendChild(el);
+    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested,
+                     yr: (n.querySelector(".date .y") || {}).textContent || "" });
+  });
+  areaEl.querySelectorAll(".mtl .gap-c").forEach(g => {
+    const el = document.createElement("div"); el.className = "tick gapmark";
+    drumEl.appendChild(el);
+    drumGaps.push({ el, y: pageTop(g) + g.offsetHeight / 2 });
+  });
+  let lastY = -1e9, lastYr = "";
+  for (const t of drumTicks){
+    if (!t.yr || t.yr === lastYr || t.y - lastY < TAB_GAP) continue;
+    const el = document.createElement("div"); el.className = "tab";
+    el.innerHTML = `<b>${esc(t.yr)}</b>`;
+    drumEl.appendChild(el);
+    drumTabs.push({ el, y: t.y });
+    lastY = t.y; lastYr = t.yr;
+  }
+  const nd = areaEl.querySelector(".mtl .nowdiv");
+  if (nd) drumNowY = pageTop(nd);
+  const mtl = areaEl.querySelector(".mtl");                // the spine's own extent on the page
+  drumSpan = mtl ? [pageTop(mtl), pageTop(mtl) + mtl.offsetHeight] : null;
+  drumFrame();
+}
+
+// the whole geometry, in one function: page pixels → angle → screen
+function project(y, D, headTh, R, cy){
+  const phi = y / D - headTh;
+  if (phi < -HALF) return { hide: -1 };
+  if (phi >  HALF) return { hide:  1 };
+  return { y: cy + R * Math.sin(phi), a: Math.cos(phi) };
+}
+
+function drumFrame(){
+  if (!drumTicks.length || !drumSpan){ drumEl.style.visibility = "hidden"; limbTop.style.visibility = "hidden";
+    limbBot.style.visibility = "hidden"; return; }
+  drumEl.style.visibility = limbTop.style.visibility = limbBot.style.visibility = "";
+  const vh = innerHeight, cy = vh / 2, D = K * vh / Math.PI, R = (vh - 180) / 2;
+  const headTh = (scrollY + vh / 2) / D;
+  // clip to the spine's own on-screen extent: the instrument is exactly as tall as the
+  // timeline is visible, so it never stands beside the header or the prose below it
+  const cut0 = Math.max(0, Math.min(vh, drumSpan[0] - scrollY));
+  const cut1 = Math.max(0, Math.min(vh, vh - (drumSpan[1] - scrollY)));
+  drumEl.style.clipPath = `inset(${cut0}px 0 ${cut1}px 0)`;
+  limbTop.style.top = (cut0 + 12) + "px"; limbBot.style.bottom = (cut1 + 12) + "px";
+  limbTop.classList.toggle("off", cut0 > vh - 40);
+  limbBot.classList.toggle("off", cut1 > vh - 40);
+  let past = 0, ahead = 0, pastYr = null, aheadYr = null, face = null, faceD = Infinity;
+
+  for (const t of drumTicks){
+    const p = project(t.y, D, headTh, R, cy);
+    if (p.hide){
+      t.el.style.display = "none"; t.el.classList.remove("face");
+      if (p.hide < 0){ past++; pastYr = pastYr ?? t.yr; } else { ahead++; aheadYr = t.yr; }
+      continue;
+    }
+    const d = Math.abs(t.y / D - headTh);
+    if (d < faceD){ faceD = d; face = t; }
+    t.el.style.display = "";
+    t.el.style.top = (p.y - 2) + "px";
+    t.el.style.opacity = (.2 + .8 * p.a).toFixed(2);
+    t.el.style.transform = `scale(${(.55 + .45 * p.a).toFixed(2)})` + (t.contested ? " rotate(45deg)" : "");
+  }
+  // the card facing you reads full-strength — information about where you are, not a control
+  for (const t of drumTicks) t.el.classList.toggle("face", t === face);
+  if (face){
+    face.el.style.opacity = "1";
+    face.el.style.transform = "scale(1.15)" + (face.contested ? " rotate(45deg)" : "");
+  }
+  for (const g of drumGaps){
+    const p = project(g.y, D, headTh, R, cy);
+    g.el.style.display = p.hide ? "none" : "";
+    if (!p.hide){ g.el.style.top = (p.y - 7) + "px"; g.el.style.opacity = (.2 + .8 * p.a).toFixed(2); }
+  }
+  for (const tb of drumTabs){
+    const p = project(tb.y, D, headTh, R, cy);
+    tb.el.style.display = p.hide ? "none" : "";
+    if (!p.hide){ tb.el.style.top = p.y + "px"; tb.el.style.opacity = (.35 + .65 * p.a).toFixed(2); }
+  }
+  const pn = drumNowY === null ? { hide: 1 } : project(drumNowY, D, headTh, R, cy);
+  drumNow.style.display = pn.hide ? "none" : "";
+  if (!pn.hide){ drumNow.style.top = pn.y + "px"; drumNow.style.opacity = (.3 + .7 * pn.a).toFixed(2); }
+
+  limbTop.classList.toggle("zero", !past);
+  limbBot.classList.toggle("zero", !ahead);
+  // the year rides in its own span so slim mode can drop it without a second code path
+  limbTop.innerHTML = past  ? `↑ <b>${past}</b><span class="yr"> · to ${esc(pastYr  || "")}</span>` : "↑ <b>0</b>";
+  limbBot.innerHTML = ahead ? `↓ <b>${ahead}</b><span class="yr"> · to ${esc(aheadYr || "")}</span>` : "↓ <b>0</b>";
+  // the band is the arc your screen currently occupies — constant height by construction
+  const bh = R * Math.sin(Math.min(HALF, vh / (2 * D))) * 2;
+  drumBand.style.top = (cy - bh / 2) + "px"; drumBand.style.height = bh + "px";
+}
+
+addEventListener("scroll", () => {
+  if (!drumRaf && drumTicks.length) drumRaf = requestAnimationFrame(() => { drumRaf = 0; drumFrame(); });
+}, { passive:true });
+addEventListener("resize", drumMeasure);
 
 // ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
 // The viewer's only writes, ever: reactions and comments the visitor taps out,
