@@ -112,6 +112,11 @@
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
   h1 .dot{color:var(--rail);font-weight:400;margin:0 2px}
   .sub{margin:8px auto 0;color:var(--dim);font-size:13px;line-height:1.55;max-width:52ch}
+  /* the one word in the subtitle a stranger won't know: brightest thing in a dim
+     paragraph, underlined so it reads as a link without leaning on hue */
+  .sub a{color:var(--text);font-weight:600;text-decoration:underline;
+    text-decoration-color:var(--rail-dim);text-underline-offset:3px}
+  .sub a:hover{text-decoration-color:var(--rail)}
   .status{margin-top:12px;font-size:12px;color:var(--dim);
     display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:center}
   .status > span + span{border-left:1px solid var(--border);padding-left:16px}
@@ -502,8 +507,9 @@
       <h1>Wiki <span class="dot">·</span> Timechain</h1>
       <div class="sub">Events from the public record, arranged in order, each with its
         source. The arrangement is a reading, not the last word — check the sources.
-        <b>Don't trust, verify.</b> Built on Nostr, so entries live on an open network
-        rather than on this page. Anyone can add an entry or dispute one.</div>
+        <b>Don't trust, verify.</b> Built on <a href="#nostr">nostr</a>, so entries live
+        on an open network rather than on this page. Anyone can add an entry or dispute
+        one.</div>
       <div class="status" id="status">
         <span><span class="spinner"></span>connecting…</span>
       </div>
@@ -538,13 +544,36 @@
         Cards come from outside: any client that lets you set tags yourself can publish
         the format in the dev notes below.</p>
 
+      <h2 id="nostr">What nostr is</h2>
+      <p>nostr is a way to publish that doesn't run through a company. There is no
+        account: you hold a keypair. The secret half signs what you write, the public
+        half is your name, and anyone can check that the two match. Nobody issues the
+        key and nobody can revoke it — which also means nobody can hand it back to you
+        if you lose it.</p>
+      <p>Signed messages get pushed to <em>relays</em> — small independent servers that
+        store them and hand them back to whoever asks. A relay is a copy, not a home.
+        If one drops what you wrote or refuses to carry it, the same signed message is
+        still sitting on the others, and a reader can ask all of them at once. That is
+        the whole protocol: signed messages, and servers that pass them along.</p>
+      <p>So this page has no accounts, no moderators, and no database. It opens a
+        connection to a handful of public relays, asks for the cards, and draws what
+        comes back — the counter at the top of the page is those connections answering.
+        Every card was signed by whoever published it, not by whoever runs this site.
+        The record lives out on the relays; if this page disappeared tomorrow, another
+        one could read the same cards.</p>
+      <p>Longer introductions: <a href="https://nostr.how" target="_blank"
+        rel="noopener noreferrer">nostr.how</a> for the plain-language version,
+        <a href="https://njump.me" target="_blank" rel="noopener noreferrer">njump.me</a>
+        to look up any key or event, and the
+        <a href="https://github.com/nostr-protocol/nips" target="_blank"
+        rel="noopener noreferrer">NIPs</a> for the protocol itself.</p>
+
       <h2>Add to the record</h2>
       <h3>1 · Get a nostr identity</h3>
       <p>A keypair is the whole membership process — no signup, no email, no one to
         approve you. Make one at
-        <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>,
-        or read <a href="https://nostr.how" target="_blank" rel="noopener noreferrer">nostr.how</a>
-        first. From that moment you can put things on this record and nobody — including
+        <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>.
+        From that moment you can put things on this record and nobody — including
         whoever runs this page — can take them off. Guard your secret key
         (<code>nsec</code>): it can't be reset, and it <em>is</em> the identity. Use a
         signer extension or app rather than pasting it into websites.</p>
