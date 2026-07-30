@@ -24,10 +24,75 @@
     --future:#28e5ff;        /* neon cyan — scheduled, not yet happened */
     --future-dim:#134a55;
     --text:#e9eaee;
+    --text-2:#d7d9df;        /* inline code */
+    --text-3:#c6c8ce;        /* long-form prose, card bodies, comments */
     --dim:#9296a0;
     --faint:#42454e;
+    --gutline:#565b66;       /* the diff gutter's rule */
+    --ink:#181203;           /* type ON an amber fill — flips with the theme */
+    --warn:#ffb27a;          /* orange, never red — meaning also in the text */
+    --glow:rgba(255,176,46,.07);      /* header wash */
+    --rail-tint:rgba(255,176,46,.16); /* inserted text */
+    --rail-tint-2:rgba(255,176,46,.12);/* contested badge */
+    --scrim:rgba(0,0,0,.62);
+    --shadow:rgba(0,0,0,.5);
+    --band:rgba(233,234,238,.035);    /* drum: ink-on-paper tints, so they invert */
+    --hair:rgba(233,234,238,.07);
+    --hairline:rgba(233,234,238,.4);
+    --past-glow:rgba(201,143,63,.65);
+    --future-glow:rgba(40,229,255,.6);
     --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
+  }
+
+  /* ── MEDIUM: sepia. Not dark-minus-a-bit — a warm earth field, tobacco and umber ──
+     The field itself is now ocher-adjacent, which the dark theme's --past was too, so
+     --past has to go LIGHTER than the field (tan) to stay legible against it; it can't
+     stay a mid ocher or the past dissolves into the paper. Cyan gets louder for free —
+     a cool hue on a warm field is the strongest contrast in the whole set, so the
+     past/future axis reads harder here than in either of the others. */
+  :root[data-theme="medium"]{
+    color-scheme: dark;
+    --bg:#4e453a; --panel:#5c5246; --panel-2:#675c4e;
+    --border:#786c5c; --border-soft:#695e4f;
+    --rail:#ffc266; --rail-dim:#94714a;
+    --accent:#8cc6ff;        /* the one cool note in the chrome — links stay unmistakable */
+    --past:#eebc84; --past-dim:#8a6c42;
+    --future:#4fd8e8; --future-dim:#2f6f79;
+    --text:#f8f3ea; --text-2:#eae2d5; --text-3:#dbd2c3;
+    --dim:#b2a692; --faint:#7b6f5f; --gutline:#8d8171;
+    --ink:#2a1c06; --warn:#ffc492;
+    --glow:rgba(255,194,102,.10);
+    --rail-tint:rgba(255,194,102,.22); --rail-tint-2:rgba(255,194,102,.16);
+    --scrim:rgba(28,21,12,.62); --shadow:rgba(28,21,12,.5);
+    --band:rgba(248,243,234,.05); --hair:rgba(248,243,234,.10);
+    --hairline:rgba(248,243,234,.45);
+    --past-glow:rgba(238,188,132,.55); --future-glow:rgba(79,216,232,.55);
+  }
+
+  /* ── LIGHT: ink on paper ──
+     The warm/cool axis has to survive a white field, so both time hues DARKEN rather
+     than lighten: ocher → umber, neon cyan → deep teal. Same warm-vs-cool split, same
+     colourblind safety, now carried by dark saturated ink instead of glow. Amber chrome
+     becomes a burnt amber dark enough to read as text, and --ink flips to near-white so
+     type on an amber fill still contrasts. */
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --bg:#fbfaf8; --panel:#ffffff; --panel-2:#f2f1ee;
+    --border:#dcd9d3; --border-soft:#e7e4de;
+    --rail:#a35c00; --rail-dim:#d9b483;
+    --accent:#0b57c4;
+    --past:#8a5410; --past-dim:#d8bb92;
+    --future:#0d6f86; --future-dim:#9dc6d2;
+    --text:#191b1f; --text-2:#2b2f36; --text-3:#3a3f47;
+    --dim:#61666f; --faint:#a8adb5; --gutline:#9aa0a9;
+    --ink:#fffaf2; --warn:#9a4a00;
+    --glow:rgba(163,92,0,.06);
+    --rail-tint:rgba(163,92,0,.16); --rail-tint-2:rgba(163,92,0,.10);
+    --scrim:rgba(25,27,31,.42); --shadow:rgba(25,27,31,.18);
+    --band:rgba(25,27,31,.035); --hair:rgba(25,27,31,.09);
+    --hairline:rgba(25,27,31,.45);
+    --past-glow:rgba(138,84,16,.5); --future-glow:rgba(13,111,134,.45);
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--text);
@@ -41,7 +106,7 @@
 
   header{
     padding:24px 20px 0;border-bottom:1px solid var(--border);text-align:center;
-    background:radial-gradient(120% 130% at 50% -20%,rgba(255,176,46,.07),transparent 55%);
+    background:radial-gradient(120% 130% at 50% -20%,var(--glow),transparent 55%);
   }
   .wrap{max-width:1000px;margin:0 auto}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
@@ -90,7 +155,10 @@
   .picker:hover,.picker:focus{border-color:var(--rail-dim);outline:none}
 
   /* copy-a-link-to-this-timeline button */
-  .pickrow{margin-top:10px;display:flex;justify-content:center}
+  .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+  /* light/medium/dark: the same segmented control the diff bar uses (.dtog/.ds) */
+  .pickrow .dtog{border-radius:7px}
+  .pickrow .ds{padding:5px 10px;font-size:11px}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
     cursor:pointer;transition:color .12s,border-color .12s}
@@ -100,7 +168,7 @@
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
   .msg{margin:26px 0;text-align:center;color:var(--dim);font-size:13px;line-height:1.7}
-  .msg.err{color:#ffb27a}          /* orange, not red — meaning also in text */
+  .msg.err{color:var(--warn)}          /* orange, not red — meaning also in text */
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--faint);
     border-top-color:var(--rail);border-radius:999px;animation:spin 1s linear infinite;
     vertical-align:-2px;margin-right:8px}
@@ -117,12 +185,12 @@
     letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:13px 0}
   .contribute details.dev[open] summary{border-bottom:1px solid var(--border-soft)}
   .contribute h3{font-size:15px;font-weight:600;margin:26px 0 8px;color:var(--text)}
-  .contribute p,.contribute li{font-size:14px;line-height:1.75;color:#c6c8ce}
+  .contribute p,.contribute li{font-size:14px;line-height:1.75;color:var(--text-3)}
   .contribute ol{padding-left:22px}
   .contribute code,pre{font-family:var(--mono);background:var(--panel-2);
     border:1px solid var(--border-soft);border-radius:6px;font-size:12.5px}
-  .contribute code{padding:1.5px 6px;color:#d7d9df}
-  .contribute pre{padding:16px 18px;overflow-x:auto;line-height:1.7;color:#c6c8ce}
+  .contribute code{padding:1.5px 6px;color:var(--text-2)}
+  .contribute pre{padding:16px 18px;overflow-x:auto;line-height:1.7;color:var(--text-3)}
 
   @media (max-width:640px){
     h1{font-size:17px}
@@ -169,20 +237,20 @@
     .mtl .ctab .td{font-size:14px}
   }
   .mtl .card h4{margin:0;font-size:17.5px;line-height:1.3;font-weight:600;color:var(--text)}
-  .mtl .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:#c6c8ce}
+  .mtl .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:var(--text-3)}
   /* ── diff marks. Scoped to nothing: comments render through the same pass. ──
      A whole-line mark becomes a gutter row (rule + −/+); marks inside a sentence
      stay inline. Position and glyph carry the meaning, decoration and lightness
      only reinforce it — legible in any vision, and it survives a screenshot. */
   del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
   ins{text-decoration:none;color:var(--text);border-radius:2px;padding:0 3px;
-    background:rgba(255,176,46,.16)}   /* tint, no outline — an outline per line-fragment
+    background:var(--rail-tint)}   /* tint, no outline — an outline per line-fragment
     turns a multi-line insertion into a stack of boxes. Distinct from links: those are blue. */
-  .dgut{margin:0 0 8px;border-left:2px solid #565b66}
+  .dgut{margin:0 0 8px;border-left:2px solid var(--gutline)}
   .dgut.add{border-left-color:var(--rail-dim)}
   .drow{display:flex;gap:9px;padding:3px 0 3px 10px}
   .dm{flex:0 0 auto;font-family:var(--mono);font-size:15px;font-weight:600;
-    color:#8b909b;user-select:none}     /* the glyph IS the meaning — don't let it whisper */
+    color:var(--dim);user-select:none}     /* the glyph IS the meaning — don't let it whisper */
   .dgut.add .dm,.dkey .dm.add{color:var(--rail)}
   .dtx{flex:1 1 auto;color:var(--dim)}                /* removed text: dimmed, NOT struck —
     a 60-word legal paragraph is unreadable through a strike; the gutter says it's gone */
@@ -194,7 +262,7 @@
     font-family:var(--mono);font-size:11px;color:var(--dim);padding:3px 9px;line-height:1.5}
   .ds:last-child{border-right:0}
   .ds:hover{color:var(--text)}
-  .ds.on{background:var(--rail);color:#181203}       /* on-state = fill + dark ink, not hue */
+  .ds.on{background:var(--rail);color:var(--ink)}       /* on-state = fill + dark ink, not hue */
   .dkey .dm{margin-left:4px}
   .mtl .cbody p{margin:0 0 8px}
   .mtl .cbody p:last-child{margin-bottom:0}
@@ -233,7 +301,7 @@
   .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
   .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
     border:2px solid var(--rail);border-right:none;border-radius:6px 0 0 6px}
-  .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,176,46,.12);
+  .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:var(--rail-tint-2);
     border:1px solid var(--rail-dim);color:var(--rail);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
   .mtl .vcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;
@@ -245,7 +313,7 @@
     border-radius:5px;background:var(--panel-2);border:1px solid var(--border);
     color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
-  .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:#9aa0ab}
+  .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:var(--dim)}
   /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
      every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
   /* comments on the spine: marginalia below the card box, collapsed to a count so the
@@ -259,7 +327,7 @@
   .mtl .mcmt{padding:7px 0;border-top:1px solid var(--border-soft)}
   .mtl .mcmt-who{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
   .mtl .mcmt-when{color:var(--faint);margin-left:7px}
-  .mtl .mcmt-body{font-size:13px;line-height:1.55;color:#b9bcc4;margin-top:2px}
+  .mtl .mcmt-body{font-size:13px;line-height:1.55;color:var(--text-3);margin-top:2px}
   .mtl .mcmt-body p{margin:0 0 6px}
   .mtl .mcmt-body p:last-child{margin-bottom:0}
   /* inside a contested vcard: same marginalia signature, per-version ownership */
@@ -285,10 +353,10 @@
   .mtl .tapbtn.sm{min-width:22px;height:18px;font-size:11px;padding:0 6px;margin-right:0}
   .mtl .tapbtn:hover{color:var(--rail);border-color:var(--rail-dim)}
   .mtl .tapbtn:disabled{opacity:.5;cursor:default}
-  .mtl .tapbtn.mine{background:var(--rail);border-color:var(--rail);color:#181203;
+  .mtl .tapbtn.mine{background:var(--rail);border-color:var(--rail);color:var(--ink);
     font-weight:700}
   .oktally{color:var(--dim);font-size:10.5px;margin-left:2px}
-  .oktally.err{color:#ffb27a}          /* orange + text, never red */
+  .oktally.err{color:var(--warn)}          /* orange + text, never red */
   /* the gate-glyph: what a commenter tapped on the card, riding before their name */
   .mtl .gateg{font-family:var(--mono);color:var(--rail);margin-right:7px}
   /* compose (checkpoint 2c): ghosted until this identity has reacted to the card —
@@ -317,16 +385,16 @@
   /* birth-certificate popup — ceremony AFTER the reward */
   #bcert{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
     justify-content:center;padding:18px}
-  #bcert .bc-back{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+  #bcert .bc-back{position:absolute;inset:0;background:var(--scrim)}
   #bcert .bc-card{position:relative;background:var(--panel);border:1px solid var(--rail-dim);
     border-radius:14px;padding:22px 24px;max-width:460px;width:100%;
-    box-shadow:0 18px 60px rgba(0,0,0,.5)}
+    box-shadow:0 18px 60px var(--shadow)}
   #bcert h3{margin:0 0 10px;font-size:17px;color:var(--rail);font-weight:650}
-  #bcert p{margin:0 0 14px;font-size:13.5px;line-height:1.65;color:#c6c8ce}
+  #bcert p{margin:0 0 14px;font-size:13.5px;line-height:1.65;color:var(--text-3)}
   #bcert .bc-row{display:flex;align-items:center;gap:8px;margin:0 0 8px}
   #bcert .bc-k{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:74px;
     flex:none;text-align:right}
-  #bcert code{font-family:var(--mono);font-size:11px;color:#d7d9df;background:var(--panel-2);
+  #bcert code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--panel-2);
     border:1px solid var(--border-soft);border-radius:6px;padding:6px 8px;flex:1;
     overflow-wrap:anywhere;line-height:1.5}
   #bcert .bc-copy{font-family:var(--mono);font-size:10.5px;color:var(--dim);cursor:pointer;
@@ -334,10 +402,10 @@
     padding:5px 9px;flex:none}
   #bcert .bc-copy:hover{color:var(--text);border-color:var(--rail-dim)}
   #bcert .bc-copy.did{color:var(--rail);border-color:var(--rail)}
-  #bcert .bc-warn{font-size:12px;color:#ffb27a;margin-top:12px}
+  #bcert .bc-warn{font-size:12px;color:var(--warn);margin-top:12px}
   #bcert .bc-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
   #bcert .bc-btns button{font-size:12.5px;cursor:pointer;border-radius:7px;padding:8px 15px}
-  #bcert .bc-saved{background:var(--rail);border:1px solid var(--rail);color:#181203;font-weight:600}
+  #bcert .bc-saved{background:var(--rail);border:1px solid var(--rail);color:var(--ink);font-weight:600}
   #bcert .bc-later{background:transparent;border:1px solid var(--border);color:var(--dim)}
   #bcert .bc-later:hover{color:var(--text)}
 
@@ -351,20 +419,20 @@
      vertical clip must not cut off (clip-path clips to the box on all four sides) */
   #drum{position:fixed;top:0;left:0;bottom:0;width:132px;z-index:5;
     pointer-events:none;user-select:none}
-  #drum .band{position:absolute;left:0;right:70px;background:rgba(233,234,238,.035);
-    border-top:1px solid rgba(233,234,238,.07);border-bottom:1px solid rgba(233,234,238,.07)}
+  #drum .band{position:absolute;left:0;right:70px;background:var(--band);
+    border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
   #drum .axle{position:absolute;left:24px;top:0;bottom:0;width:2px;background:var(--past-dim);
     opacity:.6;                     /* the axle is not the information — dimmed 40% */
     -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%);
     mask-image:linear-gradient(180deg,transparent 0,#000 90px,#000 calc(100% - 90px),transparent 100%)}
   #drum .head{position:absolute;left:0;right:0;top:50%}
-  #drum .head .ln{position:absolute;left:6px;width:58px;height:1px;background:rgba(233,234,238,.4)}
+  #drum .head .ln{position:absolute;left:6px;width:58px;height:1px;background:var(--hairline)}
   #drum .head .tri{position:absolute;left:0;top:-4px;width:0;height:0;
     border-top:4px solid transparent;border-bottom:4px solid transparent;
     border-left:6px solid var(--text)}
   /* tick vocabulary — size carries note length, shape carries kind, never hue alone */
   #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;background:var(--past)}
-  #drum .tick.face{box-shadow:0 0 7px rgba(201,143,63,.65)}
+  #drum .tick.face{box-shadow:0 0 7px var(--past-glow)}
   #drum .tick.contested{width:9px!important;height:9px;border-radius:0}
   #drum .tick.rev{height:6px;border-radius:2px;   /* ONE card wearing a visible layer — not two notes */
     /* layered in LIGHTNESS, not a second hue — cyan on the drum now means "ahead" */
@@ -379,7 +447,7 @@
     font-weight:400;color:var(--dim)}
   /* the now-line is not a note: full strip width, cyan, and it says its own name */
   #drum .now{position:absolute;left:4px;width:62px;height:2px;background:var(--future);
-    box-shadow:0 0 7px rgba(40,229,255,.6)}
+    box-shadow:0 0 7px var(--future-glow)}
   #drum .now i{position:absolute;left:70px;top:-8px;font-style:normal;font-family:var(--mono);
     font-size:10px;color:var(--future)}
   /* hidden hemispheres, numbered — the only thing wrap costs you is a count */
@@ -417,6 +485,16 @@
     .mtl .nowchip{left:calc(var(--gut) - 10px)}
   }
 </style>
+<script>
+// Theme applied BEFORE first paint — set on <html> from storage, so a light reader
+// never gets a black flash. Dark is the default and carries no attribute.
+(function(){
+  try{
+    var t = localStorage.getItem("wtc:theme");
+    if (t === "light" || t === "medium") document.documentElement.dataset.theme = t;
+  }catch{}
+})();
+</script>
 </head>
 <body>
   <header>
@@ -434,6 +512,11 @@
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <div class="dtog" id="thmtog" title="How light this page reads">
+          <button class="ds" type="button" data-thm="dark">dark</button>
+          <button class="ds" type="button" data-thm="medium">medium</button>
+          <button class="ds" type="button" data-thm="light">light</button>
+        </div>
       </div>
     </div>
   </header>
@@ -640,6 +723,26 @@ copyBtn.addEventListener("click", async () => {
   }
   setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = COPY_LABEL; }, 1600);
 });
+
+// ── how light the page reads. Three fields, one vocabulary: every colour is a token
+// on :root, so a theme is a variable swap and nothing else — no per-rule light styles,
+// no second stylesheet. The head script already applied the stored choice; this only
+// lights the right segment and writes new ones. Dark carries no attribute.
+const thmTog = document.getElementById("thmtog");
+function paintThm(){
+  const cur = document.documentElement.dataset.theme || "dark";
+  for (const b of thmTog.children) b.classList.toggle("on", b.dataset.thm === cur);
+}
+thmTog.addEventListener("click", e => {
+  const b = e.target.closest("[data-thm]"); if (!b) return;
+  const t = b.dataset.thm;
+  if (t === "dark") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("wtc:theme", t); } catch {}
+  paintThm();
+});
+paintThm();
+
 const areaEl   = document.getElementById("timeline-area");
 
 // ═══════════════ helpers ═══════════════
