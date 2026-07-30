@@ -293,6 +293,9 @@
     background:var(--panel-2);border:1px solid var(--border);color:var(--dim);padding:5px 11px}
   .mtl .cmp-send:hover:enabled{color:var(--rail);border-color:var(--rail-dim)}
   .mtl .cmp-send:disabled{opacity:.55;cursor:default}
+  .mtl .cmp-n{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .mtl .cmp-n.hid{display:none}
+  .mtl .cmp-n.at{color:var(--rail)}    /* out of room — the app's own chrome, never the timeline's hues */
   /* the always-available key chip (minted keys only) */
   .keychip{position:fixed;right:14px;bottom:14px;z-index:40;cursor:pointer;
     font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel);
@@ -563,6 +566,7 @@ const RELAYS = [
 const KIND = 30828;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
+const MAXCMT = 420;             // a comment is a margin note, not an essay — one number to move
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
 
 // ═══════════════ state ═══════════════
@@ -664,6 +668,9 @@ function esc(s){
     .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
     .replaceAll('"',"&quot;").replaceAll("'","&#39;");
 }
+
+// what another client wrote can be any length; the ellipsis says it was cut, nothing is hidden
+const clip = s => s.length > MAXCMT ? s.slice(0, MAXCMT) + " …" : s;
 
 // tiny djot-ish renderer: paragraphs + [label](url) links + {-del-}/{+ins+} (what the cards use)
 // A mark standing alone on its own line(s) becomes a gutter row — the diff idiom, and the
@@ -1181,6 +1188,13 @@ function bindTaps(){                                      // gap expanders + com
     cmtDraft.set(ta.dataset.coord, ta.value);
     const send = ta.closest(".cmp").querySelector(".cmp-send");
     if (send) send.disabled = !ta.value.trim();
+    const n = ta.closest(".cmp").querySelector(".cmp-n");
+    if (n){                                               // same reason as the button: no re-render fires here
+      const left = MAXCMT - ta.value.length;
+      n.textContent = left;
+      n.classList.toggle("hid", left > 40);
+      n.classList.toggle("at", !left);
+    }
   });
 }
 
@@ -1228,10 +1242,15 @@ function renderTimeline(entries){
   const composeBlock = (coord, rootPk) => {
     const unlocked = !!(myPk && reactions.get(coord)?.has(myPk));
     const draft = cmtDraft.get(coord) || "";
+    const left = MAXCMT - draft.length;   // .length, not code points — maxlength counts the same units
     return `<div class="cmp${unlocked ? "" : " locked"}">` +
-      `<textarea class="cmp-ta" data-coord="${esc(coord)}" rows="2"${unlocked ? "" : " disabled"}>${esc(draft)}</textarea>` +
+      `<textarea class="cmp-ta" data-coord="${esc(coord)}" rows="2" maxlength="${MAXCMT}"` +
+      `${unlocked ? "" : " disabled"}>${esc(draft)}</textarea>` +
       `<div class="cmp-row"><button class="cmp-send" type="button" data-coord="${esc(coord)}"` +
       ` data-p="${esc(rootPk)}"${unlocked && draft.trim() ? "" : " disabled"}>sign &amp; send</button>` +
+      // always in the DOM so the input handler can update it without a re-render;
+      // shown only as the room runs out — silence while there's space
+      `<span class="cmp-n${left > 40 ? " hid" : ""}${left ? "" : " at"}">${left}</span>` +
       tallyHtml(cmtSent.get(coord), cmtErr.get(coord)) + `</div></div>`;
   };
   // the card's stance row — rendered INSIDE the card box, at its bottom
@@ -1255,7 +1274,7 @@ function renderTimeline(entries){
         `<span class="mcmt-when">${esc(new Date(c.created_at*1000).toISOString().slice(0,10))}</span>` +
         `<span class="mcmt-rct">${pill(c.id, c.id, c.pubkey, "1111", " sm")}` +
         tallyHtml(tapped.get(c.id), tapErr.get(c.id)) + `</span></div>` +
-        `<div class="mcmt-body">${renderContent(c.content || "")}</div></div>`
+        `<div class="mcmt-body">${renderContent(clip(c.content || ""))}</div></div>`
       ).join("") + composeBlock(coord, ev.pubkey) : "") +
       `</div>`;
   };
@@ -1637,7 +1656,7 @@ async function tapTarget(target, eid, pk, k, g, btn){
 //    shape as the proven test comment — uppercase root scope, lowercase parent
 //    (parent = root for a top-level note) ──
 async function sendComment(coord, rootPk, ta, btn){
-  const text = ((ta && ta.value) || "").trim();
+  const text = ((ta && ta.value) || "").trim().slice(0, MAXCMT);   // maxlength is the UI; this is the guarantee
   if (!text) return;
   btn.disabled = true; ta.disabled = true;
   cmtErr.delete(coord);
