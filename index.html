@@ -56,6 +56,17 @@
   .relaydot.up{background:var(--rail)}
   .relaydot.down{background:transparent;border:1px solid var(--faint)}
 
+  /* which timeline you're reading. The picker below is the control; this is the answer,
+     and it's the page's largest type — the site mark is chrome, the collection is the subject. */
+  .collnow{margin:18px auto 0;max-width:24ch;font-size:clamp(21px,5.2vw,30px);
+    font-weight:650;letter-spacing:-.02em;line-height:1.18;color:var(--text);
+    text-wrap:balance}
+  /* slugs are machine fields and some are very long — at full size the rezoning slug took
+     four lines of a phone's header and pushed the spine off screen. Still the biggest type. */
+  .collnow.long{font-size:clamp(19px,3.6vw,22px);max-width:32ch;letter-spacing:-.01em}
+  .collnow::after{content:"";display:block;width:36px;height:2px;border-radius:2px;
+    background:var(--rail);margin:10px auto 0}
+
   /* filter picker row: axis chips over the value dropdown */
   .tabs{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
 
@@ -418,6 +429,7 @@
       <div class="status" id="status">
         <span><span class="spinner"></span>connecting…</span>
       </div>
+      <h2 class="collnow" id="collnow"></h2>
       <div class="tabs" id="tabs"></div>
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
@@ -607,6 +619,7 @@ const expandedCmts = new Set();          // card coords whose comment thread is 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
+const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
@@ -1059,6 +1072,11 @@ function vocab(){
 function renderTabs(V){
   tabsEl.innerHTML = "";
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
+  // every option in every axis is a collection, so activeF is always "c:<slug>"
+  const name = activeF ? slugName(activeF.slice(2)) : "";
+  nowEl.textContent = name;
+  nowEl.style.display = activeF ? "" : "none";
+  nowEl.classList.toggle("long", name.length > 30);
   if (!slugs.size) return;                         // status line shows "connecting…"
 
   const flat = a => V[a].flatMap(([,its]) => its);
