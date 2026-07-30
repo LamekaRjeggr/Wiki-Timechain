@@ -101,9 +101,8 @@ section on the live page for the exact tag shape, and
 [nstart.me](https://nstart.me).
 
 **A wiki client won't do it.** wikifreedia and wikistr publish kind 30818, which
-this viewer reads only as a legacy holdover — a card published there won't be
-part of the record going forward. Use anything that can sign an arbitrary kind
-with arbitrary tags.
+this viewer does not read at all — a card published there is invisible here. Use
+anything that can sign an arbitrary kind with arbitrary tags.
 
 ## Built on
 
@@ -114,7 +113,8 @@ nostr NIPs this rests on:
 - **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** —
   Wiki: where the card shape came from. The cards rode its kind 30818 until
   2026-07-29 and still borrow its `title` / `d` / djot conventions and the
-  shape of its `fork` marker — but they are kind 30828 now, not wiki articles
+  shape of its `fork` marker — but they are kind 30828 now, not wiki articles,
+  and 30818 is no longer read
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** —
   bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump
   links, and `nsec` for the minted starter key

@@ -476,7 +476,7 @@
         <b>A wiki client can't publish one:</b>
         <a href="https://wikifreedia.xyz" target="_blank" rel="noopener noreferrer">wikifreedia.xyz</a>
         and <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
-        write 30818s, which this page reads only as a legacy holdover — use anything that lets
+        write 30818s, which this page does not read at all — use anything that lets
         you set the kind and the tags yourself. A card this page can place on a rail carries:</p>
 <pre>
 kind: 30828
@@ -506,11 +506,9 @@ content:
         <code>{"kinds":[30828],"#t":["wikitimechain"],"limit":500}</code> — group what
         comes back by its collection label, sort by <code>event_date</code>, draw. Exact
         membership for one timeline is <code>{"kinds":[30828],"#l":["&lt;slug&gt;"]}</code>.
-        No manifest to fetch, no index to register with. Cards published before the kind move
-        may still be served as 30818 by relays that ignored the deletion requests; if you want
-        them, add 30818 to <code>kinds</code> and keep newest per <code>pubkey:d</code>,
-        ignoring the kind — which is exactly what this page does.
-        The full tag scheme is in
+        No manifest to fetch, no index to register with. Keep the newest event per
+        <code>pubkey:d</code> — that pair is a card's identity, and an author republishing one
+        replaces their own. The full tag scheme is in
         <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
            target="_blank" rel="noopener noreferrer">CONVENTION.md</a>.</p>
 
@@ -560,20 +558,15 @@ const RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine"
 ];
-const KIND = 30828;             // the card kind we WRITE coords against (NIPs #2426: our own kind, not NIP-54's)
-// What we READ. 30818 is the pre-migration kind. Dedup keys on `pubkey:d` WITHOUT the kind, so a
-// 30828 card collapses with its 30818 original and newest created_at wins — that's what let the
-// corpus migrate card-by-card with no flag day. Two reasons 30818 STAYS: deletion is only a
-// request (some relays still serve the old copy, and dedup is what hides it), and the
-// `bitcoin-arbitrary-data` cards were deliberately left on 30818 — dropping the kind here takes
-// that whole collection off the page. See MIGRATION-30828.md.
-const READ_KINDS = [30828, 30818];
+// Our own kind, read and written (NIPs #2426). Rode NIP-54's 30818 until 2026-07-29; the dual
+// read that carried the move is retired, so a leftover 30818 on a relay is not a card.
+const KIND = 30828;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
-const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — spans both kinds
+const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
 
 // ═══════════════ state ═══════════════
-const events   = new Map();     // pubkey:d → newest card, either READ_KIND (replaceable per author)
+const events   = new Map();     // pubkey:d → newest card (replaceable per author)
 const profiles = new Map();     // pubkey → {name, fetched}
 const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
@@ -795,7 +788,7 @@ function authorLink(pk){
 // discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
 // gate stays client-side because relays index `l` by value only (CONVENTION.md, "the #l value-only caveat").
 function sieve(ev){
-  if (!ev || !READ_KINDS.includes(ev.kind)) return;
+  if (!ev || ev.kind !== KIND) return;
   const c = collectionSlug(ev);
   if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(tag(ev,"event_date"))) return;
   if (!slugs.has(c)){ slugs.add(c); scheduleMemberFetch(); }
@@ -815,13 +808,13 @@ function scheduleMemberFetch(){
       // #l is value-only-indexed, so a card wearing our slug as some other label
       // value could sneak in — same squatting exposure as v1's #c fetch, and our
       // slugs are distinct kebab names that won't collide with date/location values.
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:READ_KINDS, "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
     });
   }, 400);
 }
 
 function ingest(ev){
-  if (!ev || !READ_KINDS.includes(ev.kind)) return;
+  if (!ev || ev.kind !== KIND) return;
   const d = tag(ev,"d"); if (!d) return;
   const key = ev.pubkey + ":" + d;
   const cur = events.get(key);
@@ -1762,9 +1755,9 @@ function connect(url){
     // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:READ_KINDS, "#t":[MARKER], limit:500 }]));
+    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
     if (slugs.size)
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:READ_KINDS, "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
     if (cmtSubs.size)
       ws.send(JSON.stringify(["REQ","cmt",{ kinds:[COMMENT_KIND], "#A": [...cmtSubs] }]));
     const rf = rctFilters();

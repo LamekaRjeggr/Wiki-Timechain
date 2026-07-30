@@ -333,11 +333,8 @@ collection); no UI should assume server-side multi-axis AND.
   kinds card by card with no flag day: a republished 30828 collapses against its own 30818
   original and the newer `created_at` wins, so the spine never blanked and no card ever
   appeared twice. Keep it keyed this way; adding the kind to the key would break the property.
-- **Dual-read across kinds.** The viewer reads `[30828, 30818]` and renders the newest per
-  `pubkey:d`. 30818 stays in the read set because deletion is a *request* — some relays keep
-  serving the old copy, and dedup against its newer twin is the only thing keeping those relays
-  from showing a stale card. Retire 30818 from the read set only when nothing you want to see
-  still lives there.
+- **One kind, read and written.** The dual read that carried the move is retired (2026-07-29):
+  30828 only. A 30818 still served by a relay that ignored its deletion request is not a card.
 - **Writes use 30828 only.** Reactions and comments address a card by a coordinate that embeds
   the kind, so there is no transition window for the write side — and no reason for one.
 - Different pubkeys with the same `d` **coexist** — that is the dispute mechanism.
@@ -375,9 +372,8 @@ is `{"kinds":[30828],"#l":["<slug>"]}` — then re-check the gate, because `#l` 
 value-only (below). That is the entire protocol; there is no manifest to fetch and no
 index to register with.
 
-Cards published before the move to 30828 may still be served as **kind 30818** by relays that
-ignored the deletion requests. If you want them, add `30818` to `kinds` and dedup on `pubkey:d`
-without the kind, newest `created_at` winning — the same rule the reference viewer uses.
+Dedup on `pubkey:d`, newest `created_at` winning. Ask for 30828 only — relays that ignored the
+kind-5 deletions still serve pre-move **30818** copies, which are retired, not content.
 
 ### Don't trust, verify.
 
@@ -408,8 +404,9 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
    rather than a needle in NIP-54's. Still bounded by `limit` if wikitimechain traffic ever
    grows large; the union across relays is the mitigation.
 6. **Relays that restrict writes will not carry the cards.** Measured, not theoretical: two paid
-   relays hold the old 30818 copies and none of the 30828s, because publishing to them requires
-   payment. This is about the key and the relay's policy, **not** the kind number — a relay
+   relays hold pre-move 30818 copies and none of the 30828s, because publishing to them requires
+   payment — so they now contribute nothing to a 30828-only read. This is about the key and the
+   relay's policy, **not** the kind number — a relay
    refusing unknown kinds outright was tested for and not found. The mitigation is the same as
    for everything else here: publish to several relays and let the union be the record.
 

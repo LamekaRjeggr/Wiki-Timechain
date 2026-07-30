@@ -10,9 +10,8 @@ Verified live against 6 relays, not bookkept:
 | `hcr2001-fast-election-results` (19) | **DONE** | not started — 19 old events live |
 | `tonopah-incorporation` (6) | **DONE** | 1 of 6 (`rita-files-…` deleted) |
 
-`bitcoin-arbitrary-data` is out of scope for this migration. It is not counted anywhere above.
-Its 9 cards are the *only* remaining 30818s with no 30828 twin — see the `READ_KINDS` note below,
-because that fact now has a consequence.
+**Read side is off 30818 too:** `READ_KINDS` gone, one `KIND = 30828`. `bitcoin-arbitrary-data`
+(9 cards, never migrated) no longer renders — those 30818s are to be deleted. Pass 2 = 33 deletes.
 
 Every migrated card verifies clean: marker present, collection label + both date buckets + the
 full `ISO-3166-1`/`-2`/`.location` ladder carried over, content length unchanged.
