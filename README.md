@@ -1,6 +1,6 @@
 # Wiki-Timechain
 
-A live viewer of timeline events (nostr kind-30818 wiki cards). 
+A live viewer of timeline events (nostr **kind-30828** cards).
 Reads straight from relays — no server, no login, no build step.
 Any dated event with a source link fits naturally on the rail.
 
@@ -11,7 +11,7 @@ Any dated event with a source link fits naturally on the rail.
 ## What it does
 
 Timelines are discovered automatically, not hardcoded — the viewer pulls
-30818 events from relays and groups any that carry a date and a collection
+30828 events from relays and groups any that carry a date and a collection
 tag. Pick one from the picker and it shows up. Add a new card to a new
 collection and it appears there too — no fixed list, no publish-side
 registration.
@@ -32,9 +32,11 @@ straight onto that collection.
 ## Documents that change
 
 When a timeline follows a document through versions, a card can carry the
-change rather than describe it. A card tags the version it revises with
-[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)'s `fork`
-marker and marks the text in djot — `{-removed-}`, `{+added+}`. A mark alone
+change rather than describe it. A card tags the version it revises with a `fork`
+marker — borrowed in shape from
+[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md), defined by
+[the convention](CONVENTION.md) now that these cards are their own kind — and
+marks the text in djot: `{-removed-}`, `{+added+}`. A mark alone
 on its own line renders as a **gutter row** (a rule and a `−`/`+`, the diff
 idiom); a mark inside a sentence stays inline. Any card carrying both gets a
 key and an **as passed / what changed** switch, whose state travels in the URL
@@ -62,12 +64,19 @@ documentation.
 
 ## The convention
 
-A timeline entry is a single **kind-30818** wiki event
-([NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)) that labels
+A timeline entry is a single **kind-30828** addressable event
+([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) that labels
 itself as belonging here ([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)):
 the `wikitimechain` marker, a `wikitimechain.collection` label, and an
 `event_date`. A collection *is* its slug — publish the first card carrying a new
 one and that timeline exists, with no registration step.
+
+**30828 is our own kind.** The cards were originally published as NIP-54 wiki
+articles (kind 30818) to inherit wiki-client rendering for free; asked whether that
+was the right shape, nostr's maintainer said plainly to use a new kind number
+([nips#2426](https://github.com/nostr-protocol/nips/issues/2426)), so the corpus
+moved. The tag scheme came across unchanged — only the kind integer differs, and
+the trade was losing that free rendering.
 
 Same `d` from the **same** author edits the card; same `d` from a **different**
 author renders beside it — a dispute, never an overwrite.
@@ -86,18 +95,26 @@ viewer itself — new cards need no deploy, they show up on next page load.
 
 ## Contributing a card
 
-Publish a kind-30818 event with the tags above (get keys at nstart.me,
-publish via wikifreedia or wikistr) — see the "Add to the record" section
-on the live page for the exact tag shape.
+Publish a kind-30828 event with the tags above — see the "Add to the record"
+section on the live page for the exact tag shape, and
+[CONVENTION.md](CONVENTION.md) for the rules. Get keys at
+[nstart.me](https://nstart.me).
+
+**A wiki client won't do it.** wikifreedia and wikistr publish kind 30818, which
+this viewer reads only as a legacy holdover — a card published there won't be
+part of the record going forward. Use anything that can sign an arbitrary kind
+with arbitrary tags.
 
 ## Built on
 
 nostr NIPs this rests on:
 - **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)** —
   events, relays, and *addressable events* (the `d`-tag, replace-per-author
-  behavior kind-30818 uses)
+  behavior kind-30828 uses)
 - **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** —
-  Wiki: defines kind-30818 and the `title` / `d` / entry format
+  Wiki: where the card shape came from. The cards rode its kind 30818 until
+  2026-07-29 and still borrow its `title` / `d` / djot conventions and the
+  shape of its `fork` marker — but they are kind 30828 now, not wiki articles
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** —
   bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump
   links, and `nsec` for the minted starter key
@@ -113,8 +130,6 @@ nostr NIPs this rests on:
 
 Tools & references:
 - Get keys — [nstart.me](https://nstart.me)
-- Publish a card — [wikifreedia.xyz](https://wikifreedia.xyz) ·
-  [wikistr.com](https://wikistr.com)
 - Inspect any event or author — [njump.me](https://njump.me)
 - Content format — [djot](https://djot.net)
 - Relays queried — `relay.damus.io`, `nos.lol`, `relay.primal.net`,
@@ -122,7 +137,7 @@ Tools & references:
 
 ## Design constraints
 
-- Cards are read-only forever: the page never writes or edits a 30818. The
+- Cards are read-only forever: the page never writes or edits a 30828. The
   only writes are reactions and comments the visitor signs with their own
   key — and it never asks for a secret key
 - Single file, zero dependencies

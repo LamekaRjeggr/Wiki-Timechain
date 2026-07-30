@@ -464,17 +464,22 @@
       <details class="dev">
       <summary>Dev · publish a card, build a reader</summary>
       <h3>Publish a card</h3>
-      <p>An entry is a <b>kind 30818</b> wiki event
-        (<a href="https://github.com/nostr-protocol/nips/blob/master/54.md" target="_blank"
-            rel="noopener noreferrer">NIP-54</a>) that labels itself as belonging here
+      <p>An entry is a <b>kind 30828</b> addressable event
+        (<a href="https://github.com/nostr-protocol/nips/blob/master/01.md" target="_blank"
+            rel="noopener noreferrer">NIP-01</a>) that labels itself as belonging here
         (<a href="https://github.com/nostr-protocol/nips/blob/master/32.md" target="_blank"
-            rel="noopener noreferrer">NIP-32</a>). General wiki clients such as
+            rel="noopener noreferrer">NIP-32</a>). 30828 is this convention's own kind — the
+        cards rode NIP-54's wiki kind 30818 until 2026-07-29, when nostr's maintainer answered
+        that a new number was the right shape
+        (<a href="https://github.com/nostr-protocol/nips/issues/2426" target="_blank"
+            rel="noopener noreferrer">nips#2426</a>). The tags did not change.
+        <b>A wiki client can't publish one:</b>
         <a href="https://wikifreedia.xyz" target="_blank" rel="noopener noreferrer">wikifreedia.xyz</a>
-        or <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
-        publish 30818s but won't add the timeline tags — use anything that lets you set
-        tags yourself. A card this page can place on a rail carries:</p>
+        and <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
+        write 30818s, which this page reads only as a legacy holdover — use anything that lets
+        you set the kind and the tags yourself. A card this page can place on a rail carries:</p>
 <pre>
-kind: 30818
+kind: 30828
 tags:
   d           my-entry-slug               (identity — one entry, editable by you; no date in it)
   title       Short entry name            (no leading year — the rail already shows the date)
@@ -498,17 +503,22 @@ content:
 
       <h3>Build your own reader</h3>
       <p>This page is one client, not the record. One request boots another:
-        <code>{"kinds":[30818],"#t":["wikitimechain"],"limit":500}</code> — group what
+        <code>{"kinds":[30828],"#t":["wikitimechain"],"limit":500}</code> — group what
         comes back by its collection label, sort by <code>event_date</code>, draw. Exact
-        membership for one timeline is <code>{"kinds":[30818],"#l":["&lt;slug&gt;"]}</code>.
-        No manifest to fetch, no index to register with. The full tag scheme is in
+        membership for one timeline is <code>{"kinds":[30828],"#l":["&lt;slug&gt;"]}</code>.
+        No manifest to fetch, no index to register with. Cards published before the kind move
+        may still be served as 30818 by relays that ignored the deletion requests; if you want
+        them, add 30818 to <code>kinds</code> and keep newest per <code>pubkey:d</code>,
+        ignoring the kind — which is exactly what this page does.
+        The full tag scheme is in
         <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/CONVENTION.md"
            target="_blank" rel="noopener noreferrer">CONVENTION.md</a>.</p>
 
       <h3>Show a document changing</h3>
       <p>If your timeline follows a document through versions, a card can carry the change
-        instead of describing it. Tag the version you revised with NIP-54's <code>fork</code>
-        marker — <code>["a","30818:&lt;pubkey&gt;:&lt;their-d&gt;","","fork"]</code> — and mark
+        instead of describing it. Tag the version you revised with the <code>fork</code>
+        marker — <code>["a","30828:&lt;pubkey&gt;:&lt;their-d&gt;","","fork"]</code>, the empty
+        third slot is structural and the marker must be the fourth element — and mark
         the text in djot: <code>{-removed-}</code>, <code>{+added+}</code>. A mark alone on its
         own line becomes a gutter row; a mark inside a sentence stays inline. Readers get a
         <b>as passed / what changed</b> switch on any card that carries both. No extra tag,
@@ -518,7 +528,7 @@ content:
         rule about not diffing more finely than a reader can follow.</p>
 
       <h3>Dispute a card</h3>
-      <p>Disagree with an entry? Publish your own kind-30818 with the <b>same
+      <p>Disagree with an entry? Publish your own kind-30828 with the <b>same
         <code>d</code> tag</b> and your correction. Nothing is overwritten — both
         versions appear side by side on the rail, each signed by its author, and readers
         judge for themselves. Disputes are additions, not deletions.</p>
@@ -537,7 +547,7 @@ content:
 "use strict";
 
 // ═══════════════ config ═══════════════
-// No collection list. Timelines are DISCOVERED: any kind-30818 card carrying a
+// No collection list. Timelines are DISCOVERED: any kind-30828 card carrying a
 // c tag plus a parseable event_date is, by that fact, a timeline entry — a card
 // can't sit on a proportional rail without a date, so validation doubles as
 // discovery. Publish a card with a new c value and a new timeline exists here.
@@ -551,21 +561,24 @@ const RELAYS = [
   "wss://nostr.wine"
 ];
 const KIND = 30828;             // the card kind we WRITE coords against (NIPs #2426: our own kind, not NIP-54's)
-// What we READ. 30818 is the pre-migration kind, kept so the spine never goes blank mid-republish:
-// dedup keys on `pubkey:d` WITHOUT the kind, so a 30828 card collapses with its 30818 original and
-// newest created_at wins. DROP 30818 once every card is republished.
+// What we READ. 30818 is the pre-migration kind. Dedup keys on `pubkey:d` WITHOUT the kind, so a
+// 30828 card collapses with its 30818 original and newest created_at wins — that's what let the
+// corpus migrate card-by-card with no flag day. Two reasons 30818 STAYS: deletion is only a
+// request (some relays still serve the old copy, and dedup is what hides it), and the
+// `bitcoin-arbitrary-data` cards were deliberately left on 30818 — dropping the kind here takes
+// that whole collection off the page. See MIGRATION-30828.md.
 const READ_KINDS = [30828, 30818];
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
-const MARKER = "wikitimechain"; // convention-v2 global membership marker: ["t","wikitimechain"]
+const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — spans both kinds
 
 // ═══════════════ state ═══════════════
-const events   = new Map();     // pubkey:d → newest 30818 (replaceable per author)
+const events   = new Map();     // pubkey:d → newest card, either READ_KIND (replaceable per author)
 const profiles = new Map();     // pubkey → {name, fetched}
 const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
 const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
-const comments = new Map();     // card coord (30818:pubkey:d) → Map(comment id → kind-1111)
+const comments = new Map();     // card coord (KIND:pubkey:d) → Map(comment id → kind-1111)
 const cmtSubs  = new Set();     // coords whose comments we've asked for — grows, never shrinks
 const reactions = new Map();    // target (card coord | comment id) → Map(pubkey → newest kind-7)
 const rctA     = new Set();     // card coords whose reactions we've asked for (#a) — grow-only

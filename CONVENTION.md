@@ -1,30 +1,41 @@
-# Collection & discovery convention — v2
+# Collection & discovery convention — kind 30828
 
-**LIVE since 2026-07-23.** The migration off v1 shipped end to end:
-all 31 cards across 3 collections are pure v2, and the viewer runs the `#t`-only
-discovery path — the `c` tag and the broad sieve are gone from the client.
+**LIVE.** Cards are nostr **kind 30828**, addressable per NIP-01. Discovery is a NIP-32
+self-label scheme under one global marker, with jurisdiction, date-bucket and geohash query
+shadows. The viewer stays a single zero-dependency `index.html`.
 
-v2 moves discovery off the shared `c` tag and the un-indexed `event_date` sieve onto
-a NIP-32 self-label scheme under one global marker, and adds jurisdiction, date-bucket,
-and geohash query shadows. Cards stay **kind 30818** (NIP-54 wiki). The viewer stays a
-single zero-dependency `index.html`.
+**There is no version number on this document.** The kind number is the version: any break
+large enough to matter gets a new kind, which is exactly what the answer below prescribes. A
+parallel `vN` counter would be a second name for the same thing. (`v1`/`v2` survive in the
+appendix as historical names for two tag-scheme changes made while riding kind 30818.)
 
-## Why v1 changed
+## Why our own kind
 
-v1 discovered a card by "has a `c` tag + a parseable `event_date`." Two problems:
-`c` is the shared wikifreedia category namespace (our slugs sit beside wild
-Title-Case categories — collision by design), and `event_date` is a multi-letter tag
-so **relays never index it** — the discovery fetch had to pull the entire global
-30818 stream and sieve it client-side, which caps out as wiki traffic grows.
+The convention originally rode **kind 30818**, NIP-54's wiki article, to inherit its rendering
+in wikifreedia and other wiki clients for free. Asked directly whether that was the right
+shape — [nostr-protocol/nips#2426](https://github.com/nostr-protocol/nips/issues/2426) —
+fiatjaf answered in one line:
 
-v1 also bet on **kind-30004 manifests** as the durable discovery layer and demoted
-per-card labels. **v2 reverses that:** per-card NIP-32 labels are now the whole
-scheme, and **the manifest layer is dropped.** One indexed marker + labels on the
-cards is enough; a separate manifest event to keep in sync is not worth its staleness.
+> No. Use a new kind number for the thing you want to do.
+
+So the cards moved to **30828**, chosen ten above 30818 with nothing claimed in between, so the
+lineage stays legible. **The tag structure was kept whole** — `d`, `title`, `published_at`,
+`event_date`, the marker and every `L`/`l` namespace carry over unchanged, and content stays
+djot. The kind integer was the only forced change.
+
+Two things stopped being borrowed and became ours to define:
+
+- **`fork`** — no longer NIP-54's marker, so the revision semantics are specified here
+  (*Revisions and diffs*, below) rather than deferred.
+- **The `t` marker** — no longer needed as identity, since the kind now carries that. It is kept
+  as an index that spans kinds, which is what made the migration surviveable.
+
+The known cost, accepted: the corpus no longer renders in NIP-54 wiki clients. That free
+rendering was the whole reason for riding 30818.
 
 ## The tag scheme
 
-Every field is a tag on the 30818 event itself (self-labeling, NIP-32 — the card
+Every field is a tag on the 30828 event itself (self-labeling, NIP-32 — the card
 labels itself; no `1985` labeling event, no `e`/`p`/`a` target).
 
 ### Required — on every card
@@ -74,7 +85,7 @@ deeper than the event's real scope.
 
 ```json
 {
-  "kind": 30818,
+  "kind": 30828,
   "content": "Over the summer the Secretary of State assigns HCR 2001 its proposition number for the November ballot.\n\nAPPROXIMATE DATE: \"Summer 2026\" — placed at 2026-07-01.\n\nSource: [Arizona Secretary of State — ballot measures](https://azsos.gov/elections/ballot-measures)",
   "tags": [
     ["d", "2026-proposition-number"],
@@ -221,16 +232,26 @@ deleted — nothing here is ever deleted.
 When a collection tracks a document through versions, a card can carry the change itself
 rather than describing it. **No new tag.** Two things you already have do the work.
 
-**The declaration is NIP-54's `fork` marker.** A card that revises another tags the one it
-came from — the addressable coordinate, and the concrete event id it was built against:
+**The declaration is a `fork` marker** — borrowed in shape from NIP-54, but ours to define now
+that the cards are their own kind. A card that revises another tags the one it came from: the
+addressable coordinate, **and** the concrete event id it was built against.
 
 ```json
-["a", "30818:<pubkey>:<the-d-it-revises>", "", "fork"],
+["a", "30828:<pubkey>:<the-d-it-revises>", "", "fork"],
 ["e", "<event id of that version>", "", "fork"]
 ```
 
-**The change itself is djot's insert/delete**, which NIP-54 already mandates as the content
-format: `{-removed-}` and `{+added+}`. The braces are required.
+The empty third element is the relay-hint slot, and it is **structural — never omit it.** The
+marker is the *fourth* element; a three-element tag puts `fork` in the hint position, where it
+means nothing. Any tooling that round-trips tags through whitespace joining will silently eat
+that empty slot and destroy the marker, so build these tags as arrays, never as text.
+
+Both halves are required and they say different things: the `a` coord survives an edit of the
+target, while the `e` id pins the exact text this card was diffed against. A revision whose
+parent gets republished still points at the version it actually read.
+
+**The change itself is djot's insert/delete**: `{-removed-}` and `{+added+}`. The braces are
+required. Content format stays djot, unchanged from when this rode NIP-54.
 
 Fork marker **and** marks in the content is what earns a card the diff treatment. Either
 alone is just a card.
@@ -274,7 +295,7 @@ A card that fails either is claiming a change that did not happen. Build the mar
 
 ## Discovery & the membership gate
 
-The viewer subscribes `{"kinds":[30818], "#t":["wikitimechain"], limit:500}` — one
+The viewer subscribes `{"kinds":[30828], "#t":["wikitimechain"], limit:500}` — one
 indexed filter, the relay does the narrowing. But **`wikitimechain` is squattable**:
 anyone can wear the marker. So the marker is *discovery bait, not proof*. A card is
 one of ours only if it passes the gate:
@@ -306,23 +327,41 @@ client-filter the rest. Each rung is individually filterable; they do not compos
 server-side. For a small corpus this is a non-issue (client-filter a fetched
 collection); no UI should assume server-side multi-axis AND.
 
-## Viewer read behavior (during and after migration)
+## Viewer read behavior
 
-- **Dual-read.** The viewer accepts both v2 cards (collection label) and legacy v1
-  cards (`c` tag + `event_date`), merging into one slug set. Legacy support is dropped
-  only after every card is confirmed migrated.
-- **Dedup by `pubkey:d`,** newest `created_at` wins; on a same-second tie, the card
-  carrying a collection label (v2) wins. Different pubkeys with the same `d` **coexist**
-  — that is the dispute mechanism, unchanged from v1.
+- **Dedup by `pubkey:d` — deliberately WITHOUT the kind.** This is what let the corpus move
+  kinds card by card with no flag day: a republished 30828 collapses against its own 30818
+  original and the newer `created_at` wins, so the spine never blanked and no card ever
+  appeared twice. Keep it keyed this way; adding the kind to the key would break the property.
+- **Dual-read across kinds.** The viewer reads `[30828, 30818]` and renders the newest per
+  `pubkey:d`. 30818 stays in the read set because deletion is a *request* — some relays keep
+  serving the old copy, and dedup against its newer twin is the only thing keeping those relays
+  from showing a stale card. Retire 30818 from the read set only when nothing you want to see
+  still lives there.
+- **Writes use 30828 only.** Reactions and comments address a card by a coordinate that embeds
+  the kind, so there is no transition window for the write side — and no reason for one.
+- Different pubkeys with the same `d` **coexist** — that is the dispute mechanism.
 - Display date is always the full-precision `event_date` tag; the `YYYY`/`YYYY-MM`
   buckets are query shadows and never the display source.
+
+### Marginalia is addressed by kind — a thing to know before changing kinds again
+
+Reactions (kind 7) and comments (kind 1111) point at `<kind>:<pubkey>:<d>`. Moving a card to a
+new kind therefore gives it a new address, and **every existing reaction and comment on it
+renders nowhere** — silently. No error; the client asks for coordinates that nothing answers,
+and the old marginalia sits on the relays unreferenced.
+
+That cost was paid once, knowingly: at the time of the move no outside contributor had ever
+reacted or commented, so there was no visitor record to lose. **It will not be free a second
+time.** Any future kind change needs a migration path for marginalia, or an explicit decision to
+abandon it.
 
 ## Publishing, and building a client
 
 Nothing here is owned. There is no registry to join, no key to be added to, no
 permission step. Two things follow.
 
-**To publish.** Sign a kind-30818 with the required tags above — marker, `event_date`,
+**To publish.** Sign a kind-30828 with the required tags above — marker, `event_date`,
 a `wikitimechain.collection` label — from any key, to any relay this viewer reads.
 A collection *is* its slug: publish the first card carrying a new slug and the
 collection exists; every conforming viewer will show it beside ours. Republishing the
@@ -330,11 +369,15 @@ same `d` from the same key edits that card; the same `d` from a different key is
 second, coexisting version — that is the dispute mechanism, not a collision.
 
 **To build a client.** One REQ boots you:
-`{"kinds":[30818],"#t":["wikitimechain"],"limit":500}`. Group what passes the gate by
+`{"kinds":[30828],"#t":["wikitimechain"],"limit":500}`. Group what passes the gate by
 its collection label, sort by `event_date`, render. Exact membership for one collection
-is `{"kinds":[30818],"#l":["<slug>"]}` — then re-check the gate, because `#l` is
+is `{"kinds":[30828],"#l":["<slug>"]}` — then re-check the gate, because `#l` is
 value-only (below). That is the entire protocol; there is no manifest to fetch and no
 index to register with.
+
+Cards published before the move to 30828 may still be served as **kind 30818** by relays that
+ignored the deletion requests. If you want them, add `30818` to `kinds` and dedup on `pubkey:d`
+without the kind, newest `created_at` winning — the same rule the reference viewer uses.
 
 ### Don't trust, verify.
 
@@ -360,13 +403,20 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
    cost of that openness is that junk and fakes also pass the gate. The answer is
    ranking, not gatekeeping (rank-by-follows, deferred) — see *Publishing, and building
    a client* above.
-5. **Discovery-window drift.** Softened versus v1: the indexed `#t` fetch no longer
-   competes with the global 30818 stream, so our small corpus sits well inside the
-   window. Still bounded by `limit` if wikitimechain traffic ever grows large; the
-   union across relays is the mitigation.
+5. **Discovery-window drift.** Now a non-issue twice over: the fetch is an indexed `#t` filter
+   *and* it runs against a kind nobody else writes, so the corpus is nearly the whole stream
+   rather than a needle in NIP-54's. Still bounded by `limit` if wikitimechain traffic ever
+   grows large; the union across relays is the mitigation.
+6. **Relays that restrict writes will not carry the cards.** Measured, not theoretical: two paid
+   relays hold the old 30818 copies and none of the 30828s, because publishing to them requires
+   payment. This is about the key and the relay's policy, **not** the kind number — a relay
+   refusing unknown kinds outright was tested for and not found. The mitigation is the same as
+   for everything else here: publish to several relays and let the union be the record.
 
-## Frozen decisions (v2)
+## Frozen decisions
 
+- **Kind: 30828.** Ours, not borrowed. The tag scheme below was inherited whole from the 30818
+  era and is unchanged by the move.
 - Marker: `["t","wikitimechain"]` — lowercase, one word, no `#`. **Forever.**
 - Namespaces: `wikitimechain.collection` / `wikitimechain.date` /
   `wikitimechain.location` — one name everywhere; no `timechain.*` split.
@@ -391,14 +441,37 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
 - Topics: freeform lowercase `t`, deliberately unspecced.
 - Membership gate: `#t` + `event_date` + collection label. Labels are discovery, the
   gate is truth; never trust a bare `#l` because the namespace isn't indexed.
-- Manifests (kind 30004): **dropped.** v2 is labels-only.
+- Manifests (kind 30004): **dropped.** The scheme is labels-only.
+- Dedup key: `pubkey:d`, **no kind** — newest `created_at` wins.
+- `fork`: both an `a` coord and an `e` id, marker in the **fourth** tag element.
 
 ---
 
-### Appendix — superseded from v1
+### Appendix — superseded
+
+**Kind 30818 → 30828** (2026-07-29). Cards were published as NIP-54 wiki articles to inherit
+wiki-client rendering; NIPs #2426 answered that this was the wrong shape, so the corpus was
+republished under its own kind and the originals deleted. Tag scheme unchanged. Relays that
+ignore deletion requests may still serve the 30818 copies — see *To build a client*. Casualties,
+both accepted knowingly: rendering in wikifreedia, and every reaction and comment made before
+the move (they address a card by a coordinate that embeds the kind).
+
+The `v1`/`v2` names below describe two tag-scheme changes made *while* riding kind 30818. They
+are kept as history; there is no `v3` and there will not be one, because a break that large now
+gets a new kind instead.
+
+**Why v1 changed.** v1 discovered a card by "has a `c` tag + a parseable `event_date`." Two
+problems: `c` is the shared wikifreedia category namespace (our slugs sat beside wild Title-Case
+categories — collision by design), and `event_date` is a multi-letter tag so **relays never index
+it**, which forced the discovery fetch to pull the entire global 30818 stream and sieve it
+client-side. v1 also bet on **kind-30004 manifests** as the durable discovery layer and demoted
+per-card labels; v2 reversed that — labels became the whole scheme and the manifest layer was
+dropped, because a separate event to keep in sync is not worth its staleness. Both of v1's
+problems are now moot for a different reason as well: the corpus has its own kind, so there is no
+foreign stream to sieve out of.
 
 - v1 discovery: `c` tag + `event_date` sieve → **replaced** by the `#t` marker + the
-  `wikitimechain.collection` label. `c` is read only during the dual-read transition.
+  `wikitimechain.collection` label. `c` is no longer read at all.
 - v1 marker `t=wiki-timechain` (for manifests) → **replaced** by `t=wikitimechain`.
 - v1 kind-30004 manifest layer, marker-freeze, rival-manifest first-seen-wins →
   **dropped** with the manifest layer.
