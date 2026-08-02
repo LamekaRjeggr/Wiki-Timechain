@@ -271,6 +271,9 @@
   .dkey .dm{margin-left:4px}
   .mtl .cbody p{margin:0 0 8px}
   .mtl .cbody p:last-child{margin-bottom:0}
+  /* summary mode: these are the publisher's words about the event, not the record's, so
+     they get a rule down the side — indent + line, never a hue, and never unmarked */
+  .mtl .cbody.sum{border-left:2px solid var(--gutline);padding-left:11px}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
   /* gaps: proportional spacer, or a collapsed marker for long silences */
@@ -523,6 +526,10 @@
           <button class="ds" type="button" data-thm="medium">medium</button>
           <button class="ds" type="button" data-thm="light">light</button>
         </div>
+        <div class="dtog" id="sumtog" title="How much of each card to show">
+          <button class="ds" type="button" data-sum="0">full</button>
+          <button class="ds" type="button" data-sum="1">summary</button>
+        </div>
       </div>
     </div>
   </header>
@@ -718,6 +725,10 @@ const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Bo
 // link lands the reader on the view you meant. Deliberately NOT a page-wide switch: a global
 // one lets a page be silently put in a state where nothing was ever removed, then screenshot.
 const plainCards = new Set((_q.get("plain") || "").split(",").filter(Boolean));
+// reading depth, page-wide and in the URL: full card text, or the author's own one-line
+// `summary` tag where a card carries one. Safe as a global switch (unlike `plain` above)
+// because it hides nothing selectively — a card with no summary still shows in full.
+let sumView = _q.get("sum") === "1";
 const AXES = [["t","topics"],["l","places"],["c","timelines"]];
 let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
@@ -736,9 +747,10 @@ const nowEl    = document.getElementById("collnow");   // the selected timeline,
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","l","t","plain"].forEach(a => u.searchParams.delete(a));
+  ["c","l","t","plain","sum"].forEach(a => u.searchParams.delete(a));
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
   if (plainCards.size) u.searchParams.set("plain", [...plainCards].join(","));
+  if (sumView) u.searchParams.set("sum", "1");
   return u;
 }
 const COPY_LABEL = "⧉ Copy link";
@@ -771,6 +783,21 @@ thmTog.addEventListener("click", e => {
   paintThm();
 });
 paintThm();
+
+// reading depth. Lives in the URL, not localStorage: it's part of the view you share,
+// the way `?c=` and `?plain=` are — the theme is about your eyes, this is about the page.
+const sumTog = document.getElementById("sumtog");
+function paintSum(){
+  for (const b of sumTog.children) b.classList.toggle("on", (b.dataset.sum === "1") === sumView);
+}
+sumTog.addEventListener("click", e => {
+  const b = e.target.closest("[data-sum]"); if (!b) return;
+  sumView = b.dataset.sum === "1";
+  history.replaceState(null, "", timelineUrl());
+  paintSum();
+  render();
+});
+paintSum();
 
 const areaEl   = document.getElementById("timeline-area");
 
@@ -879,6 +906,16 @@ function diffBar(ev, d){
     `<span class="dtog">${btn("m","what changed",!off)}${btn("p","as passed",off)}</span>` +
     (off ? "" : `<span class="dkey"><span class="dm">−</span> removed<span class="dm add">+</span> added</span>`) +
     `</div>`;
+}
+
+// A card's text, at the depth the toggle asks for. In summary mode the author's own
+// `summary` tag replaces the body — our sentence, so it's marked as ours and the diff bar
+// (which is about the body's marks) goes with it. No summary tag → the card reads in full,
+// so the toggle can never blank a node.
+function cardBody(ev, d){
+  const s = sumView && tag(ev,"summary");
+  if (s) return `<div class="cbody sum" title="the publisher's own summary — the sources are in the full card">${esc(s)}</div>`;
+  return diffBar(ev, d) + `<div class="cbody">${renderContent(ev.content || "", plainCards.has(d))}</div>`;
 }
 
 function dateOf(ev){
@@ -1473,8 +1510,7 @@ function renderTimeline(entries){
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
-          `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` + diffBar(ev, e.d) +
-          `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
+          `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}</h4>` + cardBody(ev, e.d) +
           rctRow(ev, e.d) + marginBlock(ev, e.d) + `</div>`
         ).join("") +
         `</div></div>`;
@@ -1484,8 +1520,7 @@ function renderTimeline(entries){
         `<div class="card"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
         `<h4>${esc(shortTitle(tag(ev,"title") || e.d))}` +
-        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` + diffBar(ev, e.d) +
-        `<div class="cbody">${renderContent(ev.content || "", plainCards.has(e.d))}</div>` +
+        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` + cardBody(ev, e.d) +
         rctRow(ev, e.d) + `</div>${marginBlock(ev, e.d)}</div>`;
     }
   });

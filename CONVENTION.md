@@ -80,6 +80,7 @@ deeper than the event's real scope.
 |---|---|---|
 | geohash | `["g","9w0d3fjq"]` `["g","9w0d"]` `["g","9w0"]` | **point events only** — never a jurisdiction's centroid. Emit as prefix rungs for proximity queries. |
 | topic | `["t","taproot"]` | freeform lowercase `t` values, **deliberately unspecced** — no registry, no controlled vocabulary. Add as many as fit. |
+| summary | `["summary","Coinkite shipped patched firmware for every affected model. The patch stops the bug. It does not fix a seed already made with it."]` | the event in plain words, the publisher's voice (the nostr `summary` tag, NIP-23 — not a new name). One or two short sentences, ~200 chars, no case or statute numbers. It **may never assert what the `content` cannot prove**: the body is the record, the summary is the reading of it. A viewer may offer it in place of the body; cards without one read in full. |
 
 ## Worked example — a statewide card (no county, no geohash)
 
