@@ -80,7 +80,7 @@ deeper than the event's real scope.
 |---|---|---|
 | geohash | `["g","9w0d3fjq"]` `["g","9w0d"]` `["g","9w0"]` | **point events only** — never a jurisdiction's centroid. Emit as prefix rungs for proximity queries. |
 | topic | `["t","taproot"]` | freeform lowercase `t` values, **deliberately unspecced** — no registry, no controlled vocabulary. Add as many as fit. |
-| summary | `["summary","Coinkite shipped patched firmware for every affected model. The patch stops the bug. It does not fix a seed already made with it."]` | the event in plain words, the publisher's voice (the nostr `summary` tag, NIP-23 — not a new name). One or two short sentences, ~200 chars, no case or statute numbers. It **may never assert what the `content` cannot prove**: the body is the record, the summary is the reading of it. A viewer may offer it in place of the body; cards without one read in full. |
+| summary | `["summary","Coinkite shipped patched firmware for every affected model. The patch stops the bug. It does not fix a seed already made with it."]` | the event in plain words, the publisher's voice (the nostr `summary` tag, NIP-23 — not a new name). One or two short sentences, ~200 chars, no case or statute numbers. It **may never assert what the `content` cannot prove**: the body is the record, the summary is the reading of it. A viewer may offer it in place of the body; cards without one read in full. **Required, and the sole carrier, on a card with no `content`** — see *Leads*. |
 
 ## Worked example — a statewide card (no county, no geohash)
 
@@ -227,6 +227,83 @@ Everything unsourced in such a card is labelled unsourced in place (`No posting 
 been announced by the county; the estimate is not sourced.`), and the `Source:` line
 records what was checked and when. An anticipated card is superseded by a real one, not
 deleted — nothing here is ever deleted.
+
+## Leads — a card before it has a record
+
+A card is normally a **record**: a body carrying the fact, and a source anyone can follow to
+re-check it. A **lead** is that card before the record exists — something happened, it belongs
+on the spine, and the document proving it has not been found yet. The opposite hedge from an
+anticipated card, which is an event that hasn't happened.
+
+**A lead is a card with a `summary` and no `content`.** That is the whole declaration — no tag,
+no status field. The state is read off the card's shape, which is why it travels: a client that
+never heard of this convention still renders an empty body, because there is nothing to render.
+A status *tag* would be dropped silently by that same client and the hedge would vanish. An
+absence cannot be dropped.
+
+**The title opens with `Lead — `.** The word for humans goes in the field every client shows
+first and truncates least. Not the summary, which a foreign client may not render at all.
+
+```
+title    Lead — nvk leaves the country
+summary  Said to have happened between July 20 and July 30, 2026.
+```
+
+The title still has to *identify* the card. `Lead` alone is not a title: a collection of them
+is indistinguishable in any list view. Marker, then the claim.
+
+`Lead` describes *this card* — that it has no body and no source — so it stays true until the
+card changes. Words like `unverified` describe the world instead, and go quietly false the
+moment someone else verifies the thing.
+
+### Dates on a lead
+
+`APPROXIMATE DATE:` lives in the content, so a lead has nowhere to put one. It doesn't need
+one. **The range goes in the summary, in words; `event_date` takes the first day of it**, the
+same placeholder rule as any approximate card, and the buckets encode only what is known —
+which for a range inside one month is already just the year and month.
+
+When it climbs, the range moves into the body as a proper `APPROXIMATE DATE:` line, or the
+source pins a day and the hedge goes away.
+
+### Climbing
+
+**A lead becomes a record in place: same `d`, same `published_at`.** Write the body, add the
+source, drop `Lead — ` from the title, republish. Newest `created_at` wins on the `pubkey:d`
+key and the lead *is* the record — one card, whose `published_at` still marks the day the lead
+was filed.
+
+**A lead that proves false climbs too.** The body records what was claimed and what disproved
+it, cited to the disproof. That is a body with a source: a record. Nothing is deleted, nothing
+is reused, and the false claim keeps its place on the spine.
+
+Publishing the hardened fact under a **new `d`** is the failure mode — the lead and its record
+then coexist as two cards saying the same thing, with nothing linking them. **Never recycle a
+dead lead's `d` for an unrelated card:** reactions and comments address a card as
+`30828:<pubkey>:<d>`, so every one left on the lead silently reattaches to whatever takes its
+address. A lead is also **not** a revision — no `fork` marker. The record never changed; only
+your evidence for it did.
+
+### What a lead still owes
+
+- **Every required tag**, unchanged. The gate is shape-blind: marker, parseable `event_date`,
+  collection label. A lead that fails it is not a lead, it is not a card.
+- **A summary that may be wrong but not invented.** A guess about *what happened* is a lead. A
+  guess about *why* is a story.
+
+### Two rungs, and no more
+
+Lead and record. No *corroborated*, *disputed*, or *likely* between them: every middle state
+would have to be **declared** rather than read off the card, and a declared status is exactly
+the claim that doesn't travel — and that only the publisher can make. You never assert that
+something is verified; you cite, and the reader re-checks. Disagreement already has its own
+mechanism: a second key publishing the same `d`.
+
+**Open: what the `d` should hold.** Card-specific descriptive slugs are inherited from the
+30818 era, when a card had no collection to belong to and the `d` was its only name. Under
+30828 the collection label and `title` both do work the `d` was doing, and an opinionated slug
+freezes a claim into a permanent address. Unsettled — but `d` must stay unique per card, since
+`pubkey:d` is the dedup key and any shared value collapses those cards into one.
 
 ## Revisions and diffs — showing what a document used to say
 
@@ -433,6 +510,11 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
   card, not an edit.**
 - Anticipated events: a `Status: anticipated` line, unsourced estimates labelled as
   such in place; superseded by a real card, never deleted.
+- Leads: a card with a `summary` and **no `content`**; title opens `Lead — `. Shape is the
+  declaration — no status tag, because an absence travels and a tag doesn't. Climbs to a
+  record **in place** (same `d`, same `published_at`), never as a new card and never a
+  `fork`; a disproved lead climbs too. **Two rungs only** — a middle state must be declared,
+  and declarations don't travel. What the `d` should hold is **open**.
 - Location: full ISO→named ladder to the event's true scope; required when a card has
   a location; a placeless timeline is valid (e.g. `bitcoin-arbitrary-data`).
 - Geohash: optional `g` prefix rungs, point-events-only, never a jurisdiction centroid.
