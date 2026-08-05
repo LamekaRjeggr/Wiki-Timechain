@@ -160,8 +160,9 @@ of them is indistinguishable in any list view. Marker, then the claim.
 **A summary may be wrong; it may not be invented.** A guess about *what happened* is a
 lead. A guess about *why* is a story.
 
-**The date range goes in the summary, in words.** `APPROXIMATE DATE:` lives in the body,
-and a lead has no body. When the lead climbs, the range moves into the body as a proper
+**The date range goes in the summary, in words,** and `event_date` sits on the first
+day of the range — the same placement rule approximate dates use. `APPROXIMATE DATE:`
+lives in the body, and a lead has no body. When the lead climbs, the range moves into the body as a proper
 `APPROXIMATE DATE:` line — or the source pins a day and the hedge goes away.
 
 **A lead that proves false climbs too.** The body records what was claimed and what

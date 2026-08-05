@@ -24,9 +24,9 @@ marker cannot certify membership. This NIP separates the two roles: a marker for
 relay to filter on, and a shape test the client applies to what comes back.
 
 The second is that a client which does not implement a spec will silently drop the tags
-it does not know. Any state declared by a tag therefore fails to travel. Where this NIP
-must express a card's state, it does so by the card's *shape* — a field's presence or
-absence — which no client can drop.
+it does not know. Any state declared by a tag therefore fails to travel. This NIP
+declares none: the only signal that travels is the card's *shape* — a field's presence
+or absence — which no client can drop.
 
 ## Event kind
 
@@ -51,8 +51,7 @@ no third party can attach a card to a collection its author did not choose.
 
 `event_date` MUST be a full `YYYY-MM-DD` date and is the card's position on the
 timeline. It is distinct from the event's `created_at`, which records when this version
-was signed, and from `published_at`, which is OPTIONAL and carries the original
-publication time as in [NIP-23](23.md).
+was signed, and from the OPTIONAL `published_at`; see *Optional tags*.
 
 **`d` is opaque.** How a publisher mints it is their business; a client MUST NOT
 derive meaning from it, whatever it appears to encode.
@@ -97,6 +96,7 @@ A collection whose events have no location is valid and carries no ladder.
 |---|---|---|
 | `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. |
 | `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. |
+| `published_at` | `["published_at","1784681375"]` | original publication time as in [NIP-23](23.md). SHOULD be preserved across replacements of the same `d`, while `created_at` changes with each. |
 
 ## Text fields
 
@@ -109,8 +109,8 @@ Three fields carry a card's text, a gradient of length:
 | `content` | djot body | the longest — the full statement, where links and sources live |
 
 **None is required.** A card SHOULD carry at least one; a card carrying none is valid
-and says nothing. When both are present, `summary` MUST NOT assert anything `content`
-does not support.
+and says nothing. When `summary` and `content` are both present, `summary` MUST NOT
+assert anything `content` does not support.
 
 **All three are human-readable free text.** A client MUST NOT parse any of them for
 machine-readable state, and MUST NOT require any particular wording or form. The only
