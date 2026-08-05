@@ -131,8 +131,13 @@ here is ever deleted.
 
 ## Writing a lead
 
-The spec defines the shape: a `summary`, no `content`. What it cannot define is the
-wording, which is where leads go wrong.
+*Lead* is this corpus's word, not the spec's. The spec gives three text fields, none
+required, none parsed — presence or absence is the only signal a client reads. A
+**lead** is what this corpus calls one of those shapes: a `summary` and no `content`,
+an event believed to have happened for which no citable record has yet been found. The
+absent body *is* the declaration, and it travels through any client, because an absence
+cannot be dropped. What no spec can define is the wording, which is where leads go
+wrong.
 
 **The marker word goes in the title, as a short prefix and an em dash.** The title is
 the field every client shows first and truncates least — not the summary, which a
@@ -237,10 +242,9 @@ Style calls that are settled. The wire-format decisions are frozen in the spec i
 - Topics: freeform lowercase `t`, deliberately unspecced. No registry, no vocabulary.
 - Diffs: removals in their own block; verify by reconstruction, never by eye; a rewrite
   gets prose, not marks.
+- `d`: here, the title slugified at authoring time, then frozen — the title may drift
+  on a republish, the address may not. The spec keeps `d` opaque, so no client ever
+  reads the slug back, and any scheme works so long as `d` stays unique per key —
+  `pubkey:d` is the dedup key, and a shared value collapses those cards into one.
 - Nothing is ever deleted. A superseded card is superseded in place or answered by a new
   one.
-
-**Open: what the `d` should hold.** The collection label and `title` both do work an
-opinionated descriptive slug was doing, and such a slug freezes a claim into a permanent
-address. Unsettled — but `d` must stay unique per card, since `pubkey:d` is the dedup
-key and any shared value collapses those cards into one.

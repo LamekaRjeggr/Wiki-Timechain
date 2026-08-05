@@ -44,7 +44,6 @@ no third party can attach a card to a collection its author did not choose.
 | Tag | Example | Meaning |
 |---|---|---|
 | `d` | `["d","proposition-number-assigned"]` | addressable identifier; republishing under the same `d` replaces |
-| `title` | `["title","Proposition number assigned"]` | display title |
 | `event_date` | `["event_date","2026-07-01"]` | the date the card is *about*, `YYYY-MM-DD` |
 | marker | `["t","wikitimechain"]` | discovery marker; see *Discovery* |
 | collection | `["L","timeline.collection"]` `["l","example-timeline","timeline.collection"]` | which timeline this card belongs to |
@@ -55,11 +54,8 @@ timeline. It is distinct from the event's `created_at`, which records when this 
 was signed, and from `published_at`, which is OPTIONAL and carries the original
 publication time as in [NIP-23](23.md).
 
-**`title` is human-readable free text.** Clients MUST NOT parse it for machine-readable
-state, and MUST NOT require any particular form. Publishers marking a card's state in
-its title for the benefit of clients that do not implement this NIP is a corpus
-convention, outside this specification; every state a conforming client acts on is
-determined by the card's shape, never by its title.
+**`d` is opaque.** How a publisher mints it is their business; a client MUST NOT
+derive meaning from it, whatever it appears to encode.
 
 A card MUST carry exactly one collection label. Its value is the collection's
 identifier and SHOULD be lowercase kebab-case.
@@ -101,38 +97,46 @@ A collection whose events have no location is valid and carries no ladder.
 |---|---|---|
 | `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. |
 | `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. |
-| `summary` | `["summary","The vendor shipped patched firmware for every affected model."]` | the event in plain words, in the publisher's voice. SHOULD be one or two sentences. MUST NOT assert anything `content` does not support. REQUIRED on a card with no `content`; see *Leads*. |
 
-A client MAY offer `summary` in place of `content`. A client doing so MUST fall back to
-`content` for cards carrying no `summary`, so that such a view can never blank a card.
+## Text fields
 
-## Leads
+Three fields carry a card's text, a gradient of length:
 
-A card with a `summary` and **no `content`** is a *lead*: an event believed to have
-happened, for which no citable record has yet been found. The absent body is the
-declaration. A client that does not implement this NIP renders an empty body and the
-hedge survives; a status tag would be dropped and the hedge would not.
+| Field | Example | Role |
+|---|---|---|
+| `title` tag | `["title","Proposition number assigned"]` | the shortest — names the card |
+| `summary` tag | `["summary","The vendor shipped patched firmware for every affected model."]` | the event in plain words, in the publisher's voice; SHOULD be one or two sentences |
+| `content` | djot body | the longest — the full statement, where links and sources live |
 
-**A client MUST determine this state from the card's shape alone.** It MUST NOT infer it
-from `title`, from any status tag, or from any other declared field. Publishers commonly
-mark the state in the title as well, for readers whose client does not implement this
-NIP; that wording is a corpus convention and a conforming client MUST NOT depend on it,
-because a lead is no less a lead for being titled differently.
+**None is required.** A card SHOULD carry at least one; a card carrying none is valid
+and says nothing. When both are present, `summary` MUST NOT assert anything `content`
+does not support.
 
-A lead MUST carry every required tag. A lead SHOULD state its date's uncertainty in
-`summary`, and `event_date` takes the first day of the stated range.
+**All three are human-readable free text.** A client MUST NOT parse any of them for
+machine-readable state, and MUST NOT require any particular wording or form. The only
+machine-readable signal these fields carry is **presence or absence**. This is
+deliberate: a client that does not implement this NIP silently drops the tags it does
+not know, so any state declared by a status tag fails to travel — but an absent field
+renders as an absence everywhere, and the shape survives.
 
-A lead becomes a record **in place**: same `d`, same `published_at`, with `content`
-added. Clients MUST NOT treat this as a revision — no `fork` marker is involved,
-because the recorded event never changed. Publishers MUST NOT publish the record under
-a new `d`, and MUST NOT reuse a lead's `d` for an unrelated card: reactions and
-comments address a card as `30828:<pubkey>:<d>` and would silently reattach.
+What a given combination *means* — a `summary` standing alone, a bare `title` — is
+vocabulary, and vocabulary belongs to a corpus, not to this NIP. A publisher MAY build
+conventions on these shapes; a conforming client MAY surface a shape distinctly, but
+MUST derive it from presence and absence alone, never from wording. Declared states
+such as *corroborated* or *disputed* are deliberately absent from this NIP: a
+declaration does not travel, and no publisher can credibly make such a claim about
+their own card. Disagreement is expressed by a second key publishing the same `d`.
 
-This NIP defines exactly two states, lead and record, and both are read off the card's
-shape. Intermediate states such as *corroborated* or *disputed* are deliberately absent:
-each would have to be declared rather than observed, and a declaration does not travel —
-nor can any publisher make such a claim about their own card credibly. Disagreement is
-expressed by a second key publishing the same `d`.
+A client MAY render every field a card carries, or use the gradient as tiers of
+disclosure — `title` in a list, `summary` in a preview, `content` on open. A client
+rendering a subset MUST fall back to the fields the card does carry, so that no card
+carrying any text renders blank.
+
+Filling a card in under its own `d` — adding the `content` a `summary` anticipated —
+is an ordinary replacement per [NIP-01](01.md), not a revision: no `fork` marker is
+involved, because the recorded event never changed. A publisher MUST NOT reuse a `d`
+for an unrelated card: reactions and comments address `30828:<pubkey>:<d>` and would
+silently reattach.
 
 ## Revisions
 
