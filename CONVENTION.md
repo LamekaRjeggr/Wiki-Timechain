@@ -1,37 +1,15 @@
 # Collection & discovery convention — kind 30828
 
-**LIVE.** Cards are nostr **kind 30828**, addressable per NIP-01. Discovery is a NIP-32
-self-label scheme under one global marker, with jurisdiction, date-bucket and geohash query
-shadows. The viewer stays a single zero-dependency `index.html`.
+Cards are nostr **kind 30828**, addressable per NIP-01. Discovery is a NIP-32 self-label scheme
+under one global marker, with jurisdiction, date-bucket and geohash query shadows. Content is
+**djot**. The viewer stays a single zero-dependency `index.html`.
 
-**There is no version number on this document.** The kind number is the version: any break
-large enough to matter gets a new kind, which is exactly what the answer below prescribes. A
-parallel `vN` counter would be a second name for the same thing. (`v1`/`v2` survive in the
-appendix as historical names for two tag-scheme changes made while riding kind 30818.)
+The kind number is the version. A break large enough to matter gets a new kind; there is no
+parallel `vN` counter.
 
-## Why our own kind
-
-The convention originally rode **kind 30818**, NIP-54's wiki article, to inherit its rendering
-in wikifreedia and other wiki clients for free. Asked directly whether that was the right
-shape — [nostr-protocol/nips#2426](https://github.com/nostr-protocol/nips/issues/2426) —
-fiatjaf answered in one line:
-
-> No. Use a new kind number for the thing you want to do.
-
-So the cards moved to **30828**, chosen ten above 30818 with nothing claimed in between, so the
-lineage stays legible. **The tag structure was kept whole** — `d`, `title`, `published_at`,
-`event_date`, the marker and every `L`/`l` namespace carry over unchanged, and content stays
-djot. The kind integer was the only forced change.
-
-Two things stopped being borrowed and became ours to define:
-
-- **`fork`** — no longer NIP-54's marker, so the revision semantics are specified here
-  (*Revisions and diffs*, below) rather than deferred.
-- **The `t` marker** — no longer needed as identity, since the kind now carries that. It is kept
-  as an index that spans kinds, which is what made the migration surviveable.
-
-The known cost, accepted: the corpus no longer renders in NIP-54 wiki clients. That free
-rendering was the whole reason for riding 30818.
+A few field names are borrowed from **NIP-54** — `published_at`, and the `fork` marker's tag
+shape — because they already mean the right thing. That is the extent of the relationship: 30828
+is its own kind with its own semantics, and everything below is defined here, not inherited.
 
 ## The tag scheme
 
@@ -42,15 +20,17 @@ labels itself; no `1985` labeling event, no `e`/`p`/`a` target).
 
 | Tag | Example | Meaning |
 |---|---|---|
-| `d` | `["d","2026-proposition-number"]` | addressable identifier (NIP-01/54); republish = same `d` |
+| `d` | `["d","proposition-number-assigned"]` | addressable identifier (NIP-01); republish = same `d` |
 | `title` | `["title","Proposition number assigned"]` | display title |
 | `event_date` | `["event_date","2026-07-01"]` | **display-precision truth**, `YYYY-MM-DD`; where the card sits on the spine |
 | `t` marker | `["t","wikitimechain"]` | the global discovery marker — lowercase, one word, no `#` |
-| collection | `["L","wikitimechain.collection"]` `["l","hcr2001-fast-election-results","wikitimechain.collection"]` | which timeline this card belongs to |
+| collection | `["L","wikitimechain.collection"]` `["l","example-timeline","wikitimechain.collection"]` | which timeline this card belongs to |
 | date buckets | `["L","wikitimechain.date"]` `["l","2026","wikitimechain.date"]` `["l","2026-07","wikitimechain.date"]` | query shadow of `event_date`: **year and month, both** |
 
-`published_at` (NIP-54, original publish time) is carried unchanged and is **not** the
-same as `event_date` or the event `created_at`.
+`published_at` (original publish time) is carried unchanged and is **not** the same as
+`event_date` or the event `created_at`.
+
+The `t` marker is an index that spans kinds, not the card's identity — the kind carries that.
 
 ### Required when the card has a location — the jurisdiction ladder
 
@@ -60,57 +40,55 @@ is only queryable if its value is physically on the card. Do **not** fabricate r
 deeper than the event's real scope.
 
 ```json
-["L", "ISO-3166-1"],           ["l", "US", "ISO-3166-1"],
-["L", "ISO-3166-2"],           ["l", "US-AZ", "ISO-3166-2"],
-["L", "wikitimechain.location"], ["l", "us-az-maricopa", "wikitimechain.location"],
-                                 ["l", "us-az-maricopa-phoenix", "wikitimechain.location"]
+["L", "ISO-3166-1"],           ["l", "JP", "ISO-3166-1"],
+["L", "ISO-3166-2"],           ["l", "JP-13", "ISO-3166-2"],
+["L", "wikitimechain.location"], ["l", "jp-13-shibuya", "wikitimechain.location"]
 ```
 
-- ISO rungs use ISO codes verbatim (`US`, `US-AZ`) under the standard NIP-32
+- ISO rungs use ISO codes verbatim (`JP`, `JP-13`) under the standard NIP-32
   namespaces `ISO-3166-1` / `ISO-3166-2`.
-- Sub-state rungs are **kebab-case, parent-prefixed** (`us-az-maricopa`,
-  `us-az-maricopa-phoenix`) under `wikitimechain.location`.
-- **Scope, not fabrication.** A statewide act stops at `US-AZ` — no county rung. A
-  county event adds `us-az-maricopa`. A city point event adds the city rung. The
-  ladder goes as deep as the event genuinely is, no deeper.
+- Sub-state rungs are **kebab-case, parent-prefixed** (`jp-13-shibuya`) under
+  `wikitimechain.location`.
+- **Scope, not fabrication.** A national act stops at the country rung. A regional act stops at
+  the ISO-3166-2 rung. A local point event adds the named rungs. The ladder goes as deep as the
+  event genuinely is, no deeper.
 
 ### Optional
 
 | Tag | Example | Rule |
 |---|---|---|
-| geohash | `["g","9w0d3fjq"]` `["g","9w0d"]` `["g","9w0"]` | **point events only** — never a jurisdiction's centroid. Emit as prefix rungs for proximity queries. |
+| geohash | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | **point events only** — never a jurisdiction's centroid. Emit as prefix rungs for proximity queries. |
 | topic | `["t","taproot"]` | freeform lowercase `t` values, **deliberately unspecced** — no registry, no controlled vocabulary. Add as many as fit. |
-| summary | `["summary","Coinkite shipped patched firmware for every affected model. The patch stops the bug. It does not fix a seed already made with it."]` | the event in plain words, the publisher's voice (the nostr `summary` tag, NIP-23 — not a new name). One or two short sentences, ~200 chars, no case or statute numbers. It **may never assert what the `content` cannot prove**: the body is the record, the summary is the reading of it. A viewer may offer it in place of the body; cards without one read in full. **Required, and the sole carrier, on a card with no `content`** — see *Leads*. |
+| summary | `["summary","The vendor shipped patched firmware for every affected model. The patch stops the bug. It does not fix a key already made with it."]` | the event in plain words, the publisher's voice (the nostr `summary` tag — not a new name). One or two short sentences, ~200 chars, no case or statute numbers. It **may never assert what the `content` cannot prove**: the body is the record, the summary is the reading of it. A viewer may offer it in place of the body; cards without one read in full. **Required, and the sole carrier, on a card with no `content`** — see *Leads*. |
 
-## Worked example — a statewide card (no county, no geohash)
+## Worked example — a region-scoped card (no local rung, no geohash)
 
 ```json
 {
   "kind": 30828,
-  "content": "Over the summer the Secretary of State assigns HCR 2001 its proposition number for the November ballot.\n\nAPPROXIMATE DATE: \"Summer 2026\" — placed at 2026-07-01.\n\nSource: [Arizona Secretary of State — ballot measures](https://azsos.gov/elections/ballot-measures)",
+  "content": "Over the summer the elections authority assigns the measure its proposition number for the November ballot.\n\nAPPROXIMATE DATE: \"Summer 2026\" — placed at 2026-07-01.\n\nSource: [Elections authority — ballot measures](https://example.org/ballot-measures)",
   "tags": [
-    ["d", "2026-proposition-number"],
+    ["d", "proposition-number-assigned"],
     ["title", "Proposition number assigned"],
     ["published_at", "1784681375"],
     ["event_date", "2026-07-01"],
     ["t", "wikitimechain"],
     ["L", "wikitimechain.collection"],
-    ["l", "hcr2001-fast-election-results", "wikitimechain.collection"],
+    ["l", "example-timeline", "wikitimechain.collection"],
     ["L", "wikitimechain.date"],
     ["l", "2026", "wikitimechain.date"],
     ["l", "2026-07", "wikitimechain.date"],
     ["L", "ISO-3166-1"],
-    ["l", "US", "ISO-3166-1"],
+    ["l", "JP", "ISO-3166-1"],
     ["L", "ISO-3166-2"],
-    ["l", "US-AZ", "ISO-3166-2"]
+    ["l", "JP-13", "ISO-3166-2"]
   ]
 }
 ```
 
-A statewide act by the Secretary of State: the ladder stops at `US-AZ`, and there is
-no `g` tag because it is not a point event. A city-level point card in the same
-collection would additionally carry the `wikitimechain.location` rungs and the geohash
-prefixes.
+A region-wide act by a regional authority: the ladder stops at the ISO-3166-2 rung, and there is
+no `g` tag because it is not a point event. A local point card in the same collection would
+additionally carry the `wikitimechain.location` rungs and the geohash prefixes.
 
 ## Approximate dates — one canonical, greppable line
 
@@ -147,21 +125,19 @@ with no new syntax.
 
 ### One source line, scoped per claim
 
-A card usually rests on more than one source: a photographed notice for the dates, a
-government page for the procedure. The failure mode is a single `Source:` line that
-supports half of what the card says — a reader who follows it finds the source does
-not say what the card claims it said. That is worse than no citation, because it
-looks checked.
+A card usually rests on more than one source: a photographed notice for the dates, an official
+page for the procedure. The failure mode is a single `Source:` line that supports half of what
+the card says — a reader who follows it finds the source does not say what the card claims it
+said. That is worse than no citation, because it looks checked.
 
 One source ⇒ `Source:` unchanged. More than one ⇒ **one `Sources:` line, each source
 prefixed by the claim it carries:**
 
 ```
-Sources: date and time - [posted zoning sign](https://blossom.primal.net/<sha256>.jpg),
-photographed from the public right-of-way 2026-05-29. Commission's role and venue -
-[Maricopa County P&Z Commission](https://www.maricopa.gov/383/Planning-Zoning-Commission),
-which "makes recommendations to the Board of Supervisors on rezoning ... and
-comprehensive plans."
+Sources: date and time - [posted notice](https://blossom.example/<sha256>.jpg),
+photographed from the public right-of-way 2026-05-29. The body's role and venue -
+[planning commission](https://example.org/planning-commission), which "makes
+recommendations to the board on rezoning ... and comprehensive plans."
 ```
 
 One block, not one heading per source. Two `Source:` headings read as a bibliography
@@ -194,14 +170,14 @@ A card announcing a hearing, meeting, deadline or vote carries two lines, placed
 provenance:
 
 ```
-When: 2026-08-06, 9:30 AM MST
-Where: Board of Supervisors' Auditorium, 205 W. Jefferson St., Phoenix AZ 85003;
-virtual by registration with Planning & Development.
+When: 2026-08-06, 9:30 AM UTC+9
+Where: Council chambers, City Hall; virtual by registration with the planning office.
 ```
 
 - **`Where:`, never `Location:`.** `Location:` already describes the *subject's* place
-  (the parcel). `Where:` is the *meeting's* place. On a card about a Tonopah parcel
-  heard in downtown Phoenix these are different facts and must not share a label.
+  (the parcel, the site, the thing the card is about). `Where:` is the *meeting's* place. When a
+  card about one place is heard somewhere else these are different facts and must not share a
+  label.
 - **State the timezone every time.** A permanent record is read from anywhere.
 - **Don't narrate the schedule in the prose too.** Once the block exists, the lead
   sentence says what the meeting *is* and who decides; the block says when and where.
@@ -224,9 +200,9 @@ A later card will record it as it actually happened.
 ```
 
 Everything unsourced in such a card is labelled unsourced in place (`No posting date has
-been announced by the county; the estimate is not sourced.`), and the `Source:` line
-records what was checked and when. An anticipated card is superseded by a real one, not
-deleted — nothing here is ever deleted.
+been announced; the estimate is not sourced.`), and the `Source:` line records what was
+checked and when. An anticipated card is superseded by a real one, not deleted — nothing
+here is ever deleted.
 
 ## Leads — a card before it has a record
 
@@ -245,7 +221,7 @@ absence cannot be dropped.
 first and truncates least. Not the summary, which a foreign client may not render at all.
 
 ```
-title    Lead — nvk leaves the country
+title    Lead — the foundry changed hands
 summary  Said to have happened between July 20 and July 30, 2026.
 ```
 
@@ -299,20 +275,18 @@ the claim that doesn't travel — and that only the publisher can make. You neve
 something is verified; you cite, and the reader re-checks. Disagreement already has its own
 mechanism: a second key publishing the same `d`.
 
-**Open: what the `d` should hold.** Card-specific descriptive slugs are inherited from the
-30818 era, when a card had no collection to belong to and the `d` was its only name. Under
-30828 the collection label and `title` both do work the `d` was doing, and an opinionated slug
-freezes a claim into a permanent address. Unsettled — but `d` must stay unique per card, since
-`pubkey:d` is the dedup key and any shared value collapses those cards into one.
+**Open: what the `d` should hold.** The collection label and `title` both do work an
+opinionated descriptive slug was doing, and such a slug freezes a claim into a permanent
+address. Unsettled — but `d` must stay unique per card, since `pubkey:d` is the dedup key and
+any shared value collapses those cards into one.
 
 ## Revisions and diffs — showing what a document used to say
 
 When a collection tracks a document through versions, a card can carry the change itself
 rather than describing it. **No new tag.** Two things you already have do the work.
 
-**The declaration is a `fork` marker** — borrowed in shape from NIP-54, but ours to define now
-that the cards are their own kind. A card that revises another tags the one it came from: the
-addressable coordinate, **and** the concrete event id it was built against.
+**The declaration is a `fork` marker.** A card that revises another tags the one it came from:
+the addressable coordinate, **and** the concrete event id it was built against.
 
 ```json
 ["a", "30828:<pubkey>:<the-d-it-revises>", "", "fork"],
@@ -329,7 +303,7 @@ target, while the `e` id pins the exact text this card was diffed against. A rev
 parent gets republished still points at the version it actually read.
 
 **The change itself is djot's insert/delete**: `{-removed-}` and `{+added+}`. The braces are
-required. Content format stays djot, unchanged from when this rode NIP-54.
+required.
 
 Fork marker **and** marks in the content is what earns a card the diff treatment. Either
 alone is just a card.
@@ -389,7 +363,7 @@ dropped, not stored. Membership per collection is then made exact by the label q
 
 Relays index labels by **value only** — the namespace (the `L` tag / the label's 3rd
 element) is *not* part of the filter. So `{"#l":["2026"]}` matches the value `2026` in
-**any** namespace, including a stranger's unrelated label; `{"#l":["us-az-maricopa"]}`
+**any** namespace, including a stranger's unrelated label; `{"#l":["jp-13-shibuya"]}`
 matches that value wherever it appears. Value grammars (ISO codes, kebab locations,
 `YYYY`/`YYYY-MM` dates, kebab collection slugs) are kept disjoint so collisions are
 unlikely — but **labels are discovery, the gate is truth.** A future contributor must
@@ -400,36 +374,28 @@ exactly why it can't be trusted alone.
 
 Collection, date, and location are all `l` values. A single filter's `#l` array is an
 OR, and two constraints sharing the key `l` cannot be AND-ed. "Cards in collection X
-**and** county Y" is therefore **not one REQ** — fetch by the most selective axis and
+**and** region Y" is therefore **not one REQ** — fetch by the most selective axis and
 client-filter the rest. Each rung is individually filterable; they do not compose
 server-side. For a small corpus this is a non-issue (client-filter a fetched
 collection); no UI should assume server-side multi-axis AND.
 
 ## Viewer read behavior
 
-- **Dedup by `pubkey:d` — deliberately WITHOUT the kind.** This is what let the corpus move
-  kinds card by card with no flag day: a republished 30828 collapses against its own 30818
-  original and the newer `created_at` wins, so the spine never blanked and no card ever
-  appeared twice. Keep it keyed this way; adding the kind to the key would break the property.
-- **One kind, read and written.** The dual read that carried the move is retired (2026-07-29):
-  30828 only. A 30818 still served by a relay that ignored its deletion request is not a card.
-- **Writes use 30828 only.** Reactions and comments address a card by a coordinate that embeds
-  the kind, so there is no transition window for the write side — and no reason for one.
+- **Dedup by `pubkey:d` — deliberately WITHOUT the kind.** The kind is not part of a card's
+  identity; `pubkey:d` is the whole key, newest `created_at` wins. Adding the kind to it would
+  let one author's card appear twice.
+- **One kind, read and written: 30828.**
 - Different pubkeys with the same `d` **coexist** — that is the dispute mechanism.
 - Display date is always the full-precision `event_date` tag; the `YYYY`/`YYYY-MM`
   buckets are query shadows and never the display source.
 
-### Marginalia is addressed by kind — a thing to know before changing kinds again
+### Marginalia is addressed by kind — a thing to know before changing kinds
 
 Reactions (kind 7) and comments (kind 1111) point at `<kind>:<pubkey>:<d>`. Moving a card to a
 new kind therefore gives it a new address, and **every existing reaction and comment on it
 renders nowhere** — silently. No error; the client asks for coordinates that nothing answers,
-and the old marginalia sits on the relays unreferenced.
-
-That cost was paid once, knowingly: at the time of the move no outside contributor had ever
-reacted or commented, so there was no visitor record to lose. **It will not be free a second
-time.** Any future kind change needs a migration path for marginalia, or an explicit decision to
-abandon it.
+and the old marginalia sits on the relays unreferenced. Any kind change needs a migration path
+for marginalia, or an explicit decision to abandon it.
 
 ## Publishing, and building a client
 
@@ -447,11 +413,8 @@ second, coexisting version — that is the dispute mechanism, not a collision.
 `{"kinds":[30828],"#t":["wikitimechain"],"limit":500}`. Group what passes the gate by
 its collection label, sort by `event_date`, render. Exact membership for one collection
 is `{"kinds":[30828],"#l":["<slug>"]}` — then re-check the gate, because `#l` is
-value-only (below). That is the entire protocol; there is no manifest to fetch and no
-index to register with.
-
-Dedup on `pubkey:d`, newest `created_at` winning. Ask for 30828 only — relays that ignored the
-kind-5 deletions still serve pre-move **30818** copies, which are retired, not content.
+value-only (above). Dedup on `pubkey:d`, newest `created_at` winning. That is the entire
+protocol; there is no manifest to fetch and no index to register with.
 
 ### Don't trust, verify.
 
@@ -459,43 +422,37 @@ The marker is bait, the labels are hints, and neither is proof. Run the gate on 
 event you accept, whoever sent it and whatever it claims — that is what makes an open
 marker safe to use. A client that skips the check inherits everyone else's junk.
 
-## The walls (where this breaks, and status)
+## The walls (where this breaks)
 
 1. **Relays honoring the `#t` marker filter.** Single-letter `t` is indexed by every
-   relay that answers at all; the four reachable relays honor tag filters exactly.
-   Passes.
+   relay that answers at all. Passes.
 2. **Marker is squattable and permanent.** By design — the viewer is an open
    instrument. Guard is the membership gate (shape), not identity. `wikitimechain`,
    one word, is the forever choice; renaming later means re-signing every card.
 3. **`#l` range-enumeration hits relay value-caps.** A decade of months = 120 values,
    over some relays' per-filter limits. Mitigated by the **year bucket** (a decade =
-   10 values) and, for our corpus size, by client-side filtering. Never ship a naive
+   10 values) and, for a small corpus, by client-side filtering. Never ship a naive
    enumerate-every-month REQ.
 4. **No author allowlist — on purpose.** Anyone who publishes a card that passes the
    gate is in, no permission asked. That is the offer, not a leak: a stranger can start
    a collection on their own key today and every wikitimechain viewer will find it. The
    cost of that openness is that junk and fakes also pass the gate. The answer is
-   ranking, not gatekeeping (rank-by-follows, deferred) — see *Publishing, and building
-   a client* above.
-5. **Discovery-window drift.** Now a non-issue twice over: the fetch is an indexed `#t` filter
-   *and* it runs against a kind nobody else writes, so the corpus is nearly the whole stream
-   rather than a needle in NIP-54's. Still bounded by `limit` if wikitimechain traffic ever
-   grows large; the union across relays is the mitigation.
-6. **Relays that restrict writes will not carry the cards.** Measured, not theoretical: two paid
-   relays hold pre-move 30818 copies and none of the 30828s, because publishing to them requires
-   payment — so they now contribute nothing to a 30828-only read. This is about the key and the
-   relay's policy, **not** the kind number — a relay
-   refusing unknown kinds outright was tested for and not found. The mitigation is the same as
-   for everything else here: publish to several relays and let the union be the record.
+   ranking, not gatekeeping (rank-by-follows, deferred).
+5. **Discovery-window drift.** The fetch is an indexed `#t` filter against a kind nobody else
+   writes, so the corpus is nearly the whole stream. Still bounded by `limit` if wikitimechain
+   traffic ever grows large; the union across relays is the mitigation.
+6. **Relays that restrict writes will not carry the cards.** Paid or allowlisted relays refuse
+   publishes from an unpaying key, so they contribute nothing to a read. This is about the key
+   and the relay's policy, not the kind number. The mitigation is the same as for everything
+   else here: publish to several relays and let the union be the record.
 
 ## Frozen decisions
 
-- **Kind: 30828.** Ours, not borrowed. The tag scheme below was inherited whole from the 30818
-  era and is unchanged by the move.
+- **Kind: 30828.**
 - Marker: `["t","wikitimechain"]` — lowercase, one word, no `#`. **Forever.**
 - Namespaces: `wikitimechain.collection` / `wikitimechain.date` /
   `wikitimechain.location` — one name everywhere; no `timechain.*` split.
-- Collection identity: NIP-32 self-label, replacing the v1 `c` tag.
+- Collection identity: NIP-32 self-label.
 - Date buckets: year **and** month, both values in `wikitimechain.date`
   (`2026` + `2026-07`); no separate year namespace (value length self-distinguishes).
   Buckets encode *known* precision only — year-only cards emit no month bucket.
@@ -516,7 +473,7 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
   `fork`; a disproved lead climbs too. **Two rungs only** — a middle state must be declared,
   and declarations don't travel. What the `d` should hold is **open**.
 - Location: full ISO→named ladder to the event's true scope; required when a card has
-  a location; a placeless timeline is valid (e.g. `bitcoin-arbitrary-data`).
+  a location; a placeless timeline is valid.
 - Geohash: optional `g` prefix rungs, point-events-only, never a jurisdiction centroid.
 - Topics: freeform lowercase `t`, deliberately unspecced.
 - Membership gate: `#t` + `event_date` + collection label. Labels are discovery, the
@@ -524,35 +481,3 @@ marker safe to use. A client that skips the check inherits everyone else's junk.
 - Manifests (kind 30004): **dropped.** The scheme is labels-only.
 - Dedup key: `pubkey:d`, **no kind** — newest `created_at` wins.
 - `fork`: both an `a` coord and an `e` id, marker in the **fourth** tag element.
-
----
-
-### Appendix — superseded
-
-**Kind 30818 → 30828** (2026-07-29). Cards were published as NIP-54 wiki articles to inherit
-wiki-client rendering; NIPs #2426 answered that this was the wrong shape, so the corpus was
-republished under its own kind and the originals deleted. Tag scheme unchanged. Relays that
-ignore deletion requests may still serve the 30818 copies — see *To build a client*. Casualties,
-both accepted knowingly: rendering in wikifreedia, and every reaction and comment made before
-the move (they address a card by a coordinate that embeds the kind).
-
-The `v1`/`v2` names below describe two tag-scheme changes made *while* riding kind 30818. They
-are kept as history; there is no `v3` and there will not be one, because a break that large now
-gets a new kind instead.
-
-**Why v1 changed.** v1 discovered a card by "has a `c` tag + a parseable `event_date`." Two
-problems: `c` is the shared wikifreedia category namespace (our slugs sat beside wild Title-Case
-categories — collision by design), and `event_date` is a multi-letter tag so **relays never index
-it**, which forced the discovery fetch to pull the entire global 30818 stream and sieve it
-client-side. v1 also bet on **kind-30004 manifests** as the durable discovery layer and demoted
-per-card labels; v2 reversed that — labels became the whole scheme and the manifest layer was
-dropped, because a separate event to keep in sync is not worth its staleness. Both of v1's
-problems are now moot for a different reason as well: the corpus has its own kind, so there is no
-foreign stream to sieve out of.
-
-- v1 discovery: `c` tag + `event_date` sieve → **replaced** by the `#t` marker + the
-  `wikitimechain.collection` label. `c` is no longer read at all.
-- v1 marker `t=wiki-timechain` (for manifests) → **replaced** by `t=wikitimechain`.
-- v1 kind-30004 manifest layer, marker-freeze, rival-manifest first-seen-wins →
-  **dropped** with the manifest layer.
-- v1's demotion of NIP-32 per-card labels → **reversed**; labels are now the scheme.
