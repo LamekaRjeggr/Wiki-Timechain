@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add to the record · Wiki · Timechain</title>
+<style>
+  /* Tokens are lifted verbatim from index.html so the two pages are one site. Three
+     fields, dark carrying no attribute; there is not one light-mode RULE anywhere —
+     adding a colour means adding a token to all three blocks, never a [data-theme]
+     selector on your rule. Same discipline as the viewer. */
+  :root{
+    color-scheme: dark;
+    --bg:#0b0c0e;
+    --panel:#131519;
+    --panel-2:#171a1f;
+    --border:#262930;
+    --border-soft:#1e2127;
+    --rail:#ffb02e;          /* amber rail — colorblind-safe */
+    --rail-dim:#5a4415;
+    --accent:#4aa3ff;        /* blue links/selection — safe against amber */
+    --past:#c98f3f;          /* ocher — a dated card, the rail behind you */
+    --past-dim:#4a3618;
+    --future:#28e5ff;        /* neon cyan — scheduled, not yet happened */
+    --future-dim:#134a55;
+    --text:#e9eaee;
+    --text-2:#d7d9df;
+    --text-3:#c6c8ce;
+    --dim:#9296a0;
+    --faint:#42454e;
+    --gutline:#565b66;
+    --ink:#181203;           /* type ON an amber fill — flips with the theme */
+    --warn:#ffb27a;          /* orange, never red — meaning also in the text */
+    --glow:rgba(255,176,46,.07);
+    --rail-tint:rgba(255,176,46,.16);
+    --scrim:rgba(0,0,0,.62);
+    --shadow:rgba(0,0,0,.5);
+    --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
+  }
+  :root[data-theme="medium"]{
+    color-scheme: dark;
+    --bg:#4e453a; --panel:#5c5246; --panel-2:#675c4e;
+    --border:#786c5c; --border-soft:#695e4f;
+    --rail:#ffc266; --rail-dim:#94714a;
+    --accent:#8cc6ff;
+    --past:#eebc84; --past-dim:#8a6c42;
+    --future:#4fd8e8; --future-dim:#2f6f79;
+    --text:#f8f3ea; --text-2:#eae2d5; --text-3:#dbd2c3;
+    --dim:#b2a692; --faint:#7b6f5f; --gutline:#8d8171;
+    --ink:#2a1c06; --warn:#ffc492;
+    --glow:rgba(255,194,102,.10);
+    --rail-tint:rgba(255,194,102,.22);
+    --scrim:rgba(28,21,12,.62); --shadow:rgba(28,21,12,.5);
+  }
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --bg:#fbfaf8; --panel:#ffffff; --panel-2:#f2f1ee;
+    --border:#dcd9d3; --border-soft:#e7e4de;
+    --rail:#a35c00; --rail-dim:#d9b483;
+    --accent:#0b57c4;
+    --past:#8a5410; --past-dim:#d8bb92;
+    --future:#0d6f86; --future-dim:#9dc6d2;
+    --text:#191b1f; --text-2:#2b2f36; --text-3:#3a3f47;
+    --dim:#61666f; --faint:#a8adb5; --gutline:#9aa0a9;
+    --ink:#fffaf2; --warn:#9a4a00;
+    --glow:rgba(163,92,0,.06);
+    --rail-tint:rgba(163,92,0,.16);
+    --scrim:rgba(25,27,31,.42); --shadow:rgba(25,27,31,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--font);font-size:15px;line-height:1.6;
+    -webkit-text-size-adjust:100%}
+  a{color:var(--accent)}
+  code{font-family:var(--mono);font-size:.92em;color:var(--text-2)}
+
+  header{border-bottom:1px solid var(--border-soft);background:
+    linear-gradient(180deg,var(--glow),transparent);padding:20px 18px 16px}
+  .hrow{max-width:720px;margin:0 auto;display:flex;align-items:baseline;
+    justify-content:space-between;gap:14px;flex-wrap:wrap}
+  h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .sub{max-width:720px;margin:6px auto 0;color:var(--dim);font-size:13.5px}
+
+  main{max-width:720px;margin:0 auto;padding:22px 18px 90px}
+  section{margin:0 0 26px}
+  h2{margin:0 0 3px;font-size:12px;font-family:var(--mono);letter-spacing:.09em;
+    text-transform:uppercase;color:var(--dim);font-weight:600}
+  .note{margin:0 0 12px;color:var(--dim);font-size:13px}
+
+  label{display:block;margin:13px 0 4px;font-size:12px;font-family:var(--mono);
+    letter-spacing:.03em;color:var(--dim)}
+  label .h{color:var(--faint);letter-spacing:0;font-family:var(--font);font-size:11.5px}
+  input,textarea,select{width:100%;background:var(--panel);color:var(--text);
+    border:1px solid var(--border);border-radius:8px;padding:9px 11px;
+    font-family:var(--font);font-size:14.5px;line-height:1.5}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+  textarea{resize:vertical;font-size:14.5px}
+  select{cursor:pointer}
+  .row{display:flex;gap:9px}
+  .row>*{flex:1 1 0;min-width:0}
+
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    border-radius:8px;padding:9px 15px;font-family:var(--font);font-size:14px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--rail)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.go{background:var(--rail);color:var(--ink);border-color:var(--rail);font-weight:600}
+  button.slim{padding:7px 11px;font-size:13px}
+
+  /* the segmented control, same class names and behaviour as the viewer's */
+  .dtog{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .ds{background:transparent;border:0;border-right:1px solid var(--border);cursor:pointer;
+    font-family:var(--mono);font-size:11px;color:var(--dim);padding:3px 9px;line-height:1.5;
+    border-radius:0}
+  .ds:last-child{border-right:0}
+  .ds:hover{color:var(--text);border-color:var(--border)}
+  .ds.on{background:var(--rail);color:var(--ink)}   /* on-state = fill + dark ink, not hue */
+
+  /* ── sign in ── */
+  .rung{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:9px 0;
+    background:var(--panel)}
+  .rung h3{margin:0 0 2px;font-size:14px;font-weight:600}
+  .rung p{margin:0 0 9px;color:var(--dim);font-size:12.5px}
+  .rung.last{border-style:dashed}          /* the nsec rung reads as the fallback it is */
+  .who{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid var(--rail);border-radius:10px;padding:11px 14px;background:var(--panel)}
+  .who .k{font-family:var(--mono);font-size:12px;color:var(--rail)}
+  .who .v{font-family:var(--mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
+  .via{font-size:11px;font-family:var(--mono);color:var(--dim);
+    border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+
+  /* errors and warnings: text-labelled and orange, never red/green */
+  .msg{margin:9px 0 0;font-size:13px;color:var(--dim);font-family:var(--mono);
+    word-break:break-word}
+  .msg.bad{color:var(--warn)}
+  .msg.bad::before{content:"⚠ error — "}
+  .msg.warnish{color:var(--warn)}
+  .msg.warnish::before{content:"⚠ heads up — "}
+  .msg.ok{color:var(--rail)}
+
+  details{margin:14px 0 0;border-top:1px solid var(--border-soft);padding-top:10px}
+  summary{cursor:pointer;font-size:12px;font-family:var(--mono);color:var(--dim);
+    letter-spacing:.05em;text-transform:uppercase}
+
+  /* ── preview: the viewer's own card, so what you see is what lands ── */
+  .pv{border:1px solid var(--border);border-radius:12px;background:var(--panel);
+    padding:13px 15px;margin:10px 0 0}
+  .pv .ctab{display:flex;align-items:baseline;gap:10px;width:fit-content;
+    max-width:calc(100% + 15px);margin:-13px 0 10px -15px;padding:6px 28px 5px 15px;
+    background:var(--panel-2);border-bottom:1px solid var(--border);
+    border-radius:11px 0 0 0;white-space:nowrap;
+    clip-path:polygon(0 0,calc(100% - 17px) 0,100% 100%,0 100%);
+    font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .pv .ctab .td{font-size:16.5px;color:var(--past);flex:none}
+  .pv .ctab .sl{color:var(--faint);flex:none}
+  .pv .ctab .by{overflow:hidden;text-overflow:ellipsis}
+  .pv.future .ctab .td{color:var(--future)}
+  .pv h4{margin:0;font-size:17.5px;line-height:1.3;font-weight:600;color:var(--text)}
+  .pv .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:var(--text-3)}
+  .pv .cbody p{margin:0 0 8px}
+  .pv .cbody p:last-child{margin-bottom:0}
+  del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
+  ins{text-decoration:none;color:var(--text);border-radius:2px;padding:0 3px;
+    background:var(--rail-tint)}
+  .dgut{margin:0 0 8px;border-left:2px solid var(--gutline)}
+  .dgut.add{border-left-color:var(--rail-dim)}
+  .drow{display:flex;gap:9px;padding:3px 0 3px 10px}
+  .dm{flex:0 0 auto;font-family:var(--mono);font-size:15px;font-weight:600;
+    color:var(--dim);user-select:none}
+  .dgut.add .dm{color:var(--rail)}
+  .dtx{flex:1 1 auto;color:var(--dim)}
+  .dgut.add .dtx{color:var(--text)}
+  .revl{display:inline-block;margin:0 0 8px;padding:1px 7px;border:1px dashed var(--gutline);
+    border-radius:4px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--dim)}
+
+  pre.json{margin:10px 0 0;padding:11px 12px;background:var(--panel-2);
+    border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:340px;
+    font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--text-3)}
+
+  .relays{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+  .rl{font-family:var(--mono);font-size:11px;color:var(--dim);
+    border:1px solid var(--border);border-radius:5px;padding:1px 7px}
+  .rl.up{border-color:var(--rail);color:var(--rail)}
+  .rl.down{border-style:dashed;opacity:.6}
+
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+</style>
+<script>
+// Theme applied BEFORE first paint, from the same key the viewer writes — a reader who
+// set light there does not get a black flash here. Dark is the default, no attribute.
+(function(){
+  try{
+    var t = localStorage.getItem("wtc:theme");
+    if (t === "light" || t === "medium") document.documentElement.dataset.theme = t;
+  }catch{}
+})();
+</script>
+<script type="module">
+  // Vendored, not fetched — nothing loads from a third-party host. Its own module, so a
+  // failure to load bunker support cannot take the extension and nsec rungs down with it.
+  import { BunkerSigner, parseBunkerInput } from './nip46.js';
+  window._nip46 = { BunkerSigner, parseBunkerInput };
+  window.dispatchEvent(new Event("nip46ready"));
+</script>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <h1>Add to the record</h1>
+    <div class="dtog" id="theme" role="group" aria-label="theme">
+      <button class="ds" data-t="dark">dark</button>
+      <button class="ds" data-t="medium">sepia</button>
+      <button class="ds" data-t="light">light</button>
+    </div>
+  </div>
+  <p class="sub">Write a kind-30828 card: start a timeline, add an entry to someone
+    else's, or revise a card that is already there. Your key signs it, the relays keep
+    it, and <a href="./">the viewer</a> reads it on the next load — nothing here is
+    stored on a server. <a href="CONVENTION.md">How to write one</a> ·
+    <a href="NIP-DRAFT.md">the spec</a>.</p>
+</header>
+
+<main>
+  <section id="sec-sign">
+    <h2>1 · sign in</h2>
+    <p class="note">A card is a record, so it has to carry a real key — there is no
+      throwaway identity here. Pick whichever of these you already have.</p>
+
+    <div id="signed-out">
+      <div class="rung">
+        <h3>Browser extension</h3>
+        <p>nos2x, Alby, Nostore — your key never leaves it. NIP-07.</p>
+        <button class="slim" id="b-nip07">connect extension</button>
+      </div>
+
+      <div class="rung">
+        <h3>Remote signer (bunker)</h3>
+        <p>Your key stays on your phone or signer and approves each signature. Paste the
+          <code>bunker://</code> URI it gives you. NIP-46.</p>
+        <div class="row">
+          <input id="bunker-uri" placeholder="bunker://…" autocomplete="off" spellcheck="false">
+          <button class="slim" id="b-bunker" style="flex:0 0 auto" disabled>connect</button>
+        </div>
+      </div>
+
+      <div class="rung last">
+        <h3>Secret key</h3>
+        <p><strong>Held for this tab only</strong> — never saved, never sent anywhere, gone
+          when you close or reload the page. Anyone holding your <code>nsec</code> is you,
+          so prefer either option above if you have one.</p>
+        <div class="row">
+          <input id="nsec-in" type="password" placeholder="nsec1…" autocomplete="off" spellcheck="false">
+          <button class="slim" id="b-nsec" style="flex:0 0 auto">use for this tab</button>
+        </div>
+      </div>
+      <p class="msg" id="sign-msg"></p>
+    </div>
+
+    <div id="signed-in" style="display:none">
+      <div class="who">
+        <span class="k">signed in</span>
+        <span class="v" id="who-npub"></span>
+        <span class="via" id="who-via"></span>
+        <button class="slim" id="b-out" style="margin-left:auto">sign out</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-card">
+    <h2>2 · the card</h2>
+    <p class="note">One fact per card. The collection is the timeline it joins — pick an
+      existing one or type a new slug, which is all it takes to start one.</p>
+
+    <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
+    <div class="row">
+      <select id="f-load"><option value="">— new card —</option></select>
+      <button class="slim" id="b-load" style="flex:0 0 auto">load</button>
+    </div>
+
+    <label for="f-coll">collection <span class="h">— the timeline this joins. Required.</span></label>
+    <div class="row">
+      <select id="f-coll-select"><option value="">— pick one —</option></select>
+      <input id="f-coll" placeholder="or type a new slug" autocomplete="off">
+    </div>
+
+    <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
+    <input id="f-title" placeholder="Mirepoix" autocomplete="off">
+
+    <label for="f-d">d · address <span class="h">— suggested from the title until you edit it. Frozen once published: republishing the same d replaces that card.</span></label>
+    <input id="f-d" placeholder="mirepoix" autocomplete="off">
+
+    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
+    <input id="f-date" placeholder="2003-07-14" autocomplete="off">
+
+    <label for="f-summary">summary <span class="h">— optional, your plain-words gloss; the viewer can show this instead of the record</span></label>
+    <input id="f-summary" placeholder="Short summary" autocomplete="off">
+
+    <label for="f-content">content · djot <span class="h">— one factual sentence, blank line, then Source: [label](url). Bare URLs do not autolink.</span></label>
+    <textarea id="f-content" rows="9" placeholder="One factual sentence about what happened.
+
+Source: [label](https://primary-source)"></textarea>
+
+    <details>
+      <summary>advanced</summary>
+      <label for="f-pubat">published_at <span class="h">— unix seconds; blank = now. Editing an existing card? keep its original.</span></label>
+      <input id="f-pubat" type="number" placeholder="auto" autocomplete="off">
+      <label for="f-extra">extra tags <span class="h">— one per line, "key value". Location ladders go here: L ISO-3166-2 / l US-AZ ISO-3166-2</span></label>
+      <textarea id="f-extra" rows="3" placeholder="key value"></textarea>
+    </details>
+    <p class="msg" id="card-msg"></p>
+  </section>
+
+  <section id="sec-fork">
+    <h2>3 · revises another card <span style="text-transform:none;letter-spacing:0;font-family:var(--font);color:var(--faint)">— optional</span></h2>
+    <p class="note">Leave this alone for an ordinary card. Pick a card here and yours
+      becomes a revision of it: the viewer draws the lineage, and if your content carries
+      djot marks — <code>{-removed-}</code> and <code>{+added+}</code> — it renders as a
+      diff against what that card said.</p>
+    <div class="row">
+      <select id="f-fork"><option value="">— not a revision —</option></select>
+      <button class="slim" id="b-fork-clear" style="flex:0 0 auto">clear</button>
+    </div>
+    <details>
+      <summary>revise a card that isn't in the list</summary>
+      <p class="note" style="margin-top:9px">These are what actually get published; the
+        picker above just fills them in. Both halves are required — the coordinate survives
+        an edit of the target, the event id pins the exact version you revised.</p>
+      <label for="f-fork-d">its d</label>
+      <input id="f-fork-d" placeholder="d slug it revises" autocomplete="off">
+      <label for="f-fork-pk">its author's pubkey <span class="h">— 64 hex; blank = your own key</span></label>
+      <input id="f-fork-pk" placeholder="hex pubkey" autocomplete="off">
+      <label for="f-fork-e">that version's event id <span class="h">— 64 hex</span></label>
+      <input id="f-fork-e" placeholder="hex event id" autocomplete="off">
+    </details>
+  </section>
+
+  <section id="sec-preview">
+    <h2>4 · preview</h2>
+    <p class="note">The viewer's own card, rendered from what you have typed.</p>
+    <div id="pv-host"></div>
+    <details>
+      <summary>the event that will be signed</summary>
+      <pre class="json" id="pv-json"></pre>
+    </details>
+  </section>
+
+  <section id="sec-publish">
+    <h2>5 · publish</h2>
+    <div class="bar">
+      <button class="go" id="b-pub" disabled>sign &amp; publish</button>
+      <span class="msg" id="pub-msg" style="margin:0"></span>
+    </div>
+    <div class="relays" id="relays"></div>
+    <pre class="json" id="pub-json" style="display:none"></pre>
+  </section>
+</main>
+
+<script>
+// ═══════════════ config — the same relays, kind and marker the viewer reads ═══════════════
+const RELAYS = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.primal.net",
+  "wss://relay.mostr.pub",
+  "wss://relay.nostr.band",
+  "wss://nostr.wine"
+];
+const KIND   = 30828;
+const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
+// The spec's namespaces. Live cards still carry the old wikitimechain.* names and the
+// viewer dual-reads both — but everything written here is written in the spec's terms.
+const NS_COLL = "timeline.collection";
+const NS_DATE = "timeline.date";
+const NS_COLL_OLD = "wikitimechain.collection";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
+  .replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+
+// ═══════════════ theme ═══════════════
+function setTheme(t){
+  if (t === "dark") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("wtc:theme", t); } catch {}
+  paintTheme();
+}
+function paintTheme(){
+  const cur = document.documentElement.dataset.theme || "dark";
+  $("theme").querySelectorAll(".ds").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
+}
+$("theme").addEventListener("click", e => {
+  const b = e.target.closest(".ds"); if (b) setTheme(b.dataset.t);
+});
+paintTheme();
+
+// ═══════════════ bech32 (BIP-173) — encode is the viewer's, decode is new ═══════════════
+const B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function b32polymod(vals){
+  const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+  let chk = 1;
+  for (const v of vals){
+    const b = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i=0;i<5;i++) if ((b>>i)&1) chk ^= GEN[i];
+  }
+  return chk;
+}
+const b32hrpExpand = hrp => {
+  const exp = [];
+  for (const c of hrp) exp.push(c.charCodeAt(0)>>5);
+  exp.push(0);
+  for (const c of hrp) exp.push(c.charCodeAt(0)&31);
+  return exp;
+};
+function bech32(hrp, hex){
+  const data = [];
+  for (let i=0;i<hex.length;i+=2) data.push(parseInt(hex.slice(i,i+2),16));
+  let acc=0, bits=0; const out=[];
+  for (const b of data){ acc=(acc<<8)|b; bits+=8;
+    while(bits>=5){ bits-=5; out.push((acc>>bits)&31); } }
+  if (bits>0) out.push((acc<<(5-bits))&31);
+  const pm = b32polymod(b32hrpExpand(hrp).concat(out,[0,0,0,0,0,0])) ^ 1;
+  const chk=[]; for (let i=0;i<6;i++) chk.push((pm>>5*(5-i))&31);
+  return hrp+"1"+out.concat(chk).map(v=>B32[v]).join("");
+}
+const npub = hex => bech32("npub", hex);
+// Decode is only here so a pasted nsec can be turned into a key. It VERIFIES the
+// checksum: a typo in an nsec must fail loudly, not sign as some other identity.
+function bech32Decode(str, wantHrp){
+  const s = String(str).trim().toLowerCase();
+  const sep = s.lastIndexOf("1");
+  if (sep < 1 || sep + 7 > s.length) throw new Error("not a bech32 string");
+  const hrp = s.slice(0, sep);
+  if (wantHrp && hrp !== wantHrp) throw new Error(`expected ${wantHrp}1…, got ${hrp}1…`);
+  const vals = [];
+  for (const c of s.slice(sep + 1)){
+    const v = B32.indexOf(c);
+    if (v === -1) throw new Error(`"${c}" is not a bech32 character`);
+    vals.push(v);
+  }
+  if (b32polymod(b32hrpExpand(hrp).concat(vals)) !== 1) throw new Error("checksum failed — one character is wrong");
+  let acc = 0, bits = 0; const out = [];
+  for (const v of vals.slice(0, -6)){
+    acc = (acc << 5) | v; bits += 5;
+    while (bits >= 8){ bits -= 8; out.push((acc >> bits) & 255); }
+  }
+  return out.map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+// ═══════════════ secp256k1 + BIP-340 schnorr ═══════════════
+// Lifted verbatim from index.html, where it is verified against the official BIP-340
+// test vectors (node .htest/schnorr.mjs). Here it signs for the nsec rung only — the
+// extension and the bunker sign for themselves.
+const CURVE_P = 2n**256n - 2n**32n - 977n;
+const CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+const G = [0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,
+           0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n];
+const fmod = (a, m) => ((a % m) + m) % m;
+function finv(a, m){
+  let [r0, r1, s0, s1] = [fmod(a, m), m, 1n, 0n];
+  while (r1 !== 0n){ const q = r0 / r1; [r0, r1] = [r1, r0 - q*r1]; [s0, s1] = [s1, s0 - q*s1]; }
+  return fmod(s0, m);
+}
+function padd(A, B){
+  if (!A) return B; if (!B) return A;
+  if (A[0] === B[0] && fmod(A[1] + B[1], CURVE_P) === 0n) return null;
+  const l = A[0] === B[0]
+    ? fmod(3n*A[0]*A[0] * finv(2n*A[1], CURVE_P), CURVE_P)
+    : fmod((B[1]-A[1]) * finv(B[0]-A[0], CURVE_P), CURVE_P);
+  const x = fmod(l*l - A[0] - B[0], CURVE_P);
+  return [x, fmod(l*(A[0]-x) - A[1], CURVE_P)];
+}
+function pmul(Pt, k){
+  let R = null, A = Pt;
+  while (k > 0n){ if (k & 1n) R = padd(R, A); A = padd(A, A); k >>= 1n; }
+  return R;
+}
+const hexToBytes = h => Uint8Array.from(h.match(/../g) || [], x => parseInt(x, 16));
+const bytesToHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+const bytesToInt = b => BigInt("0x" + (bytesToHex(b) || "0"));
+const intTo32   = i => hexToBytes(i.toString(16).padStart(64, "0"));
+const bcat = (...bs) => { const o = new Uint8Array(bs.reduce((n,b) => n + b.length, 0));
+  let at = 0; for (const b of bs){ o.set(b, at); at += b.length; } return o; };
+const sha256 = async b => new Uint8Array(await crypto.subtle.digest("SHA-256", b));
+async function taggedHash(tag, ...msgs){
+  const th = await sha256(new TextEncoder().encode(tag));
+  return sha256(bcat(th, th, ...msgs));
+}
+function xonlyPub(skHex){
+  return pmul(G, bytesToInt(hexToBytes(skHex)))[0].toString(16).padStart(64, "0");
+}
+async function schnorrSign(msgHex, skHex, auxHex){
+  const m  = hexToBytes(msgHex);
+  const d0 = bytesToInt(hexToBytes(skHex));
+  const Pt = pmul(G, d0);
+  const d  = (Pt[1] & 1n) ? CURVE_N - d0 : d0;
+  const aux = auxHex ? hexToBytes(auxHex) : crypto.getRandomValues(new Uint8Array(32));
+  const t = d ^ bytesToInt(await taggedHash("BIP0340/aux", aux));
+  const rand = await taggedHash("BIP0340/nonce", intTo32(t), intTo32(Pt[0]), m);
+  const k0 = fmod(bytesToInt(rand), CURVE_N);
+  if (k0 === 0n) throw new Error("bad nonce");
+  const R = pmul(G, k0);
+  const k = (R[1] & 1n) ? CURVE_N - k0 : k0;
+  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge", intTo32(R[0]), intTo32(Pt[0]), m)), CURVE_N);
+  return bytesToHex(bcat(intTo32(R[0]), intTo32(fmod(k + e*d, CURVE_N))));
+}
+async function signWithSk(tmpl, skHex){
+  const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
+  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+  ev.id = bytesToHex(await sha256(new TextEncoder().encode(ser)));
+  ev.sig = await schnorrSign(ev.id, skHex);
+  return ev;
+}
+
+// ═══════════════ the signer ladder ═══════════════
+// Three rungs behind one interface, same shape as the viewer's getSigner() seam. The
+// difference from the viewer, and it is deliberate: there is NO minted key. A reaction is
+// cheap expression and can ride a throwaway; a card is a record, and a card signed by a
+// key nobody has ever seen is noise the reader has to wade through.
+let signer  = null;          // { via, pubkey, sign(template) -> signed event }
+let bunkerC = null;          // live BunkerSigner, so sign-out can close it
+let sessionSk = null;        // the nsec rung, IN MEMORY ONLY — see clearSession()
+
+function signMsg(text, cls){
+  const el = $("sign-msg");
+  el.textContent = text || "";
+  el.className = "msg" + (cls ? " " + cls : "");
+}
+
+async function useNip07(){
+  if (!window.nostr) return signMsg("no NIP-07 extension answered — is one installed and unlocked?", "bad");
+  signMsg("waiting for the extension…");
+  try {
+    const pk = await window.nostr.getPublicKey();
+    setSigner({ via:"extension", pubkey: pk, sign: t => window.nostr.signEvent(t) });
+  } catch(e){ signMsg(msgOf(e), "bad"); }
+}
+
+async function useBunker(){
+  const uri = $("bunker-uri").value.trim();
+  if (!uri) return;
+  if (!window._nip46) return signMsg("the signer library has not loaded — reload the page", "bad");
+  signMsg("parsing the bunker URI…");
+  try {
+    const pointer = await window._nip46.parseBunkerInput(uri);
+    if (!pointer) throw new Error("that is not a valid bunker:// URI");
+    // Ephemeral per-session client key. It talks to the signer and is never an identity.
+    const clientKey = crypto.getRandomValues(new Uint8Array(32));
+    signMsg("connecting to the signer…");
+    const b = window._nip46.BunkerSigner.fromBunker(clientKey, pointer, {
+      onauth: url => { signMsg("approve the connection in your signer…");
+                       try { window.open(url, "_blank", "noopener"); } catch {} }
+    });
+    await b.connect();
+    const pk = await b.getPublicKey();
+    bunkerC = b;
+    $("bunker-uri").value = "";
+    setSigner({ via:"bunker", pubkey: pk, sign: t => b.signEvent(t) });
+  } catch(e){ signMsg(msgOf(e), "bad"); }
+}
+
+function useNsec(){
+  const raw = $("nsec-in").value.trim();
+  if (!raw) return;
+  try {
+    const sk = raw.startsWith("nsec") ? bech32Decode(raw, "nsec") : raw.toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(sk)) throw new Error("a secret key is 64 hex characters, or an nsec1… string");
+    const d = BigInt("0x" + sk);
+    if (d === 0n || d >= CURVE_N) throw new Error("that key is out of range for secp256k1");
+    sessionSk = sk;
+    $("nsec-in").value = "";
+    setSigner({ via:"nsec · this tab only", pubkey: xonlyPub(sk), sign: t => signWithSk(t, sessionSk) });
+  } catch(e){ signMsg(msgOf(e), "bad"); }
+}
+
+function setSigner(s){
+  signer = s;
+  $("signed-out").style.display = "none";
+  $("signed-in").style.display = "";
+  const n = npub(s.pubkey);
+  $("who-npub").textContent = n.slice(0, 14) + "…" + n.slice(-6);
+  $("who-via").textContent = s.via;
+  signMsg("");
+  renderMine();          // your cards can only be listed once we know who you are
+  refresh();
+}
+
+// The nsec never reaches storage, so signing out is enough to be rid of it — but zero it
+// anyway, and do the same on unload, so a key does not sit in a live heap after you leave.
+function clearSession(){
+  sessionSk = null;
+  if (bunkerC){ try { bunkerC.close(); } catch {} bunkerC = null; }
+  signer = null;
+}
+function signOut(){
+  clearSession();
+  $("signed-out").style.display = "";
+  $("signed-in").style.display = "none";
+  renderMine();
+  refresh();
+}
+addEventListener("pagehide", clearSession);
+addEventListener("beforeunload", clearSession);
+
+const msgOf = e => (e && e.message) ? e.message : String(e);
+
+$("b-nip07").addEventListener("click", useNip07);
+$("b-bunker").addEventListener("click", useBunker);
+$("b-nsec").addEventListener("click", useNsec);
+$("b-out").addEventListener("click", signOut);
+$("nsec-in").addEventListener("keydown", e => { if (e.key === "Enter") useNsec(); });
+$("bunker-uri").addEventListener("keydown", e => { if (e.key === "Enter") useBunker(); });
+addEventListener("nip46ready", () => { $("b-bunker").disabled = false; });
+if (window._nip46) $("b-bunker").disabled = false;
+
+// ═══════════════ reading the corpus ═══════════════
+// One sub, the viewer's own discovery filter: kind + marker, no author filter. That single
+// read feeds all three things this page needs — the collection list, the d-collision guard,
+// and the fork picker — so there is no second query and no baked pubkey anywhere.
+const cards   = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
+const relayUp = new Map();
+let eosed = 0, settled = false;
+
+const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
+const dOf     = ev => tagOf(ev, "d");
+const dateOf  = ev => tagOf(ev, "event_date");
+const collOf  = ev => {
+  const l = ev.tags.find(t => t[0] === "l" && (t[2] === NS_COLL || t[2] === NS_COLL_OLD));
+  return l ? l[1] : "";
+};
+
+// The membership gate, exactly as the spec states it: the marker is squattable, so a card
+// counts only if it ALSO carries a collection label and a parseable YYYY-MM-DD event_date.
+function passes(ev){
+  if (ev.kind !== KIND) return false;
+  if (!ev.tags.some(t => t[0] === "t" && t[1] === MARKER)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOf(ev))) return false;
+  return !!collOf(ev) && !!dOf(ev);
+}
+function ingest(ev){
+  if (!passes(ev)) return;
+  const key = ev.pubkey + ":" + dOf(ev);
+  const cur = cards.get(key);
+  if (cur && cur.created_at >= ev.created_at) return;
+  cards.set(key, ev);
+  scheduleDraw();
+}
+
+let drawT = null;
+function scheduleDraw(){
+  if (drawT) return;
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); }, 150);
+}
+
+function connect(url){
+  let ws;
+  try { ws = new WebSocket(url); } catch { relayUp.set(url,"down"); renderRelays(); return; }
+  relayUp.set(url, "connecting");
+  ws.onopen = () => {
+    relayUp.set(url, "up"); renderRelays();
+    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
+  };
+  ws.onmessage = m => {
+    let data; try { data = JSON.parse(m.data); } catch { return; }
+    if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EOSE"){ eosed++; if (eosed >= 2) markSettled(); }
+    if (data[0] === "OK"){
+      const t = tallies.get(data[1]);
+      if (t){ data[2] ? t.ok++ : (t.no++, t.why = t.why || String(data[3] || "")); renderPubTally(); }
+    }
+  };
+  ws.onerror = () => { relayUp.set(url,"down"); renderRelays(); };
+  ws.onclose = () => { if (relayUp.get(url) !== "up") relayUp.set(url,"down"); renderRelays(); };
+  sockets.push(ws);
+}
+const sockets = [];
+
+// Until the read settles, a d that looks free may only look free — and publishing over your
+// own card cannot be undone. So an unsettled read blocks the publish rather than passing it.
+function markSettled(){
+  if (settled) return;
+  settled = true;
+  refresh();
+}
+setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
+
+function renderRelays(){
+  $("relays").innerHTML = RELAYS.map(r => {
+    const st = relayUp.get(r) || "connecting";
+    return `<span class="rl ${st}">${esc(r.replace("wss://",""))}</span>`;
+  }).join("");
+}
+renderRelays();
+RELAYS.forEach(connect);
+
+// ═══════════════ authoring helpers (ported from the Forge writer) ═══════════════
+// NIP-54 subject normalization: two authors writing the same subject land on the same d.
+function wikiSlug(s){
+  return String(s).toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+// djot link targets can't contain whitespace — a space or line-wrap inside [label](url) is
+// always a copy/paste artifact (chat clients and terminals soft-wrap long URLs).
+function fixLinkTargets(s){
+  return String(s).replace(/\]\(([^)]*)\)/g, (_, url) => "](" + url.replace(/\s+/g, "") + ")");
+}
+
+// ═══════════════ the djot-ish renderer — the viewer's, so the preview is honest ═══════════════
+const MARK = /\{([-+])([^]*?)\1\}/g;
+function renderContent(text){
+  const inline = s => s
+    .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\{-([^]*?)-\}/g, "<del>$1</del>")
+    .replace(/\{\+([^]*?)\+\}/g, "<ins>$1</ins>");
+  return esc(text).split(/\n\s*\n/).map(block => {
+    const solo = [];
+    for (const m of block.matchAll(MARK)){
+      const e = m.index + m[0].length;
+      if ((m.index === 0 || block[m.index-1] === "\n") && (e === block.length || block[e] === "\n"))
+        solo.push({s: m.index, e, k: m[1] === "+" ? "add" : "rem", t: m[2]});
+    }
+    let out = "", cur = 0, gut = null;
+    const para = s => { s = s.replace(/^\n+|\n+$/g,""); if (s) out += "<p>" + inline(s).replace(/\n/g,"<br>") + "</p>"; };
+    const flushG = () => { if (gut){
+      out += `<div class="dgut ${gut.k}">` + gut.rows.map(r =>
+        `<div class="drow"><span class="dm">${gut.k === "add" ? "+" : "−"}</span>` +
+        `<div class="dtx">${inline(r)}</div></div>`).join("") + `</div>`;
+      gut = null; } };
+    for (const x of solo){
+      const gap = block.slice(cur, x.s);
+      if (gap.trim()){ flushG(); para(gap); }
+      if (gut && gut.k !== x.k) flushG();
+      (gut ||= {k: x.k, rows: []}).rows.push(x.t);
+      cur = x.e;
+    }
+    if (block.slice(cur).trim()){ flushG(); para(block.slice(cur)); }
+    flushG();
+    return out;
+  }).join("");
+}
+
+// ═══════════════ the form ═══════════════
+let loadedD = null;    // the d currently loaded for editing — republishing it IS the edit
+
+const val = id => ($(id)?.value || "").trim();
+function cardMsg(text, cls){
+  const el = $("card-msg");
+  el.textContent = text || "";
+  el.className = "msg" + (cls ? " " + cls : "");
+}
+
+// d follows the title until you touch it — then it is yours, because it is the address.
+$("f-title").addEventListener("input", () => {
+  const dEl = $("f-d");
+  if (!dEl.dataset.touched) dEl.value = wikiSlug($("f-title").value);
+  refresh();
+});
+$("f-d").addEventListener("input", () => { $("f-d").dataset.touched = "1"; refresh(); });
+["f-coll","f-date","f-summary","f-content","f-pubat","f-extra",
+ "f-fork-d","f-fork-e","f-fork-pk"].forEach(id => $(id).addEventListener("input", refresh));
+$("f-coll-select").addEventListener("change", () => {
+  const v = $("f-coll-select").value;
+  if (v) $("f-coll").value = v;
+  refresh();
+});
+$("f-coll").addEventListener("input", () => { $("f-coll-select").value = ""; });
+
+function renderCollections(){
+  const sel = $("f-coll-select"), keep = sel.value;
+  const seen = [...new Set([...cards.values()].map(collOf))].filter(Boolean).sort();
+  sel.innerHTML = '<option value="">— pick one —</option>' +
+    seen.map(c => `<option value="${esc(c)}">${esc(c)} · ${
+      [...cards.values()].filter(e => collOf(e) === c).length} cards</option>`).join("");
+  sel.value = keep;
+}
+
+// Your own cards, for editing. Needs a signer — before that there is nobody to filter on,
+// which is the whole reason no pubkey is baked into this page.
+function renderMine(){
+  const sel = $("f-load");
+  const mine = signer
+    ? [...cards.values()].filter(e => e.pubkey === signer.pubkey)
+        .sort((a,b) => (dateOf(a) < dateOf(b) ? 1 : -1))
+    : [];
+  sel.innerHTML = '<option value="">— new card —</option>' + mine.map(e =>
+    `<option value="${esc(dOf(e))}">${esc(tagOf(e,"title") || dOf(e))} · ${esc(dateOf(e))} · ${esc(collOf(e))}</option>`
+  ).join("");
+  $("b-load").disabled = !mine.length;
+}
+
+function loadMine(){
+  const d = $("f-load").value;
+  if (!d || !signer) return;
+  const ev = cards.get(signer.pubkey + ":" + d);
+  if (!ev) return;
+  // The legacy "YYYY · " title prefix is noise — the card's tab carries the date — so strip
+  // it on load and let the republish clean it. d is identity and is never touched.
+  $("f-title").value = tagOf(ev,"title").replace(/^\d{4}\s*·\s*/, "");
+  $("f-d").value = d; $("f-d").dataset.touched = "1";
+  loadedD = d;
+  $("f-coll").value    = collOf(ev);
+  $("f-coll-select").value = "";
+  $("f-summary").value = tagOf(ev,"summary");
+  $("f-pubat").value   = tagOf(ev,"published_at");
+  $("f-date").value    = dateOf(ev);
+  $("f-content").value = ev.content;
+  const fa = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+  const fe = ev.tags.find(t => t[0] === "e" && t[3] === "fork");
+  const coord = (fa?.[1] || "").split(":");
+  $("f-fork-d").value  = coord.slice(2).join(":");
+  $("f-fork-pk").value = coord[1] || "";
+  $("f-fork-e").value  = fe?.[1] || "";
+  // Everything the form owns comes back out of its own fields; anything else on the event
+  // is round-tripped through the extra-tags box verbatim so an edit cannot silently drop it.
+  // The fork's own p tag is dropped with the fork tags — the builder re-emits it, and a
+  // survivor here would ride along in extra tags and be published twice.
+  const owned = new Set(["d","title","summary","published_at","event_date","t","L","l"]);
+  const forkPk = coord[1] || "";
+  $("f-extra").value = ev.tags
+    .filter(t => !owned.has(t[0]) && t[3] !== "fork" && !(t[0] === "p" && t[1] === forkPk))
+    .map(t => t.join(" ")).join("\n");
+  cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
+  refresh();
+}
+$("b-load").addEventListener("click", loadMine);
+
+// ═══════════════ the fork picker ═══════════════
+// Forge takes a raw hex event id and pubkey here, which is fine when you wrote every card
+// yourself and unusable for anyone else. The picker names cards; the hex fields below it
+// stay the truth, so the tag builder is the same one, unchanged.
+function renderForks(){
+  const sel = $("f-fork"), keep = sel.value;
+  const c = wikiSlug(val("f-coll"));      // the field is free text; the label is a slug
+  const list = [...cards.values()]
+    .filter(e => !c || collOf(e) === c)
+    .sort((a,b) => (dateOf(a) < dateOf(b) ? -1 : 1));
+  sel.innerHTML = '<option value="">— not a revision —</option>' + list.map(e => {
+    const n = npub(e.pubkey);
+    return `<option value="${esc(e.id)}">${esc(dateOf(e))} · ${esc(tagOf(e,"title") || dOf(e))} · ${esc(n.slice(0,10))}…</option>`;
+  }).join("");
+  sel.value = keep;
+}
+$("f-fork").addEventListener("change", () => {
+  const id = $("f-fork").value;
+  if (!id) return;
+  const ev = [...cards.values()].find(e => e.id === id);
+  if (!ev) return;
+  $("f-fork-d").value  = dOf(ev);
+  $("f-fork-pk").value = ev.pubkey;
+  $("f-fork-e").value  = ev.id;
+  refresh();
+});
+$("b-fork-clear").addEventListener("click", () => {
+  $("f-fork").value = ""; $("f-fork-d").value = ""; $("f-fork-pk").value = ""; $("f-fork-e").value = "";
+  refresh();
+});
+
+// ═══════════════ the tag builder ═══════════════
+// Ported from the Forge writer. It throws on anything that would produce a card the viewer
+// would then silently drop, so every error here is a card that would have vanished.
+function buildTemplate(){
+  const now      = Math.floor(Date.now() / 1000);
+  const title    = val("f-title");
+  const dRaw     = val("f-d");
+  const category = val("f-coll");
+  const summary  = val("f-summary");
+  const pubAt    = val("f-pubat");
+  const eventDate= val("f-date");
+  const extraRaw = val("f-extra");
+  let content    = fixLinkTargets($("f-content").value || "");
+
+  const d = wikiSlug(dRaw || title);
+  const c = wikiSlug(category);
+  if (!d) throw new Error("a title (or a d slug) is required — it is the card's address");
+  if (!c) throw new Error("a collection is required — every card joins a timeline");
+
+  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD. The TAG is always a full date, because
+  // the membership gate needs a concrete point on the spine; a coarse input is placed on
+  // day 01 and the precision is recorded where the convention puts it, in the content.
+  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14)");
+  const [, wy, wmIn, wdIn] = dm;
+  const wm = wmIn || "01";
+  const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
+  const dchk = new Date(fullDate + "T00:00:00Z");
+  if (isNaN(dchk) || dchk.toISOString().slice(0, 10) !== fullDate)
+    throw new Error(`${eventDate} is not a real date`);
+
+  // A full date defers to the canonical line, because that line is all a card read back off
+  // a relay carries — the field always shows the placed date, never the precision it took.
+  let prec = wdIn ? "day" : wmIn ? "month" : "year";
+  if (prec === "day"){
+    if      (/APPROXIMATE DATE:\s*known to the year/i.test(content))  prec = "year";
+    else if (/APPROXIMATE DATE:\s*known to the month/i.test(content)) prec = "month";
+  }
+  // Write the line the coarse input implies — unless the content already declares a date, so
+  // a hand-written period ("Summer 2026") is never stomped. A card with no content keeps none.
+  if (!wdIn && content.trim() && !/APPROXIMATE DATE:/i.test(content)){
+    const line = `APPROXIMATE DATE: known to the ${prec} — placed at ${fullDate}.`;
+    const src  = content.search(/^Sources?:/m);
+    content = src === -1
+      ? content.trimEnd() + "\n\n" + line
+      : content.slice(0, src).trimEnd() + "\n\n" + line + "\n\n" + content.slice(src);
+  }
+
+  const tags = [["d", d]];
+  if (title) tags.push(["title", title]);
+  tags.push(["published_at", pubAt || String(now)]);
+  tags.push(["event_date", fullDate]);
+  // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
+  // no month bucket, because the placeholder month is not a fact about the world.
+  tags.push(["t", MARKER]);
+  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
+  tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
+  if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
+  if (summary) tags.push(["summary", summary]);
+
+  // Fork. Both halves or neither: the a coordinate survives an edit of the target, the e id
+  // pins the exact version revised. FOUR elements — the empty third slot is the relay hint
+  // and is STRUCTURAL. Built as arrays here and read back into their own fields on load, so
+  // they never round-trip through the whitespace-joined extra-tags box, which would eat the
+  // empty slot and turn ["a",coord,"","fork"] into ["a",coord,"fork"] — marker gone.
+  const forkD  = val("f-fork-d");
+  const forkE  = val("f-fork-e");
+  const forkPk = val("f-fork-pk") || (signer ? signer.pubkey : "");
+  if (forkD || forkE){
+    if (!forkD || !forkE) throw new Error("a revision needs both halves — the d it revises and the event id of that version");
+    if (!/^[0-9a-f]{64}$/i.test(forkE)) throw new Error("the revised version's event id must be 64 hex characters");
+    if (!/^[0-9a-f]{64}$/i.test(forkPk)) throw new Error("a revision needs the target author's pubkey (64 hex) — sign in, or type one");
+    tags.push(["a", `${KIND}:${forkPk}:${forkD}`, "", "fork"]);
+    tags.push(["e", forkE, "", "fork"]);
+    tags.push(["p", forkPk]);
+  }
+
+  extraRaw.split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
+    const parts = l.split(/\s+/);
+    if (parts.length >= 2) tags.push(parts);
+  });
+
+  return { kind: KIND, created_at: now, tags, content };
+}
+
+// Same pubkey:d REPLACES, unrecoverably — so your own collision is refused, never merged.
+// A DIFFERENT author holding that d is not a collision at all: the spec says those coexist
+// as rival versions of one entry. That gets said out loud and allowed.
+function collisionCheck(d){
+  if (!signer) return null;
+  if (d !== loadedD && cards.has(signer.pubkey + ":" + d)){
+    const hit = cards.get(signer.pubkey + ":" + d);
+    return { block: true, text: `"${d}" is already your card "${tagOf(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Load it above to edit, or give this one its own d.` };
+  }
+  const rival = [...cards.values()].find(e => dOf(e) === d && e.pubkey !== signer.pubkey);
+  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which the viewer shows as contested. That is allowed; just make sure you meant it.` };
+  return null;
+}
+
+// ═══════════════ preview + gating ═══════════════
+function refresh(){
+  let tmpl = null, err = null;
+  try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
+
+  if (tmpl){
+    const d = (tmpl.tags.find(t => t[0] === "d") || [])[1];
+    const col = collisionCheck(d);
+    if (col?.block){ err = col.text; }
+    else if (col) cardMsg(col.text, "warnish");
+    else if (!$("card-msg").classList.contains("ok")) cardMsg("");
+  }
+
+  // An untouched form has nothing wrong with it yet — say what's missing, don't cry error.
+  const pristine = !val("f-title") && !val("f-d") && !$("f-content").value.trim();
+  $("pv-host").innerHTML = tmpl ? previewHtml(tmpl)
+    : `<p class="msg${pristine ? "" : " bad"}">${esc(pristine ? "fill in the card above and it appears here" : err || "")}</p>`;
+  $("pv-json").textContent = tmpl ? JSON.stringify(tmpl, null, 2) : "";
+
+  const why = !signer ? "sign in first"
+    : err ? err
+    : !settled ? `still reading the existing cards from the relays (${cards.size} so far) — the d check can't answer yet`
+    : "";
+  $("b-pub").disabled = !!why;
+  if (why && !$("pub-msg").classList.contains("ok")) pubMsg(why, err && signer && settled ? "bad" : "");
+  else if (!why && !$("pub-msg").classList.contains("ok")) pubMsg("");
+}
+
+function previewHtml(tmpl){
+  const t  = k => (tmpl.tags.find(x => x[0] === k) || [])[1] || "";
+  const date = t("event_date");
+  const future = date > new Date().toISOString().slice(0, 10);
+  const who = signer ? npub(signer.pubkey).slice(0, 12) + "…" : "unsigned";
+  const isRev = tmpl.tags.some(x => x[0] === "a" && x[3] === "fork");
+  return `<div class="pv${future ? " future" : ""}">
+    <div class="ctab"><span class="td">${esc(date)}</span><span class="sl">/</span>
+      <span class="by">by ${esc(who)}</span></div>
+    ${isRev ? `<div class="revl">revises ${esc(val("f-fork-d"))}</div>` : ""}
+    ${t("title") ? `<h4>${esc(t("title"))}</h4>` : ""}
+    <div class="cbody">${renderContent(tmpl.content)}</div>
+  </div>`;
+}
+
+// ═══════════════ publish ═══════════════
+const tallies = new Map();     // event id → { ok, no, why }
+function pubMsg(text, cls){
+  const el = $("pub-msg");
+  el.textContent = text || "";
+  el.className = "msg" + (cls ? " " + cls : "");
+}
+function renderPubTally(){
+  const [id, t] = [...tallies.entries()].pop() || [];
+  if (!t) return;
+  const open = [...relayUp.values()].filter(v => v === "up").length;
+  pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
+}
+
+async function publish(){
+  if (!signer) return;
+  let signed;
+  $("b-pub").disabled = true;
+  pubMsg("signing…");
+  try {
+    signed = await signer.sign(buildTemplate());
+    if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
+  } catch(e){
+    pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
+  }
+  const open = sockets.filter(ws => ws.readyState === WebSocket.OPEN);
+  if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
+
+  tallies.set(signed.id, { ok: 0, no: 0, why: "" });
+  const msg = JSON.stringify(["EVENT", signed]);
+  open.forEach(ws => { try { ws.send(msg); } catch {} });
+
+  ingest(signed);                       // your own card is in the set immediately
+  loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];
+  $("pub-json").style.display = "";
+  $("pub-json").textContent = JSON.stringify(signed, null, 2);
+  pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);
+  $("b-pub").disabled = false;
+}
+$("b-pub").addEventListener("click", publish);
+
+// ═══════════════ deep link ═══════════════
+// ?c=<slug> arrives from the viewer's own link, so "add to this timeline" lands with the
+// timeline already chosen.
+const qc = new URLSearchParams(location.search).get("c");
+if (qc) $("f-coll").value = qc;
+
+refresh();
+
+// The test harness drives THIS code, never a copy of it — same discipline as the viewer's
+// window.__wtc. Publishes nothing: buildTemplate stops one step short of signing.
+window.__add = { buildTemplate, wikiSlug, fixLinkTargets, bech32, bech32Decode, xonlyPub, renderContent };
+</script>
+</body>
+</html>

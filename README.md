@@ -137,11 +137,23 @@ Tools & references:
 
 ## Design constraints
 
-- Cards are read-only forever: the page never writes or edits a 30828. The
-  only writes are reactions and comments the visitor signs with their own
-  key — and it never asks for a secret key
-- Single file, zero dependencies
+- The viewer is read-only forever: `index.html` never writes or edits a 30828.
+  Its only writes are reactions and comments the visitor signs with their own
+  key — and it never asks for a secret key. Writing cards is `add.html`'s job,
+  and it is a separate page for exactly that reason
+- Zero dependencies fetched at runtime: nothing loads from a third-party host.
+  `index.html` is one self-contained file; `add.html` adds one vendored sibling
+  (see Vendored code)
 - Colorblind-safe (no meaning carried by hue alone)
+
+## Vendored code
+
+`nip46.js` is [nostr-tools](https://github.com/nbd-wtf/nostr-tools) 2.23.9's
+NIP-46 bundle, copied into this repo verbatim so that `add.html`'s bunker login
+fetches nothing from anyone else's server. It is **MIT-licensed** — Paul Miller's
+`@noble/hashes`, `@noble/curves`, `@noble/ciphers` and `@scure/base` travel inside
+it, and their license block ships at the foot of the file. The CC0 dedication below
+covers this repo's own work, not that file.
 
 ## License
 

@@ -183,7 +183,9 @@
   .pickrow .ds{padding:5px 10px;font-size:11px}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
-    cursor:pointer;transition:color .12s,border-color .12s}
+    cursor:pointer;transition:color .12s,border-color .12s;
+    display:inline-block;line-height:1.5;text-decoration:none}  /* one rule serves the
+    button and the anchor beside it — an underline there would read as body-copy link */
   .linkbtn:hover{color:var(--text);border-color:var(--rail-dim)}
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
 
@@ -574,6 +576,8 @@
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <a id="addlink" class="linkbtn" href="add.html"
+          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <div class="dtog" id="thmtog" title="How light this page reads">
           <button class="ds" type="button" data-thm="dark">dark</button>
           <button class="ds" type="button" data-thm="medium">medium</button>
@@ -649,6 +653,14 @@
         note, signed by you, stored on the same relays that hold the card. Reactions and
         margin notes are the whole write side this page has.</p>
 
+      <h3>3 · Write a card</h3>
+      <p>Cards are written on <a href="add.html">a separate page</a> — this one only ever
+        reads them. There you sign in with an extension, a remote signer, or (last resort)
+        a secret key held for that tab alone, and write an entry: into a timeline that
+        already exists, into a new one you name yourself, or as a revision of a card
+        someone else wrote. Nobody grants permission. A collection exists the moment a
+        card carries its name.</p>
+
       <details class="dev">
       <summary>Dev · publish a card, build a reader</summary>
       <h3>Publish a card</h3>
@@ -664,8 +676,9 @@
         <b>A wiki client can't publish one:</b>
         <a href="https://wikifreedia.xyz" target="_blank" rel="noopener noreferrer">wikifreedia.xyz</a>
         and <a href="https://wikistr.com" target="_blank" rel="noopener noreferrer">wikistr.com</a>
-        write 30818s, which this page does not read at all — use anything that lets
-        you set the kind and the tags yourself. A card this page can place on a rail carries:</p>
+        write 30818s, which this page does not read at all — use
+        <a href="add.html">add.html</a>, or anything else that lets you set the kind and
+        the tags yourself. A card this page can place on a rail carries:</p>
 <pre>
 kind: 30828
 tags:
@@ -810,6 +823,7 @@ const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
+const addLink  = document.getElementById("addlink");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
 rosterEl.addEventListener("click", e => {
   const b = e.target.closest("[data-pk]"); if (!b) return;
@@ -1482,6 +1496,9 @@ function renderTabs(V){
   nowEl.textContent = name;
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
+  // the writer is a separate page (this one never writes a card) — hand it the timeline
+  // you are reading, so "add a card" lands with the collection already chosen
+  addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) : "add.html";
   renderRoster();
   if (!slugs.size) return;                       // status line shows "connecting…"
 
