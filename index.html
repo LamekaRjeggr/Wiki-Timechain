@@ -137,6 +137,23 @@
   .collnow::after{content:"";display:block;width:36px;height:2px;border-radius:2px;
     background:var(--rail);margin:10px auto 0}
 
+  /* who else has published under this collection. A LENS, not an axis: tapping a chip steps
+     the other authors' cards back, it never changes which cards are on the page — a filter
+     here would be a fourth axis and would break both "axes don't compose" and one spine, one
+     story. Hidden entirely while a collection has one author, the way an axis with no groups
+     loses its chip. */
+  .roster{margin:11px auto 0;max-width:640px;display:flex;flex-wrap:wrap;
+    justify-content:center;align-items:center;gap:5px}
+  .rchip{background:transparent;border:1px solid var(--border);color:var(--dim);
+    border-radius:7px;padding:4px 9px;font-size:11.5px;font-family:var(--mono);
+    cursor:pointer;line-height:1.4}
+  .rchip:hover{color:var(--text)}
+  .rchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
+  .rchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
+  .rchip .oc{color:var(--rail);margin-right:5px}   /* ⌂ is chrome — the app's amber, never a timeline hue */
+  .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
+    color:var(--faint);margin-top:2px}
+
   /* filter picker row: axis chips over the value dropdown */
   .tabs{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
 
@@ -338,6 +355,25 @@
     color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:var(--dim)}
+
+  /* ── third-party cards this collection has NOT adopted. Three channels and no hue: they sit
+     INSET from the spine, their rule and border are DASHED, and they say "proposed" in words.
+     (The ocher/cyan axis only ever means time; amber only ever means the app's own chrome.) */
+  .mtl .prop{grid-column:2;margin:7px 0 0 20px;padding-left:14px;
+    border-left:1px dashed var(--gutline)}
+  .mtl .prop .card{border-style:dashed}
+  .mtl .ptag{margin-left:8px;padding:1px 6px;vertical-align:2px;font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+    border:1px dashed var(--gutline);border-radius:5px}
+  /* the fold — cards from keys with no standing here. Nothing is deleted, only resisted, and
+     the count IS the information. */
+  .mtl .foldrow{display:grid;grid-template-columns:var(--gut) 1fr;column-gap:var(--cgap)}
+  .mtl .foldrow .lab{grid-column:2;padding:13px 0 2px;color:var(--dim);
+    font-family:var(--mono);font-size:11.5px;cursor:pointer}
+  .mtl .foldrow .go{color:var(--accent);margin-left:7px}
+  /* the roster lens: everything not by the lit author steps back. Lightness only. */
+  .mtl .lensoff{opacity:.32}
+
   /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
      every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
   /* comments on the spine: marginalia below the card box, collapsed to a count so the
@@ -533,6 +569,7 @@
         <span><span class="spinner"></span>connecting…</span>
       </div>
       <h2 class="collnow" id="collnow"></h2>
+      <div class="roster" id="roster" style="display:none"></div>
       <div class="tabs" id="tabs"></div>
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
@@ -716,6 +753,7 @@ const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one 
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
 const MAXCMT = 420;             // a comment is a margin note, not an essay — one number to move
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
+const MARGIN = 2;               // deadband on the plurality lead — inside it a collection is co-held, not flipped
 
 // ═══════════════ state ═══════════════
 const events   = new Map();     // pubkey:d → newest card (replaceable per author)
@@ -758,11 +796,21 @@ let cmtTimer = null;
 let rctTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const expandedCmts = new Set();          // card coords whose comment thread is open
+const showFold     = new Set();          // slugs whose "proposed" fold the visitor opened
+// the roster lens — whose cards to pick out. Transient like the two sets above and NOT in the
+// URL: it's a way of looking, not a view worth 64 hex characters of link.
+let lensPk = null;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
+const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
+rosterEl.addEventListener("click", e => {
+  const b = e.target.closest("[data-pk]"); if (!b) return;
+  lensPk = lensPk === b.dataset.pk ? null : b.dataset.pk;
+  render();
+});
 
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
@@ -1218,18 +1266,111 @@ function scheduleRender(){
 function matching(f){
   return [...events.values()].filter(ev => matchesF(ev, f));
 }
-// group a filter's events by d-tag: one entry per d, versions within
+// ═══════════ authority: who curates a collection, and which cards stand on its spine ═══════════
+// All derived from what's already on the events — signatures and card counts. Nothing new is
+// tagged. THE RULE: prominence is earned by a SIGNED ACT, never by a number. Stance tallies
+// can't rank (this page mints keys for free, so one visitor is fifty +'s), created_at can't
+// rank (self-asserted), follows can't rank (no login, no key in the repo). What is left that
+// cannot be faked: how many cards an author has published here, and a list someone signed.
+function coinedAt(ev){
+  // coinage reads published_at, NOT created_at: 30828 is replaceable, so created_at moves when
+  // you fix a typo — under created_at you'd lose your own coinage by editing your oldest card.
+  return +tag(ev,"published_at") || ev.created_at;
+}
+function authorityOf(c){
+  const evs = matching("c:" + c);
+  const n = new Map(), first = new Map();
+  for (const ev of evs){
+    n.set(ev.pubkey, (n.get(ev.pubkey) || 0) + 1);
+    const t = coinedAt(ev);
+    if (!(first.get(ev.pubkey) <= t)) first.set(ev.pubkey, t);
+  }
+  const rank = [...n.keys()].sort((a,b) => (n.get(b) - n.get(a)) || (first.get(a) - first.get(b)));
+  // PLURALITY DECIDES; FIRST COINAGE IS ONLY THE TIEBREAK — and that order is the whole
+  // security of it. Coinage-first is seizable with ONE backdated card; plurality-first makes
+  // that same card lose to the nineteen already here, so coinage is reached for only at a tie,
+  // which on real data means a collection holding one card and having nothing to take.
+  // MARGIN is a deadband, not a majority: without it the crown turns over every time either
+  // author publishes and the roster and the adoption gate flap with it. Inside the band nobody
+  // flips — the collection is CO-HELD and every holder curates.
+  const top = n.get(rank[0]) || 0;
+  const origins = new Set(rank.filter(pk => n.get(pk) > top - MARGIN));
+  // Adoption is a FRANCHISE, not a crown: a list counts if its signer already stands on the
+  // spine. The originator grants the first one — that bootstraps it, and it is what stops a
+  // fresh key adopting itself on. It's also what makes the flip harmless: an author who loses
+  // the count keeps every adoption they granted, so nothing a reader was reading falls off.
+  // A CURATOR'S OWN `+` IS THE ADOPTION. No second event type, no second subscription, no
+  // composing UI: the strongest thing a curator can sign, said in the vocabulary the page
+  // already has, through the buttons every reader already uses. Note carefully what is being
+  // read — not HOW MANY plus-taps a card carries (a number, and this page mints keys for
+  // free) but WHOSE. Same events, a different question, and the rule holds. Withdrawing is an
+  // ordinary switch to `=` or `−`: one key gets one vote and the newest replaces, so there is
+  // nothing to delete and no kind 5 to be refused by the paid relays.
+  const curators = new Set(origins);   // whose stance counts
+  const adopted = new Set();           // card coords one of them vouched for
+  for (let pass = 0; pass < 8; pass++){
+    const was = adopted.size + curators.size;
+    for (const ev of evs){
+      const coord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
+      if (adopted.has(coord)) continue;
+      const byPk = reactions.get(coord);
+      if (!byPk) continue;
+      for (const pk of [...curators]){
+        const r = byPk.get(pk);
+        if (!r || glyphOf(r) !== "+") continue;
+        adopted.add(coord); curators.add(ev.pubkey); break;
+      }
+    }
+    if (adopted.size + curators.size === was) break;
+  }
+  // Standing — who gets the inset shelf rather than the fold — is WIDER than curation, and
+  // deliberately: substantial presence earns a hearing. It's what stops the flip from burying
+  // a deposed originator's record in the fold, and it can't be used to climb, because a list
+  // only counts from a CURATOR. (Note the limit this accepts: a deposed originator's cards go
+  // inset, not spine. Any rule that kept them on the spine is a rule a squatter could use to
+  // reach the spine, since coinage is self-asserted. One adoption from the new holder restores
+  // them, and until then the record is on the page, attributed, never hidden.)
+  const stand = new Set([...curators, ...rank.filter(pk => n.get(pk) >= MARGIN)]);
+  return { n, rank, origins, coheld: origins.size > 1, adopted, curators, stand };
+}
+// three shelves. 0 = on the spine (a curator's own card, or one they adopted — adoption makes
+// a card indistinguishable from a founding one, which is what accepting means). 1 = proposed,
+// from an author who already stands here, so they've earned a hearing but not a slot.
+// 2 = behind the fold. Never deleted, only resisted.
+function tierOf(ev, A){
+  if (!A || A.origins.has(ev.pubkey)) return 0;
+  if (A.adopted.has(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))) return 0;
+  return A.stand.has(ev.pubkey) ? 1 : 2;
+}
+// what the fold is holding back — the count IS the information
+function foldOf(c){
+  const A = authorityOf(c);
+  const hid = matching("c:" + c).filter(ev => tierOf(ev, A) === 2);
+  return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
+}
+
+// group a filter's events by d-tag: one entry per d, versions within — split by shelf, so an
+// entry can carry spine versions, proposed versions, or (a pure addition) only proposed ones.
 function entriesOf(f){
+  const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
+  const A = c ? authorityOf(c) : null;
+  const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders shelf 3 as shelf 2
+  const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of matching(f)){
     const d = tag(ev,"d");
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
-  return [...byD.entries()].map(([d, evs]) => {
-    evs.sort((a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1));
-    return { d, evs, date: dateOf(evs[0]), frac: yearFrac(dateOf(evs[0])),
-             title: tag(evs[0],"title") || d, contested: evs.length > 1 };
-  }).sort((a,b) => a.frac - b.frac);
+  const out = [];
+  for (const [d, all] of byD){
+    const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
+    const prop = all.filter(ev => { const t = tierOf(ev, A); return t && t <= cut; }).sort(ord);
+    if (!evs.length && !prop.length) continue;
+    const head = evs[0] || prop[0];
+    out.push({ d, evs, prop, date: dateOf(head), frac: yearFrac(dateOf(head)),
+               title: tag(head,"title") || d, contested: evs.length > 1 });
+  }
+  return out.sort((a,b) => a.frac - b.frac);
 }
 
 // ═══════════════ render: status + tabs ═══════════════
@@ -1291,6 +1432,27 @@ function vocab(){
   };
 }
 
+// Who else has published here. A LENS, not an axis — it never changes which cards are on the
+// page. Hidden at one author, the way an axis with no groups loses its chip, so it stays
+// invisible until a second key publishes: that is the expected state on today's data, not a
+// broken build. The note is there because "originator" reads as ownership if nothing says
+// otherwise — what the title carries is curation, and never anyone's record.
+function renderRoster(){
+  const c = activeF ? activeF.slice(2) : null;
+  const A = c ? authorityOf(c) : null;
+  if (!A || A.rank.length < 2){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; lensPk = null; return; }
+  if (lensPk && !A.n.has(lensPk)) lensPk = null;          // switched to a timeline they aren't in
+  rosterEl.style.display = "";
+  rosterEl.innerHTML = A.rank.map(pk =>
+      `<button class="rchip${pk === lensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
+      ` title="${A.origins.has(pk) ? "curates this collection" : "contributor"} — tap to pick out their cards">` +
+      (A.origins.has(pk) ? `<span class="oc">⌂</span>` : "") +
+      `${authorLabel(pk)}<span class="n">${A.n.get(pk)}</span></button>`
+    ).join("") +
+    `<div class="rnote">${A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
+    ` · every author keeps their own cards</div>`;
+}
+
 function renderTabs(V){
   tabsEl.innerHTML = "";
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
@@ -1299,7 +1461,8 @@ function renderTabs(V){
   nowEl.textContent = name;
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
-  if (!slugs.size) return;                         // status line shows "connecting…"
+  renderRoster();
+  if (!slugs.size) return;                       // status line shows "connecting…"
 
   const flat = a => V[a].flatMap(([,its]) => its);
   const axes = document.createElement("div");
@@ -1445,6 +1608,13 @@ function bindTaps(){                                      // gap expanders + com
       render();
       return;
     }
+    const fr = e.target.closest(".foldrow");
+    if (fr && fr.dataset.c){
+      const c = fr.dataset.c;
+      showFold.has(c) ? showFold.delete(c) : showFold.add(c);
+      render();
+      return;
+    }
     const g = e.target.closest(".gap-c"); if (!g || !g.dataset.k) return;
     const k = g.dataset.k;
     expandedGaps.has(k) ? expandedGaps.delete(k) : expandedGaps.add(k);
@@ -1472,11 +1642,13 @@ function renderTimeline(entries){
   // the spine has no selection, so comment laziness is per-COLLECTION: subscribe
   // every version's coord in one batch (bounded — collections are tens of cards).
   // What it buys: real counts on the toggles instead of a mute affordance.
-  entries.forEach(e => e.evs.forEach(ev => {
-    const coord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
-    wantComments(coord);
-    wantCardReactions(coord);
-  }));
+  entries.forEach(e => [...e.evs, ...e.prop].forEach(ev =>
+    wantComments(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))));
+  // reactions go wider: EVERY card in the collection, rendered or not. A curator's + is what
+  // promotes a card, and a folded card is never rendered — gate the subscription on rendering
+  // and a promotion could never be observed, so nothing would ever leave the fold.
+  if (activeF) matching(activeF).forEach(ev =>
+    wantCardReactions(KIND + ":" + ev.pubkey + ":" + tag(ev,"d")));
 
   // margin block for one card version: the tap-pill, the thread, the compose box.
   // The +-pill IS the tally — count inside, filled when yours is in it; foreign
@@ -1547,6 +1719,18 @@ function renderTimeline(entries){
       `</div>`;
   };
 
+  // the roster lens steps every other author's card back — lightness, so it survives all three
+  // fields and reads for a colourblind eye. It dims; it never removes.
+  const lens = ev => (lensPk && ev.pubkey !== lensPk) ? " lensoff" : "";
+  // a proposed card is the SAME card — same tab, same body, same stance row. What differs is
+  // where it sits (inset, dashed) and that it says so.
+  const propCard = (ev, d) =>
+    `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
+    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
+    `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span>${depthMark(ev, d)}</h4>` +
+    cardBody(ev, d) +
+    (lvlOf(d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
+
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
   const gaps = entries.slice(1).map((e,i) => e.frac - entries[i].frac);
   const med = median(gaps.filter(g => g > 1e-4)) || 0.5;
@@ -1583,31 +1767,45 @@ function renderTimeline(entries){
     // scraping rendered text, and `d` stays recoverable now that nothing prints it
     const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}"`;
 
-    if (e.contested){
+    const propHtml = e.prop.length
+      ? `<div class="prop">` + e.prop.map(ev => propCard(ev, e.d)).join("") + `</div>` : "";
+
+    if (!e.evs.length){          // a pure addition — a new `d` from a key that isn't on the spine
+      html += `<div class="node"${nodeAttrs}>${propHtml}</div>`;
+    } else if (e.contested){
       html += `<div class="node"${nodeAttrs}><span class="cdot"></span>` +
         `<div class="contest"><div class="cbrace"></div>` +
         `<div class="cbadge">${esc(e.date)} · ◆ contested · ${e.evs.length} versions</div>` +
         e.evs.map((ev, vi) =>
-          `<div class="vcard"><div class="byline">` +
+          `<div class="vcard${lens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
           `<h4>${headTitle(ev, e.d)}${depthMark(ev, e.d)}</h4>` + cardBody(ev, e.d) +
           (lvlOf(e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
-        `</div></div>`;
+        `</div>` + propHtml + `</div>`;
     } else {
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
+        `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}${depthMark(ev, e.d)}</h4>` +
         cardBody(ev, e.d) +
-        (lvlOf(e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) + `</div>`;
+        (lvlOf(e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
+        propHtml + `</div>`;
     }
   });
 
   if (nowShown) html += `</div>`;                          // close .futurezone
+  // the fold sits at the foot of the spine, outside the future zone: it isn't a moment in the
+  // record, it's what the record hasn't taken in.
+  const fc = activeF ? activeF.slice(2) : "";
+  const fold = fc ? foldOf(fc) : { n: 0, keys: 0 };
+  if (fold.n)
+    html += `<div class="foldrow" data-c="${esc(fc)}"><div class="lab">` +
+      `${fold.n} proposed · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
+      `<span class="go">${showFold.has(fc) ? "hide" : "show"}</span></div></div>`;
   html += `</div></div>`;
   // live events re-render mid-typing: keep the focused compose box's caret alive
   const ae = document.activeElement;
