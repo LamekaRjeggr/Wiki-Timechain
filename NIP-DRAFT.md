@@ -32,7 +32,9 @@ absence — which no client can drop.
 
 A timeline card is kind `30828`, an addressable event as defined in
 [NIP-01](01.md). The event is self-labeling per [NIP-32](32.md): every field is a tag
-on the card itself. Cards MUST NOT be labeled by a separate kind `1985` event.
+on the card itself. A client MUST ignore external kind `1985` labeling events when
+applying this NIP — a card's membership and axes are read from the card alone, so that
+no third party can attach a card to a collection its author did not choose.
 
 `content` is [djot](https://djot.net). Clients that do not implement djot SHOULD render
 `content` as plain text rather than as another markup language.
@@ -53,6 +55,12 @@ timeline. It is distinct from the event's `created_at`, which records when this 
 was signed, and from `published_at`, which is OPTIONAL and carries the original
 publication time as in [NIP-23](23.md).
 
+**`title` is human-readable free text.** Clients MUST NOT parse it for machine-readable
+state, and MUST NOT require any particular form. Publishers marking a card's state in
+its title for the benefit of clients that do not implement this NIP is a corpus
+convention, outside this specification; every state a conforming client acts on is
+determined by the card's shape, never by its title.
+
 A card MUST carry exactly one collection label. Its value is the collection's
 identifier and SHOULD be lowercase kebab-case.
 
@@ -64,8 +72,9 @@ emitted as buckets — a card known only to the year emits no month bucket.
 
 ### Location
 
-A card describing an event with a location SHOULD carry a jurisdiction ladder: every
-rung from the top down to the event's true scope.
+A card describing an event with a location SHOULD carry a jurisdiction ladder. If it
+does, the ladder MUST run from the top down to the event's true scope, with every rung
+present.
 
 ```json
 ["L", "ISO-3166-1"],            ["l", "JP", "ISO-3166-1"],
@@ -73,9 +82,9 @@ rung from the top down to the event's true scope.
 ["L", "timeline.location"],     ["l", "jp-13-shibuya", "timeline.location"]
 ```
 
-Every rung MUST be present on the card. Relays filter on a label's *value*, not on the
-(`L`,`l`) pair, so an omitted rung is not queryable even when it is implied by a deeper
-one.
+Relays filter on a label's *value*, not on the (`L`,`l`) pair, so an omitted rung is not
+queryable even when a deeper rung implies it. That is why the whole ladder is written
+out rather than derived.
 
 - ISO rungs MUST use ISO codes verbatim under the standard namespaces `ISO-3166-1` and
   `ISO-3166-2`.
@@ -94,8 +103,8 @@ A collection whose events have no location is valid and carries no ladder.
 | `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. |
 | `summary` | `["summary","The vendor shipped patched firmware for every affected model."]` | the event in plain words, in the publisher's voice. SHOULD be one or two sentences. MUST NOT assert anything `content` does not support. REQUIRED on a card with no `content`; see *Leads*. |
 
-A client MAY offer `summary` in place of `content`. A card without one MUST render in
-full rather than render as empty.
+A client MAY offer `summary` in place of `content`. A client doing so MUST fall back to
+`content` for cards carrying no `summary`, so that such a view can never blank a card.
 
 ## Leads
 
@@ -104,9 +113,11 @@ happened, for which no citable record has yet been found. The absent body is the
 declaration. A client that does not implement this NIP renders an empty body and the
 hedge survives; a status tag would be dropped and the hedge would not.
 
-The `title` of a lead SHOULD open with a short word and an em dash marking the state —
-`Lead — ` is RECOMMENDED. The marker word MUST describe the card, not the world: it
-must remain true until the card itself changes.
+**A client MUST determine this state from the card's shape alone.** It MUST NOT infer it
+from `title`, from any status tag, or from any other declared field. Publishers commonly
+mark the state in the title as well, for readers whose client does not implement this
+NIP; that wording is a corpus convention and a conforming client MUST NOT depend on it,
+because a lead is no less a lead for being titled differently.
 
 A lead MUST carry every required tag. A lead SHOULD state its date's uncertainty in
 `summary`, and `event_date` takes the first day of the stated range.
@@ -117,9 +128,10 @@ because the recorded event never changed. Publishers MUST NOT publish the record
 a new `d`, and MUST NOT reuse a lead's `d` for an unrelated card: reactions and
 comments address a card as `30828:<pubkey>:<d>` and would silently reattach.
 
-This NIP defines exactly two states, lead and record. Intermediate states such as
-*corroborated* or *disputed* are deliberately absent: each would have to be declared
-rather than read off the card, and a declaration does not travel. Disagreement is
+This NIP defines exactly two states, lead and record, and both are read off the card's
+shape. Intermediate states such as *corroborated* or *disputed* are deliberately absent:
+each would have to be declared rather than observed, and a declaration does not travel —
+nor can any publisher make such a claim about their own card credibly. Disagreement is
 expressed by a second key publishing the same `d`.
 
 ## Revisions
@@ -138,25 +150,37 @@ edit of the parent, while the `e` id pins the exact version this card was built
 against.
 
 The change itself is expressed with djot's insert and delete syntax, `{-removed-}` and
-`{+added+}`. A client MAY render such a card as a diff only when it carries both a
-`fork` marker and marks in `content`; either alone is an ordinary card.
+`{+added+}`. A client MUST NOT render a card as a diff unless it carries both a `fork`
+marker and marks in `content`; either alone is an ordinary card.
 
-A marked card asserts two documents. A client or publisher verifying one SHOULD do so
-by reconstruction: stripping the deletions and unwrapping the insertions MUST yield the
-newer document exactly, and the converse MUST yield the older.
+A marked card asserts two documents, and both MUST be recoverable from it: stripping the
+deletions and unwrapping the insertions yields the newer document exactly, and the
+converse yields the older. A publisher SHOULD verify a marked card by performing both
+reconstructions rather than by reading it.
 
 ## Discovery
 
-A client discovers cards with a single indexed filter:
+A client discovers cards with a single indexed filter (the limit is illustrative):
 
 ```json
 {"kinds": [30828], "#t": ["<marker>"], "limit": 500}
 ```
 
-The marker names a corpus. It is a lowercase single-word `t` value chosen by whoever
-starts one; `wikitimechain` is the marker of the first deployed corpus. A card MUST
-carry the marker of the corpus it belongs to. A marker is permanent in practice, since
+The marker names a corpus, not this protocol. It is a lowercase single-word `t` value
+chosen by whoever starts one; `wikitimechain` is the marker of the first deployed
+corpus. A card MUST carry the marker of the corpus it belongs to, and a client is
+configured with the marker or markers it reads. A marker is permanent in practice, since
 changing it requires re-signing every card.
+
+**The marker and freeform topics share the `t` tag.** A card MAY therefore carry many
+`t` values, and nothing distinguishes a marker from a topic by inspection. Two
+consequences, both intended:
+
+- A client MUST test for the *presence* of its corpus marker among a card's `t` values,
+  and MUST NOT assume a card carries only one.
+- A topic value on an unrelated card may coincide with a corpus marker, and that card
+  will be returned by the corpus's discovery filter. This is not a defect to be patched
+  in the tag layout; it is precisely what the membership gate below exists to absorb.
 
 ### The membership gate
 
@@ -197,14 +221,14 @@ whose results MUST be re-checked against the gate.
 
 ## Client behavior
 
-- Cards MUST be deduplicated on `pubkey:d`, newest `created_at` winning. The kind MUST
-  NOT form part of that key.
+- Cards are deduplicated by the addressable-event rules of [NIP-01](01.md) — newest
+  `created_at` per (kind, pubkey, `d`) — which, since this NIP defines a single kind,
+  is a key of pubkey and `d`.
 - Cards from **different** pubkeys sharing a `d` MUST NOT be collapsed. They are rival
-  versions of one entry and a client SHOULD present them as such.
+  versions of one entry and a client SHOULD present them as such rather than choosing
+  between them silently.
 - A card's displayed date MUST be `event_date`. Date buckets are query shadows and MUST
   NOT be used for display.
-- A client SHOULD read `event_date` leniently when rendering a collection it has already
-  admitted, and strictly when admitting cards during discovery.
 
 ### Marginalia is addressed by kind
 
