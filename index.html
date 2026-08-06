@@ -701,11 +701,9 @@ content:
         registration step for a timeline: a collection <em>is</em> its slug, so publishing
         the first card carrying a new <code>timeline.collection</code> value is all it
         takes to start one, and it appears here beside the rest.</p>
-      <p>The label namespaces were <code>wikitimechain.*</code> before the spec renamed them.
-        Cards published here earlier still carry the old form and are being replaced; this page
-        reads both, so either one works and nothing has to be republished in a hurry. Use
-        <code>timeline.*</code> on anything new. The <code>t</code> marker is not part of the
-        rename — it names this timeline, not a version, and every card still carries it.</p>
+      <p>The label namespaces are <code>timeline.*</code>. The <code>t</code> marker is not
+        part of that naming — it names this timeline, not a version, and every card carries
+        it.</p>
 
       <h3>Build your own reader</h3>
       <p>This page is one client, not the record. One request boots another:
@@ -900,28 +898,15 @@ function labelVal(ev, ns){
   const t = ev.tags.find(t => t[0] === "l" && t[2] === ns);
   return t ? t[1] : "";
 }
-// TWO label namespaces are read, newest first. The spec renamed `wikitimechain.*` →
-// `timeline.*` (a project name in a public standard is what reviewers reject) and every
-// LIVE card still wears the old one, so both must resolve until the republish lands —
-// reader before writer, the rule the kind migration taught. The `t` MARKER did NOT get
-// renamed (NIP-DRAFT: it names the first deployed timeline, not a version), so discovery
-// is untouched by all of this. Neither arm is removable on a schedule: an outside
-// publisher's card can wear either, and dropping the old one un-discovers whatever
-// never got republished.
-const NS = ["timeline.", "wikitimechain."];
-function nsVal(ev, name){
-  for (const p of NS){ const v = labelVal(ev, p + name); if (v) return v; }
-  return "";
-}
-// a card's collection slug. The legacy `c` fallback is a v1 grace window — nothing live
-// relies on it. One place decides membership.
+// ONE label namespace: `timeline.*`. The spec renamed it from `wikitimechain.*` (a project
+// name in a public standard is what reviewers reject) and the republish is done, so the old
+// arm and the v1 `c` fallback are both gone. The `t` MARKER did NOT get renamed
+// (NIP-DRAFT: it names the first deployed timeline, not a version) — discovery is untouched.
+const nsVal = (ev, name) => labelVal(ev, "timeline." + name);
+// a card's collection slug. One place decides membership.
 function collectionSlug(ev){
-  return nsVal(ev, "collection") || tag(ev,"c");
+  return nsVal(ev, "collection");
 }
-// how modern a card's labelling is — read ONLY by the same-created_at tiebreak in ingest()
-// (an unlabelled card ranks 0, BELOW both — findIndex's -1 would rank it highest)
-const nsRank = ev => { const i = NS.findIndex(p => labelVal(ev, p + "collection"));
-                       return i < 0 ? 0 : NS.length - i; };
 
 // ── the filter, "axis:value" ──
 const axisOf = f => f.slice(0, f.indexOf(":"));
@@ -930,7 +915,7 @@ const valOf  = f => f.slice(f.indexOf(":") + 1);
 // (CONVENTION.md), so a county card also carries — and matches — its state and country
 // rungs; filtering client-side on cards that already passed the gate. The two ISO rungs
 // are external names and unaffected by the rename; only the house rung has both forms.
-const PLACE_NS = ["ISO-3166-1","ISO-3166-2","timeline.location","wikitimechain.location"];
+const PLACE_NS = ["ISO-3166-1","ISO-3166-2","timeline.location"];
 function matchesF(ev, f){
   const v = valOf(f);
   switch (axisOf(f)){
@@ -1107,8 +1092,8 @@ function authorLink(pk){
 }
 
 // ═══════════════ ingest ═══════════════
-// Discovery sieve: membership = a parseable event_date + a collection slug from a
-// `*.collection` label in either namespace (see collectionSlug; legacy `c` grace-window).
+// Discovery sieve: membership = a parseable event_date + a collection slug from the
+// `timeline.collection` label (see collectionSlug).
 // Cards passing it are kept AND their slug becomes a known timeline; anything else
 // from the open pull (wild wiki articles) is dropped, not stored. Strictness is
 // discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
@@ -1144,12 +1129,8 @@ function ingest(ev){
   const d = tag(ev,"d"); if (!d) return;
   const key = ev.pubkey + ":" + d;
   const cur = events.get(key);
-  if (cur){
-    if (cur.created_at > ev.created_at) return;
-    // same created_at during a propagation gap (relay A has the republished card, relay B
-    // still the old labels): prefer the version wearing the newer namespace (dedup rule).
-    if (cur.created_at === ev.created_at && nsRank(ev) <= nsRank(cur)) return;
-  }
+  // ties keep the copy already held — with one namespace there is nothing left to prefer
+  if (cur && cur.created_at >= ev.created_at) return;
   events.set(key, ev);
   if (!profiles.has(ev.pubkey)){
     profiles.set(ev.pubkey, { name:null, fetched:false });

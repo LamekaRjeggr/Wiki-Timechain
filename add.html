@@ -382,11 +382,9 @@ const RELAYS = [
 ];
 const KIND   = 30828;
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
-// The spec's namespaces. Live cards still carry the old wikitimechain.* names and the
-// viewer dual-reads both — but everything written here is written in the spec's terms.
+// The spec's namespaces.
 const NS_COLL = "timeline.collection";
 const NS_DATE = "timeline.date";
-const NS_COLL_OLD = "wikitimechain.collection";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -640,7 +638,7 @@ const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
 const dOf     = ev => tagOf(ev, "d");
 const dateOf  = ev => tagOf(ev, "event_date");
 const collOf  = ev => {
-  const l = ev.tags.find(t => t[0] === "l" && (t[2] === NS_COLL || t[2] === NS_COLL_OLD));
+  const l = ev.tags.find(t => t[0] === "l" && t[2] === NS_COLL);
   return l ? l[1] : "";
 };
 
@@ -997,7 +995,7 @@ function inheritedTags(c){
   const cand = t =>
     (t[0] === "t" && t[1] !== MARKER) ||
     ((t[0] === "L" || t[0] === "l") &&
-      !/^(timeline|wikitimechain)\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
+      !/^timeline\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
   let common = null;   // key -> original tag array, so a value with a space survives
   for (const ev of list){
     const m = new Map(ev.tags.filter(cand).map(t => [JSON.stringify(t), t]));
