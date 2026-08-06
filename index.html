@@ -105,21 +105,23 @@
   .mono{font-family:var(--mono)}
 
   header{
-    padding:24px 20px 0;border-bottom:1px solid var(--border);text-align:center;
+    padding:20px 20px 0;border-bottom:1px solid var(--border);
     background:radial-gradient(120% 130% at 50% -20%,var(--glow),transparent 55%);
   }
   .wrap{max-width:1000px;margin:0 auto}
+  /* masthead frame is left/right chrome; the subject below it stays centre stage */
+  .mast{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
+    gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
   h1 .dot{color:var(--rail);font-weight:400;margin:0 2px}
-  .sub{margin:8px auto 0;color:var(--dim);font-size:13px;line-height:1.55;max-width:52ch}
+  .sub{margin:0;color:var(--dim);font-size:13px;line-height:1.55;max-width:60ch;text-align:left}
   /* the one word in the subtitle a stranger won't know: brightest thing in a dim
      paragraph, underlined so it reads as a link without leaning on hue */
   .sub a{color:var(--text);font-weight:600;text-decoration:underline;
     text-decoration-color:var(--rail-dim);text-underline-offset:3px}
   .sub a:hover{text-decoration-color:var(--rail)}
-  .status{margin-top:12px;font-size:12px;color:var(--dim);
-    display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:center}
-  .status > span + span{border-left:1px solid var(--border);padding-left:16px}
+  .status{font-size:12px;color:var(--dim);white-space:nowrap;margin-left:auto}
   .status b{color:var(--text);font-weight:600}
   .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
     background:var(--faint);margin-right:5px;vertical-align:1px}
@@ -128,14 +130,17 @@
 
   /* which timeline you're reading. The picker below is the control; this is the answer,
      and it's the page's largest type — the site mark is chrome, the collection is the subject. */
-  .collnow{margin:18px auto 0;max-width:24ch;font-size:clamp(21px,5.2vw,30px);
+  .collnow{margin:24px auto 0;max-width:24ch;font-size:clamp(21px,5.2vw,30px);
     font-weight:650;letter-spacing:-.02em;line-height:1.18;color:var(--text);
-    text-wrap:balance}
+    text-align:center;text-wrap:balance}
   /* slugs are machine fields and some are very long — at full size the rezoning slug took
      four lines of a phone's header and pushed the spine off screen. Still the biggest type. */
   .collnow.long{font-size:clamp(19px,3.6vw,22px);max-width:32ch;letter-spacing:-.01em}
   .collnow::after{content:"";display:block;width:36px;height:2px;border-radius:2px;
     background:var(--rail);margin:10px auto 0}
+  /* the subject's own facts, right under its name — where "N entries" lives now */
+  .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
+    color:var(--faint)}
 
   /* who else has published under this collection. A LENS, not an axis: tapping a chip steps
      the other authors' cards back, it never changes which cards are on the page — a filter
@@ -178,9 +183,9 @@
 
   /* copy-a-link-to-this-timeline button */
   .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
-  /* light/medium/dark: the same segmented control the diff bar uses (.dtog/.ds) */
-  .pickrow .dtog{border-radius:7px}
-  .pickrow .ds{padding:5px 10px;font-size:11px}
+  /* depth + theme: the same segmented control the diff bar uses (.dtog/.ds) */
+  .pickrow .dtog,.mast .dtog{border-radius:7px}
+  .pickrow .ds,.mast .ds{padding:5px 10px;font-size:11px}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
     cursor:pointer;transition:color .12s,border-color .12s;
@@ -561,33 +566,42 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>Wiki <span class="dot">·</span> Timechain</h1>
-      <div class="sub">Events from the public record, arranged in order, each with its
-        source. The arrangement is a reading, not the last word — check the sources.
-        <b>Don't trust, verify.</b> Built on <a href="#nostr">nostr</a>, so entries live
-        on an open network rather than on this page. Anyone can add an entry or dispute
-        one.</div>
-      <div class="status" id="status">
-        <span><span class="spinner"></span>connecting…</span>
-      </div>
-      <h2 class="collnow" id="collnow"></h2>
-      <div class="roster" id="roster" style="display:none"></div>
-      <div class="tabs" id="tabs"></div>
-      <div class="pickrow">
-        <button id="copylink" class="linkbtn" type="button"
-          title="Copy a shareable link to the selected view">⧉ Copy link</button>
-        <a id="addlink" class="linkbtn" href="add.html"
-          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
+      <!-- band 1: masthead — the site's chrome. Theme is a device preference (localStorage,
+           never in the URL) so it lives up here with the mark, not among the view controls. -->
+      <div class="mast">
+        <h1>Wiki <span class="dot">·</span> Timechain</h1>
         <div class="dtog" id="thmtog" title="How light this page reads">
           <button class="ds" type="button" data-thm="dark">dark</button>
           <button class="ds" type="button" data-thm="medium">medium</button>
           <button class="ds" type="button" data-thm="light">light</button>
         </div>
+      </div>
+      <div class="mastsub">
+        <div class="sub">Events from the public record, arranged in order, each with its
+          source — on <a href="#nostr">nostr</a>, so anyone can add an entry or dispute
+          one. <b>Don't trust, verify.</b></div>
+        <div class="status" id="status">
+          <span><span class="spinner"></span>connecting…</span>
+        </div>
+      </div>
+      <!-- band 2: the subject — what you're reading, with its own facts under it -->
+      <h2 class="collnow" id="collnow"></h2>
+      <div class="collmeta" id="collmeta"></div>
+      <div class="roster" id="roster" style="display:none"></div>
+      <!-- band 3: choosing — read something else -->
+      <div class="tabs" id="tabs"></div>
+      <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
+           the button that copies that URL; Add carries ?c= of this timeline. -->
+      <div class="pickrow">
         <div class="dtog" id="sumtog" title="How much of each card to show — the floor. Any one card can be opened past it.">
           <button class="ds" type="button" data-depth="0">titles</button>
           <button class="ds" type="button" data-depth="1">summary</button>
           <button class="ds" type="button" data-depth="2">full</button>
         </div>
+        <button id="copylink" class="linkbtn" type="button"
+          title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <a id="addlink" class="linkbtn" href="add.html"
+          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
       </div>
     </div>
   </header>
@@ -821,6 +835,7 @@ const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
+const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
 const addLink  = document.getElementById("addlink");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
 rosterEl.addEventListener("click", e => {
@@ -1392,17 +1407,14 @@ function entriesOf(f){
 // ═══════════════ render: status + tabs ═══════════════
 function slugName(c){ return c.replaceAll("-"," "); }
 
+// plumbing only. The timeline count lives on the "timelines" axis chip and the entry
+// count under the collection's own name (collmeta) — each fact beside its subject.
 function renderStatus(){
   const up = [...relayState.values()].filter(v => v === "up").length;
   const dots = RELAYS.map(r =>
     `<span class="relaydot ${relayState.get(r)==="up"?"up":relayState.get(r)==="down"?"down":""}" title="${esc(r)}"></span>`
   ).join("");
-  const k = slugs.size;
-  const n = activeF ? entriesOf(activeF).length : 0;
-  statusEl.innerHTML =
-    `<span><b>${k}</b> timeline${k===1?"":"s"}</span>` +
-    `<span><b>${n}</b> entr${n===1?"y":"ies"}</span>` +
-    `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
+  statusEl.innerHTML = `<span>${dots}<b>${up}</b>/${RELAYS.length} relays</span>`;
 }
 
 // one selection path: everything the picker can choose is a collection. The chip is
@@ -1477,6 +1489,9 @@ function renderTabs(V){
   nowEl.textContent = name;
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
+  const n = activeF ? entriesOf(activeF).length : 0;
+  metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}` : "";
+  metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) : "add.html";
