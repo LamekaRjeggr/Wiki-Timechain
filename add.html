@@ -94,6 +94,7 @@
   input,textarea,select{width:100%;background:var(--panel);color:var(--text);
     border:1px solid var(--border);border-radius:8px;padding:9px 11px;
     font-family:var(--font);font-size:14.5px;line-height:1.5}
+  input.need,textarea.need{border-color:var(--warn)}   /* required + empty — orange, never red */
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
   textarea{resize:vertical;font-size:14.5px}
   select{cursor:pointer}
@@ -137,6 +138,13 @@
   .msg.warnish{color:var(--warn)}
   .msg.warnish::before{content:"⚠ heads up — "}
   .msg.ok{color:var(--rail)}
+
+  .proto{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .inh{margin:10px 0 0;padding:8px 11px;border:1px dashed var(--border);border-radius:8px;
+    font-size:12.5px;color:var(--dim);line-height:2}
+  .inh code{color:var(--text-2)}
+  .inh .tg{font-family:var(--mono);font-size:11px;border:1px solid var(--border);
+    border-radius:5px;padding:0 6px;margin-right:4px;color:var(--text-3);white-space:nowrap}
 
   details{margin:14px 0 0;border-top:1px solid var(--border-soft);padding-top:10px}
   summary{cursor:pointer;font-size:12px;font-family:var(--mono);color:var(--dim);
@@ -224,20 +232,23 @@
 <main>
   <section id="sec-sign">
     <h2>1 · sign in</h2>
-    <p class="note">A card is a record, so it has to carry a real key — there is no
-      throwaway identity here. Pick whichever of these you already have.</p>
+    <p class="note">A card is a record. A record needs a real key behind it — no throwaway
+      identity here. Three ways in. Use the one you already have.</p>
 
     <div id="signed-out">
       <div class="rung">
         <h3>Browser extension</h3>
-        <p>nos2x, Alby, Nostore — your key never leaves it. NIP-07.</p>
+        <p>An add-on in your browser holds your key. You click, it signs.
+          Your key never touches this page.
+          <span class="proto">nos2x · Alby · Nostore · NIP-07</span></p>
         <button class="slim" id="b-nip07">connect extension</button>
       </div>
 
       <div class="rung">
-        <h3>Remote signer (bunker)</h3>
-        <p>Your key stays on your phone or signer and approves each signature. Paste the
-          <code>bunker://</code> URI it gives you. NIP-46.</p>
+        <h3>Remote signer</h3>
+        <p>Your key lives on your phone or another device. Every signature asks that device
+          first — you approve it there. Paste the <code>bunker://</code> address your
+          signer app shows you. <span class="proto">NIP-46</span></p>
         <div class="row">
           <input id="bunker-uri" placeholder="bunker://…" autocomplete="off" spellcheck="false">
           <button class="slim" id="b-bunker" style="flex:0 0 auto" disabled>connect</button>
@@ -246,9 +257,9 @@
 
       <div class="rung last">
         <h3>Secret key</h3>
-        <p><strong>Held for this tab only</strong> — never saved, never sent anywhere, gone
-          when you close or reload the page. Anyone holding your <code>nsec</code> is you,
-          so prefer either option above if you have one.</p>
+        <p>Paste your secret key. <strong>This tab only</strong> — never saved, never sent
+          anywhere, gone when you close the page. Anyone who has your <code>nsec</code> IS
+          you. If you have either option above, use it instead.</p>
         <div class="row">
           <input id="nsec-in" type="password" placeholder="nsec1…" autocomplete="off" spellcheck="false">
           <button class="slim" id="b-nsec" style="flex:0 0 auto">use for this tab</button>
@@ -283,6 +294,7 @@
       <select id="f-coll-select"><option value="">— pick one —</option></select>
       <input id="f-coll" placeholder="or type a new slug" autocomplete="off">
     </div>
+    <div class="inh" id="inherit" style="display:none"></div>
 
     <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
     <input id="f-title" placeholder="Mirepoix" autocomplete="off">
@@ -301,11 +313,9 @@
 
 Source: [label](https://primary-source)"></textarea>
 
-    <details>
-      <summary>advanced</summary>
-      <label for="f-pubat">published_at <span class="h">— unix seconds; blank = now. Editing an existing card? keep its original.</span></label>
-      <input id="f-pubat" type="number" placeholder="auto" autocomplete="off">
-      <label for="f-extra">extra tags <span class="h">— one per line, "key value". Location ladders go here: L ISO-3166-2 / l US-AZ ISO-3166-2</span></label>
+    <details id="adv" style="display:none">
+      <summary>extra tags — optional</summary>
+      <label for="f-extra">extra tags <span class="h">— one per line, "key value"; no spaces inside a value. Location ladders go here: L ISO-3166-2 / l US-AZ ISO-3166-2</span></label>
       <textarea id="f-extra" rows="3" placeholder="key value"></textarea>
     </details>
     <p class="msg" id="card-msg"></p>
@@ -650,7 +660,7 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); }, 150);
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); }, 150);
 }
 
 function connect(url){
@@ -746,6 +756,9 @@ function renderContent(text){
 
 // ═══════════════ the form ═══════════════
 let loadedD = null;    // the d currently loaded for editing — republishing it IS the edit
+// published_at is machine-held: a new card gets now, an edit keeps the original. There is
+// no field for it — an editable timestamp is a backdating tool, and this is a record.
+let loadedPubAt = "";
 
 const val = id => ($(id)?.value || "").trim();
 function cardMsg(text, cls){
@@ -761,7 +774,7 @@ $("f-title").addEventListener("input", () => {
   refresh();
 });
 $("f-d").addEventListener("input", () => { $("f-d").dataset.touched = "1"; refresh(); });
-["f-coll","f-date","f-summary","f-content","f-pubat","f-extra",
+["f-coll","f-date","f-summary","f-content","f-extra",
  "f-fork-d","f-fork-e","f-fork-pk"].forEach(id => $(id).addEventListener("input", refresh));
 $("f-coll-select").addEventListener("change", () => {
   const v = $("f-coll-select").value;
@@ -806,7 +819,7 @@ function loadMine(){
   $("f-coll").value    = collOf(ev);
   $("f-coll-select").value = "";
   $("f-summary").value = tagOf(ev,"summary");
-  $("f-pubat").value   = tagOf(ev,"published_at");
+  loadedPubAt          = tagOf(ev,"published_at");
   $("f-date").value    = dateOf(ev);
   $("f-content").value = ev.content;
   const fa = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
@@ -828,6 +841,20 @@ function loadMine(){
   refresh();
 }
 $("b-load").addEventListener("click", loadMine);
+
+// Picking "— new card —" is a real intent: wipe the edit state, or the loaded card's
+// published_at and d-guard exemption ride silently into the next card. Collection stays —
+// the common case is several cards into one timeline.
+function resetForm(){
+  ["f-title","f-d","f-summary","f-content","f-extra",
+   "f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
+  delete $("f-d").dataset.touched;
+  $("f-fork").value = "";
+  loadedD = null; loadedPubAt = "";
+  cardMsg("");
+  refresh();
+}
+$("f-load").addEventListener("change", () => { if (!$("f-load").value) resetForm(); });
 
 // ═══════════════ the fork picker ═══════════════
 // Forge takes a raw hex event id and pubkey here, which is fine when you wrote every card
@@ -869,7 +896,6 @@ function buildTemplate(){
   const dRaw     = val("f-d");
   const category = val("f-coll");
   const summary  = val("f-summary");
-  const pubAt    = val("f-pubat");
   const eventDate= val("f-date");
   const extraRaw = val("f-extra");
   let content    = fixLinkTargets($("f-content").value || "");
@@ -910,7 +936,7 @@ function buildTemplate(){
 
   const tags = [["d", d]];
   if (title) tags.push(["title", title]);
-  tags.push(["published_at", pubAt || String(now)]);
+  tags.push(["published_at", loadedPubAt || String(now)]);
   tags.push(["event_date", fullDate]);
   // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
   // no month bucket, because the placeholder month is not a fact about the world.
@@ -937,12 +963,43 @@ function buildTemplate(){
     tags.push(["p", forkPk]);
   }
 
-  extraRaw.split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
-    const parts = l.split(/\s+/);
-    if (parts.length >= 2) tags.push(parts);
-  });
+  // Joining an EXISTING collection locks the extra-tags box out: hand-typed tags there are
+  // what forks a collection's shape and bites later. The one exception is an edit of your
+  // own card (loadedD), where the box is the round-trip carrier for tags this form doesn't
+  // own — dropping those would silently strip the card. The collection's shared tags are
+  // inherited instead, deduped against everything already built.
+  const isExisting = [...cards.values()].some(e => collOf(e) === c);
+  if (!isExisting || loadedD){
+    extraRaw.split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
+      const parts = l.split(/\s+/);
+      if (parts.length >= 2) tags.push(parts);
+    });
+  }
+  if (isExisting){
+    const have = new Set(tags.map(t => JSON.stringify(t)));
+    for (const t of inheritedTags(c))
+      if (!have.has(JSON.stringify(t))) tags.push(t);
+  }
 
   return { kind: KIND, created_at: now, tags, content };
+}
+
+// What a collection's cards AGREE on — the exact tags present on every one of them. Topic
+// t's (never the marker) and location L/l ladders (never the spec's own namespaces). A
+// collection whose cards disagree on a tag inherits nothing for it: agreement, not guess.
+function inheritedTags(c){
+  const list = [...cards.values()].filter(e => collOf(e) === c);
+  if (!list.length) return [];
+  const cand = t =>
+    (t[0] === "t" && t[1] !== MARKER) ||
+    ((t[0] === "L" || t[0] === "l") &&
+      !/^(timeline|wikitimechain)\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
+  let common = null;   // key -> original tag array, so a value with a space survives
+  for (const ev of list){
+    const m = new Map(ev.tags.filter(cand).map(t => [JSON.stringify(t), t]));
+    common = common === null ? m : new Map([...common].filter(([k]) => m.has(k)));
+  }
+  return [...common.values()];
 }
 
 // Same pubkey:d REPLACES, unrecoverably — so your own collision is refused, never merged.
@@ -964,11 +1021,18 @@ function refresh(){
   let tmpl = null, err = null;
   try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
 
+  needGlow();
+  renderInherit();
+  renderForks();     // its list filters by collection, so it must follow the field, not the relays
+
   if (tmpl){
     const d = (tmpl.tags.find(t => t[0] === "d") || [])[1];
     const col = collisionCheck(d);
+    const body = $("f-content").value.trim();
+    const noSrc = body && !/\]\(https?:/.test(body);
     if (col?.block){ err = col.text; }
     else if (col) cardMsg(col.text, "warnish");
+    else if (noSrc) cardMsg("no source yet — say where this comes from: a line like Source: [label](https://…). You can publish without one, but a record wants a source.", "warnish");
     else if (!$("card-msg").classList.contains("ok")) cardMsg("");
   }
 
@@ -985,6 +1049,41 @@ function refresh(){
   $("b-pub").disabled = !!why;
   if (why && !$("pub-msg").classList.contains("ok")) pubMsg(why, err && signer && settled ? "bad" : "");
   else if (!why && !$("pub-msg").classList.contains("ok")) pubMsg("");
+}
+
+// The three fields the gate needs, orange while empty. Title and d glow as a pair — the
+// builder takes either one. Never red, and the label already says "Required" in words.
+function needGlow(){
+  const needName = !val("f-title") && !val("f-d");
+  $("f-title").classList.toggle("need", needName);
+  $("f-d").classList.toggle("need", needName);
+  $("f-coll").classList.toggle("need", !wikiSlug(val("f-coll")));
+  $("f-date").classList.toggle("need", !val("f-date"));
+}
+
+// The collection field's consequences, said before you sign: a known slug shows what your
+// card will inherit and locks the extra-tags box; a new slug opens it. The slugging is
+// also made visible here — "Tonopah Rezoning" joins as tonopah-rezoning.
+function renderInherit(){
+  const c = wikiSlug(val("f-coll"));
+  const box = $("inherit"), adv = $("adv");
+  if (!c){ box.style.display = "none"; adv.style.display = "none"; return; }
+  box.style.display = "";
+  const n = [...cards.values()].filter(e => collOf(e) === c).length;
+  if (!n){
+    adv.style.display = "";
+    box.innerHTML = `starts a new timeline: <code>${esc(c)}</code> — extra tags below are yours to set; later cards inherit what this timeline's cards share`;
+    return;
+  }
+  adv.style.display = "none";
+  const inh = inheritedTags(c);
+  const kept = loadedD ? val("f-extra") : "";
+  box.innerHTML = `joins <code>${esc(c)}</code> (${n} card${n === 1 ? "" : "s"}) — ` +
+    (inh.length
+      ? `inherits what its cards share: ` + inh.map(t => `<span class="tg">${esc(t.join(" "))}</span>`).join("")
+      : `its cards share no extra tags, so none are inherited`) +
+    (kept ? `<br>kept from the loaded card: ` + kept.split("\n").filter(s => s.trim())
+        .map(l => `<span class="tg">${esc(l)}</span>`).join("") : "");
 }
 
 function previewHtml(tmpl){
@@ -1036,6 +1135,7 @@ async function publish(){
 
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];
+  loadedPubAt = (signed.tags.find(t => t[0] === "published_at") || [])[1] || "";  // an immediate re-edit keeps it
   $("pub-json").style.display = "";
   $("pub-json").textContent = JSON.stringify(signed, null, 2);
   pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);
@@ -1053,7 +1153,8 @@ refresh();
 
 // The test harness drives THIS code, never a copy of it — same discipline as the viewer's
 // window.__wtc. Publishes nothing: buildTemplate stops one step short of signing.
-window.__add = { buildTemplate, wikiSlug, fixLinkTargets, bech32, bech32Decode, xonlyPub, renderContent };
+window.__add = { buildTemplate, wikiSlug, fixLinkTargets, bech32, bech32Decode, xonlyPub, renderContent,
+                 ingest, inheritedTags };
 </script>
 </body>
 </html>
