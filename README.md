@@ -56,8 +56,10 @@ more finely than a reader can follow.
 Cards carry reactions ([NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
 kind-7) and comments ([NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)
 kind-1111), read live from the same relays and written from the page — signed
-by a browser extension if you have one, otherwise by a keypair the page mints
-for you on the spot. It never asks for an existing secret key.
+by a browser signer extension ([NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md):
+nos2x, Alby, and others). Without one you can read everything; the reaction
+buttons and the comment box are not drawn, since there is nothing to sign with.
+The page never asks for a secret key and never mints one for you.
 
 Cards themselves are read-only forever: reactions and comments are the only
 things this page ever writes. Try it on the live site; the behavior is the
@@ -146,21 +148,19 @@ nostr NIPs this rests on:
   shape of its `fork` marker — but they are kind 30828 now, not wiki articles,
   and 30818 is no longer read
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** —
-  bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump
-  links, and `nsec` for the minted starter key
+  bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump links
 - **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)** —
   reactions (the `+` tap, kind 7)
 - **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** —
   comments (kind 1111, scoped to one signed version of a card)
 - **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** —
-  browser signer extensions; used when present, minting is the fallback in the
-  viewer and the writer's first rung
+  browser signer extensions; the viewer's ONLY signer, and the writer's first rung
 - **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** —
   remote signing; `add.html`'s `bunker://` rung, for a key that lives on another
   device (see Vendored code)
 - **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** —
-  schnorr signatures; the minted key's signer is implemented inline and
-  verified against the official test vectors
+  schnorr signatures; verification is implemented inline and checked against
+  the official test vectors, sign and verify
 
 Tools & references:
 - Get keys — [nstart.me](https://nstart.me)

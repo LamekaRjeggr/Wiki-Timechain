@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Deny everything, then name the exceptions. The reader never handles a real key — only
-     a minted throwaway — so unlike the writer it can pin connect-src to exactly the relays
-     it reads from: no bunker here, no arbitrary relay to allow for. 'unsafe-inline' is
-     forced by the no-build design, so this stops exfiltration, not execution.
+<!-- Deny everything, then name the exceptions. The reader never handles a key at all — every
+     signature comes from a NIP-07 extension — so unlike the writer it can pin connect-src to
+     exactly the relays it reads from: no bunker here, no arbitrary relay to allow for.
+     'unsafe-inline' is forced by the no-build design, so this stops exfiltration, not execution.
      No frame-buster here, unlike the writer: a reader worth embedding in someone else's
-     page is a feature, and the worst a clickjack can steal is a throwaway key's reaction. -->
+     page is a feature, and a clickjack can only reach an extension that prompts anyway. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
   script-src 'self' 'unsafe-inline';
@@ -32,7 +32,7 @@
     --accent:#4aa3ff;        /* blue links/selection — safe against amber */
     /* TIME carries the hue: the past is ocher/sepia, what's ahead is neon cyan, and the
        now-rule is the seam between them. Amber (--rail) stays the app's own chrome —
-       buttons, tallies, the birth certificate — so the timeline's colour is never a
+       buttons, tallies, relay dots — so the timeline's colour is never a
        control's colour. Warm-yellow vs cyan is the colourblind-safe axis. */
     --past:#c98f3f;          /* ocher — a dated card, the rail behind you */
     --past-dim:#4a3618;
@@ -457,39 +457,6 @@
   .mtl .cmp-n{font-family:var(--mono);font-size:11px;color:var(--dim)}
   .mtl .cmp-n.hid{display:none}
   .mtl .cmp-n.at{color:var(--rail)}    /* out of room — the app's own chrome, never the timeline's hues */
-  /* the always-available key chip (minted keys only) */
-  .keychip{position:fixed;right:14px;bottom:14px;z-index:40;cursor:pointer;
-    font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel);
-    border:1px solid var(--border);border-radius:20px;padding:7px 13px;
-    max-width:78vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .keychip.hot{color:var(--rail);border-color:var(--rail-dim)}
-  .keychip:hover{border-color:var(--rail)}
-  /* birth-certificate popup — ceremony AFTER the reward */
-  #bcert{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
-    justify-content:center;padding:18px}
-  #bcert .bc-back{position:absolute;inset:0;background:var(--scrim)}
-  #bcert .bc-card{position:relative;background:var(--panel);border:1px solid var(--rail-dim);
-    border-radius:14px;padding:22px 24px;max-width:460px;width:100%;
-    box-shadow:0 18px 60px var(--shadow)}
-  #bcert h3{margin:0 0 10px;font-size:17px;color:var(--rail);font-weight:650}
-  #bcert p{margin:0 0 14px;font-size:13.5px;line-height:1.65;color:var(--text-3)}
-  #bcert .bc-row{display:flex;align-items:center;gap:8px;margin:0 0 8px}
-  #bcert .bc-k{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:74px;
-    flex:none;text-align:right}
-  #bcert code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--panel-2);
-    border:1px solid var(--border-soft);border-radius:6px;padding:6px 8px;flex:1;
-    overflow-wrap:anywhere;line-height:1.5}
-  #bcert .bc-copy{font-family:var(--mono);font-size:10.5px;color:var(--dim);cursor:pointer;
-    background:transparent;border:1px solid var(--border);border-radius:6px;
-    padding:5px 9px;flex:none}
-  #bcert .bc-copy:hover{color:var(--text);border-color:var(--rail-dim)}
-  #bcert .bc-copy.did{color:var(--rail);border-color:var(--rail)}
-  #bcert .bc-warn{font-size:12px;color:var(--warn);margin-top:12px}
-  #bcert .bc-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
-  #bcert .bc-btns button{font-size:12.5px;cursor:pointer;border-radius:7px;padding:8px 15px}
-  #bcert .bc-saved{background:var(--rail);border:1px solid var(--rail);color:var(--ink);font-weight:600}
-  #bcert .bc-later{background:transparent;border:1px solid var(--border);color:var(--dim)}
-  #bcert .bc-later:hover{color:var(--text)}
 
   /* ── the drum: the timeline wound on a cylinder, seen edge-on ──
      A GAUGE, NOT A CONTROL. pointer-events:none everywhere — no click-jump, no drag,
@@ -671,16 +638,19 @@
         whoever runs this page — can take them off. Guard your secret key
         (<code>nsec</code>): it can't be reset, and it <em>is</em> the identity. Use a
         signer extension or app rather than pasting it into websites.</p>
-      <p>No extension? Tap a reaction anyway — the page generates a keypair in your
-        browser and signs with it. That's a real nostr identity, usable in any client;
-        it lives only in this browser until you save it from the key chip.</p>
+      <p>This page reads your key through a <b>browser signer extension</b> — nos2x, Alby,
+        or any other that speaks NIP-07. Without one you can read everything here; the
+        reaction buttons and the comment box simply aren't drawn, because there would be
+        nothing to sign with. This page never holds a key of yours and never mints one
+        for you.</p>
 
       <h3>2 · React, then comment</h3>
-      <p>Tap <code>+</code>, <code>=</code>, or <code>−</code> at the bottom of a card to
-        sign a reaction with your key. One vote per card: tapping a different glyph
-        replaces your last. Reacting unlocks the comment box on that card — a margin
-        note, signed by you, stored on the same relays that hold the card. Reactions and
-        margin notes are the whole write side this page has.</p>
+      <p>With a signer extension installed, tap <code>+</code>, <code>=</code>, or
+        <code>−</code> at the bottom of a card to sign a reaction with your key. One vote
+        per card: tapping a different glyph replaces your last. Reacting unlocks the
+        comment box on that card — a margin note, signed by you, stored on the same relays
+        that hold the card. Reactions and margin notes are the whole write side this page
+        has. Without an extension the counts still show; only the buttons are gone.</p>
 
       <h3>3 · Write a card</h3>
       <p>Cards are written on <a href="add.html">a separate page</a> — this one only ever
@@ -1094,7 +1064,7 @@ function b32polymod(vals){
   }
   return chk;
 }
-function bech32(hrp, hex){                 // npub for pubkeys, nsec for minted secrets
+function bech32(hrp, hex){                 // npub for pubkeys (nsec only in the test harness)
   const data = [];
   for (let i=0;i<hex.length;i+=2) data.push(parseInt(hex.slice(i,i+2),16));
   // convert 8-bit → 5-bit
@@ -1315,7 +1285,7 @@ function matching(f){
 // ═══════════ authority: who curates a collection, and which cards stand on its spine ═══════════
 // All derived from what's already on the events — signatures and card counts. Nothing new is
 // tagged. THE RULE: prominence is earned by a SIGNED ACT, never by a number. Stance tallies
-// can't rank (this page mints keys for free, so one visitor is fifty +'s), created_at can't
+// can't rank (a key is free to mint anywhere, so one visitor is fifty +'s), created_at can't
 // rank (self-asserted), follows can't rank (no login, no key in the repo). What is left that
 // cannot be faked: how many cards an author has published here, and a list someone signed.
 function coinedAt(ev){
@@ -1348,8 +1318,8 @@ function authorityOf(c){
   // A CURATOR'S OWN `+` IS THE ADOPTION. No second event type, no second subscription, no
   // composing UI: the strongest thing a curator can sign, said in the vocabulary the page
   // already has, through the buttons every reader already uses. Note carefully what is being
-  // read — not HOW MANY plus-taps a card carries (a number, and this page mints keys for
-  // free) but WHOSE. Same events, a different question, and the rule holds. Withdrawing is an
+  // read — not HOW MANY plus-taps a card carries (a number, and keys are free to mint
+  // anywhere) but WHOSE. Same events, a different question, and the rule holds. Withdrawing is an
   // ordinary switch to `=` or `−`: one key gets one vote and the newest replaces, so there is
   // nothing to delete and no kind 5 to be refused by the paid relays.
   const curators = new Set(origins);   // whose stance counts
@@ -1705,13 +1675,15 @@ function renderTimeline(entries){
   // gate-glyph: what their author tapped on the card. The compose box sits at the
   // bottom of the open thread, ghosted until this identity has reacted — the
   // read → react → comment ladder shown by behavior, not copy (checkpoint 2c).
-  const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(g)} ${n}</span>`).join("");
+  const glyphs = ch => ch.map(([g,n]) => `<span class="rg">${esc(disp(g))} ${n}</span>`).join("");
   // three stances, one vote: your newest tap replaces the last (ingest keeps newest
   // per pubkey). Wire glyph for dislike is ASCII "-" (NIP-25 interop); displays "−".
   const STANCES = ["+", "=", "-"];
   const disp = g => g === "-" ? "−" : g;
   const pill = (target, eid, pk, k, cls) => {
     const ch = charge(target);
+    // no extension, no buttons: with nothing to sign with, the tally is all there is to say
+    if (!hasSigner) return glyphs(ch.slice(0,6));
     const count = g => (ch.find(([x]) => x === g) || [])[1];
     const myEv = myPk && reactions.get(target)?.get(myPk);
     const myG = myEv ? glyphOf(myEv) : null;
@@ -1729,6 +1701,7 @@ function renderTimeline(entries){
     return `<span class="gateg" title="reacted ${esc(g)} to this card">${esc(g)}</span>`;
   };
   const composeBlock = (coord, rootPk) => {
+    if (!hasSigner) return "";            // nothing to sign the note with
     const unlocked = !!(myPk && reactions.get(coord)?.has(myPk));
     const draft = cmtDraft.get(coord) || "";
     const left = MAXCMT - draft.length;   // .length, not code points — maxlength counts the same units
@@ -1745,6 +1718,7 @@ function renderTimeline(entries){
   // the card's stance row — rendered INSIDE the card box, at its bottom
   const rctRow = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
+    if (!hasSigner && !charge(coord).length) return "";   // no buttons and no tally = no row
     return `<div class="mrct">` + pill(coord, ev.id, ev.pubkey, String(KIND), "") +
       tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>`;
   };
@@ -1754,6 +1728,7 @@ function renderTimeline(entries){
     const cs = [...(comments.get(coord)?.values() || [])]
       .sort((a,b) => (w(b.id) - w(a.id)) || (a.created_at - b.created_at));
     const open = expandedCmts.has(coord);
+    if (!hasSigner && !cs.length) return "";   // nothing to read and nothing to write
     const toggle = `<div class="mcmt-t" data-coord="${esc(coord)}">` +
       (cs.length ? `◦ ${cs.length} comment${cs.length===1?"":"s"}` : `◦ comment`) +
       `<span class="go">${open ? "collapse ▴" : cs.length ? "read ▾" : "write ▾"}</span></div>`;
@@ -2013,12 +1988,23 @@ const cmtSent  = new Map();     // card coord → my latest margin note's event 
 const cmtErr   = new Map();     // card coord → short error text for the compose box
 const cmtDraft = new Map();     // card coord → compose text, held across live re-renders
 let myPk = null;                // my pubkey once a signer produced one — lights .mine
-let certForId = null;           // event id whose first accept triggers the birth certificate
 
-const SK_KEY = "wtc:sk", SAVED_KEY = "wtc:saved", UNSAVED_N = "wtc:unsaved", CERT_SEEN = "wtc:cert";
-// "later" snoozes the nag chip. Not a permanent no: the next event the visitor signs puts
-// more at stake, so it re-earns the corner. Saving the key retires the nag for good.
-const CHIP_SNOOZE = "wtc:snooze";
+// NIP-07 OR NOTHING. The reader used to mint a throwaway key when no extension was present;
+// it doesn't any more (2026-08-07, user's call). A vote signed by a key born on this page a
+// second ago is a vote from nobody, and the page was handing people an identity they never
+// asked to hold. With no extension the write affordances simply don't render — pill, compose,
+// and the whole margin block when there's nothing there to read either.
+// The bunker rung is deliberately NOT here: it lives in add.html, and reaching it from the
+// reader means widening this page's connect-src to arbitrary relays. See CLAUDE.md.
+let hasSigner = !!window.nostr;
+// extensions can inject after first paint — look twice more, then stop asking
+if (!hasSigner) [400, 1500].forEach(ms => setTimeout(() => {
+  if (!hasSigner && window.nostr){ hasSigner = true; scheduleRender(); }
+}, ms));
+// the extension's pubkey, remembered across loads so .mine and the compose gate are right
+// on arrival — asking for it up front would fire a permission prompt at a reader
+const PK_KEY = "wtc:pk";
+myPk = localStorage.getItem(PK_KEY) || null;
 
 // honest tally text for one published event id — rendered by marginBlock
 function tallyHtml(id, err){
@@ -2029,11 +2015,11 @@ function tallyHtml(id, err){
   return `<span class="oktally${t.done && !t.ok ? " err" : ""}">accepted by ${t.ok} of ${t.sent} relay${t.sent === 1 ? "" : "s"}</span>`;
 }
 
-// ── secp256k1 + BIP-340 schnorr, hand-rolled. Two jobs, and only one of them is the
-//    write side: SIGNING powers the minted starter key (NIP-07 extensions sign for
-//    themselves), VERIFYING checks every event the relays hand us — see the gate above
-//    connect(). Both verified against the official BIP-340 test vectors, sign and
-//    verify, positive rows and negative: node .htest/schnorr.mjs. Affine BigInt math,
+// ── secp256k1 + BIP-340 schnorr, hand-rolled. VERIFYING is the page's job: it checks
+//    every event the relays hand us — see the gate above connect(). SIGNING no longer
+//    has a runtime caller (the extension signs), and is kept because it is what
+//    .htest/schnorr.mjs runs the official BIP-340 vectors through, and what builds the
+//    genuine event the gate test smuggles its forgeries past. Affine BigInt math,
 //    ~20ms a verify — which is why the gate queues rather than blocks. ──
 const CURVE_P = 2n**256n - 2n**32n - 977n;
 const CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
@@ -2071,11 +2057,6 @@ async function taggedHash(tag, ...msgs){
   return sha256(bcat(th, th, ...msgs));
 }
 
-function mintKey(){                        // fresh secret key, uniform in [1, n)
-  let d = 0n;
-  while (d === 0n || d >= CURVE_N) d = bytesToInt(crypto.getRandomValues(new Uint8Array(32)));
-  return d.toString(16).padStart(64, "0");
-}
 function xonlyPub(skHex){
   return pmul(G, bytesToInt(hexToBytes(skHex)))[0].toString(16).padStart(64, "0");
 }
@@ -2128,7 +2109,8 @@ async function eventId(ev){
   return bytesToHex(await sha256(new TextEncoder().encode(ser)));
 }
 
-// NIP-01 id + signature for a minted-key event
+// NIP-01 id + signature from a raw secret key. No runtime caller — the test harness's
+// fixture builder, and the only way it can produce a genuinely signed event to feed the gate.
 async function signWithMint(tmpl, skHex){
   const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
   ev.id = await eventId(ev);               // same serialization the gate re-derives
@@ -2137,21 +2119,16 @@ async function signWithMint(tmpl, skHex){
 }
 
 // ── the signer seam: everything that writes asks getSigner() and nothing else.
-//    NIP-07 extension if present; else the minted localStorage starter key —
-//    two implementations behind one interface. ──
+//    One implementation — the NIP-07 extension. Callers are only reachable when
+//    hasSigner is true, so the throw is a guard, not a path. ──
 let signerP = null;
 function getSigner(){
   if (!signerP){
     signerP = (async () => {
-      if (window.nostr){
-        const pk = await window.nostr.getPublicKey();
-        return { via:"nip07", pubkey: pk, sign: t => window.nostr.signEvent(t) };
-      }
-      let sk = localStorage.getItem(SK_KEY);
-      if (!sk){ sk = mintKey(); localStorage.setItem(SK_KEY, sk); }
-      return { via:"mint", pubkey: xonlyPub(sk), sign: t => signWithMint(t, sk) };
+      if (!window.nostr) throw new Error("no signer");
+      return { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
     })();
-    signerP.catch(() => { signerP = null; });    // a declined NIP-07 prompt can retry
+    signerP.catch(() => { signerP = null; });    // a declined prompt can retry
   }
   return signerP;
 }
@@ -2165,7 +2142,7 @@ function publish(ev){
     ws.send(JSON.stringify(["EVENT", ev]));
     t.sent++;
   });
-  setTimeout(() => { t.done = true; certMaybe(ev.id); scheduleRender(); }, 6000);
+  setTimeout(() => { t.done = true; scheduleRender(); }, 6000);
   setTimeout(() => { tallies.delete(ev.id); scheduleRender(); }, 20000);
 }
 
@@ -2188,12 +2165,10 @@ async function tapTarget(target, eid, pk, k, g, btn){
       content: g || "+",                                   // the stance: one character
       tags
     });
-    myPk = ev.pubkey;
-    if (s.via === "mint" && !localStorage.getItem(CERT_SEEN)) certForId = ev.id;
+    rememberPk(ev.pubkey);
     tapped.set(target, ev.id);
     ingestReaction(ev);                                    // reward first: the glyph lights now
     publish(ev);
-    if (s.via === "mint") bumpUnsaved();
   } catch {
     tapErr.set(target, "signer declined — tap to retry");
     scheduleRender();
@@ -2217,92 +2192,22 @@ async function sendComment(coord, rootPk, ta, btn){
       tags: [["A", coord], ["K", String(KIND)], ["P", rootPk],
              ["a", coord], ["k", String(KIND)], ["p", rootPk]]
     });
-    myPk = ev.pubkey;
+    rememberPk(ev.pubkey);
     cmtDraft.delete(coord);
     cmtSent.set(coord, ev.id);
     ingestComment(ev);                                     // reward first: the note joins the thread now
     publish(ev);
-    if (s.via === "mint") bumpUnsaved();
   } catch {
     cmtErr.set(coord, "signer declined — try again");
     scheduleRender();
   }
 }
 
-// ── ceremony after: the birth certificate ──
-function certMaybe(id){
-  if (!certForId || id !== certForId) return;
-  certForId = null;
-  showCert(true);
-}
-function bumpUnsaved(){
-  if (localStorage.getItem(SAVED_KEY)) return;
-  localStorage.removeItem(CHIP_SNOOZE);              // a new event un-snoozes: the count changed
-  localStorage.setItem(UNSAVED_N, String((parseInt(localStorage.getItem(UNSAVED_N), 10) || 0) + 1));
-  renderKeyChip();
-}
-
-function showCert(firstTime){
-  const sk = localStorage.getItem(SK_KEY);
-  if (!sk) return;
-  localStorage.setItem(CERT_SEEN, "1");
-  const nsecStr = bech32("nsec", sk), npubStr = bech32("npub", xonlyPub(sk));
-  let el = document.getElementById("bcert");
-  if (!el){ el = document.createElement("div"); el.id = "bcert"; document.body.appendChild(el); }
-  el.innerHTML = `<div class="bc-back"></div><div class="bc-card">` +
-    `<h3>${firstTime ? "That was your first nostr event." : "Your nostr key"}</h3>` +
-    `<p>This key signed it. It was minted in this browser and lives only here until you ` +
-    `save it somewhere safe — it works in any nostr client.</p>` +
-    `<div class="bc-row"><span class="bc-k">npub · public</span><code>${esc(npubStr)}</code>` +
-    `<button class="bc-copy" type="button" data-copy="${esc(npubStr)}">copy</button></div>` +
-    `<div class="bc-row"><span class="bc-k">nsec · SECRET</span><code>${esc(nsecStr)}</code>` +
-    `<button class="bc-copy" type="button" data-copy="${esc(nsecStr)}">copy</button></div>` +
-    `<p class="bc-warn">⚠ The nsec IS the identity — whoever holds it is you. Don't paste ` +
-    `it into websites; this page never asks for it back.</p>` +
-    `<div class="bc-btns"><button class="bc-saved" type="button">I saved it</button>` +
-    `<button class="bc-later" type="button">later</button></div></div>`;
-  el.querySelectorAll(".bc-copy").forEach(b => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
-    b.classList.add("did"); b.textContent = "copied ✓";
-    setTimeout(() => { b.classList.remove("did"); b.textContent = "copy"; }, 1600);
-  }));
-  // "later" (and dismissing by backdrop, which means the same thing) clears the corner too —
-  // a nag you can't put down is just furniture. Reopening the cert by hand doesn't re-snooze.
-  const close = snooze => { el.remove(); if (snooze) localStorage.setItem(CHIP_SNOOZE, "1"); renderKeyChip(); };
-  el.querySelector(".bc-later").addEventListener("click", () => close(true));
-  el.querySelector(".bc-back").addEventListener("click", () => close(true));
-  el.querySelector(".bc-saved").addEventListener("click", () => {
-    localStorage.setItem(SAVED_KEY, "1");
-    localStorage.removeItem(CHIP_SNOOZE);            // saved: the chip goes calm, not away
-    close(false);
-  });
-}
-
-// ── the always-available key chip (minted keys only; NIP-07 users hold their own) ──
-const chipEl = document.createElement("button");
-chipEl.className = "keychip"; chipEl.type = "button"; chipEl.style.display = "none";
-chipEl.addEventListener("click", () => showCert(false));
-document.body.appendChild(chipEl);
-function renderKeyChip(){
-  if (!localStorage.getItem(SK_KEY)){ chipEl.style.display = "none"; return; }
-  chipEl.style.display = "";
-  if (localStorage.getItem(SAVED_KEY)){
-    chipEl.classList.remove("hot");
-    chipEl.textContent = "⚿ your key";
-    chipEl.title = "view your nostr key";
-  } else {
-    if (localStorage.getItem(CHIP_SNOOZE)){ chipEl.style.display = "none"; return; }
-    const n = parseInt(localStorage.getItem(UNSAVED_N), 10) || 0;
-    chipEl.classList.add("hot");
-    chipEl.textContent = n ? `⚿ ${n} event${n === 1 ? " rides" : "s ride"} on this unsaved key`
-                           : "⚿ unsaved key";
-    chipEl.title = "this key exists only in this browser — view and save it";
-  }
-}
-// a key minted on an earlier visit: light the chip and the .mine states on load
-if (localStorage.getItem(SK_KEY)){
-  try { myPk = xonlyPub(localStorage.getItem(SK_KEY)); } catch {}
-  renderKeyChip();
+// the extension keeps the key; we only keep its public half, so the page knows whose
+// glyphs are lit before the first sign of the session
+function rememberPk(pk){
+  myPk = pk;
+  try { localStorage.setItem(PK_KEY, pk); } catch {}
 }
 
 // test hook — headless harness only, no runtime consumer
@@ -2405,7 +2310,6 @@ function connect(url){
       const t = tallies.get(data[1]);
       if (t){
         data[2] ? t.ok++ : t.no++;
-        if (data[2]) certMaybe(data[1]);       // first accept → the birth certificate
         scheduleRender();
       }
     }
