@@ -2014,10 +2014,12 @@ function tallyHtml(id, err){
   return `<span class="oktally${t.done && !t.ok ? " err" : ""}">accepted by ${t.ok} of ${t.sent} relay${t.sent === 1 ? "" : "s"}</span>`;
 }
 
-// ── secp256k1 + BIP-340 schnorr, hand-rolled — powers the MINTED starter key only
-//    (NIP-07 extensions sign for themselves). Verified against the official BIP-340
-//    test vectors: node .htest/schnorr.mjs. Affine BigInt math: slow-ish, but this
-//    signs one tiny event per tap, not a block. ──
+// ── secp256k1 + BIP-340 schnorr, hand-rolled. Two jobs, and only one of them is the
+//    write side: SIGNING powers the minted starter key (NIP-07 extensions sign for
+//    themselves), VERIFYING checks every event the relays hand us — see the gate above
+//    connect(). Both verified against the official BIP-340 test vectors, sign and
+//    verify, positive rows and negative: node .htest/schnorr.mjs. Affine BigInt math,
+//    ~20ms a verify — which is why the gate queues rather than blocks. ──
 const CURVE_P = 2n**256n - 2n**32n - 977n;
 const CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 const G = [0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,
@@ -2078,11 +2080,43 @@ async function schnorrSign(msgHex, skHex, auxHex){   // auxHex fixed only by the
   return bytesToHex(bcat(intTo32(R[0]), intTo32(fmod(k + e*d, CURVE_N))));
 }
 
+// ── the other direction: given a message, a pubkey and a signature, did that key sign
+//    that message? Needs one thing signing didn't — recovering the full point from the
+//    x-only pubkey (BIP-340 keys carry no y), which is a modular square root. ──
+const fpow = (b, e, m) => {                // modular exponent, square-and-multiply
+  let r = 1n; b = fmod(b, m);
+  while (e > 0n){ if (e & 1n) r = fmod(r*b, m); b = fmod(b*b, m); e >>= 1n; }
+  return r;
+};
+function liftX(x){                         // x → the curve point with even y, or null
+  if (x <= 0n || x >= CURVE_P) return null;
+  const c = fmod(x*x*x + 7n, CURVE_P);
+  const y = fpow(c, (CURVE_P + 1n) / 4n, CURVE_P);
+  if (fmod(y*y, CURVE_P) !== c) return null;   // no square root: x is not on the curve
+  return [x, (y & 1n) ? CURVE_P - y : y];
+}
+async function schnorrVerify(msgHex, pkHex, sigHex){
+  if (!/^[0-9a-f]{64}$/.test(String(pkHex)) || !/^[0-9a-f]{128}$/.test(String(sigHex))) return false;
+  const P = liftX(BigInt("0x" + pkHex));
+  if (!P) return false;
+  const r = BigInt("0x" + sigHex.slice(0, 64)), s = BigInt("0x" + sigHex.slice(64));
+  if (r >= CURVE_P || s >= CURVE_N) return false;
+  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge",
+    intTo32(r), intTo32(P[0]), hexToBytes(msgHex))), CURVE_N);
+  const R = padd(pmul(G, s), pmul(P, CURVE_N - e));      // R = sG − eP
+  return !!R && (R[1] & 1n) === 0n && R[0] === r;
+}
+
+// the NIP-01 id of an event: the hash of its own contents, so it can't be reassigned
+async function eventId(ev){
+  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+  return bytesToHex(await sha256(new TextEncoder().encode(ser)));
+}
+
 // NIP-01 id + signature for a minted-key event
 async function signWithMint(tmpl, skHex){
   const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
-  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
-  ev.id = bytesToHex(await sha256(new TextEncoder().encode(ser)));
+  ev.id = await eventId(ev);               // same serialization the gate re-derives
   ev.sig = await schnorrSign(ev.id, skHex);
   return ev;
 }
@@ -2257,7 +2291,67 @@ if (localStorage.getItem(SK_KEY)){
 }
 
 // test hook — headless harness only, no runtime consumer
-window.__wtc = { schnorrSign, xonlyPub, bech32, signWithMint };
+window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
+                 admit, dropped: () => vDropped };
+
+// ═══════════════ the gate ═══════════════
+// Nothing a relay says is believed until the signature checks out. Every event arrives
+// CLAIMING a pubkey, and a relay can put any pubkey on anything it invents — so the
+// claim is worth exactly what it is until checked. Everything downstream reads those
+// claims as authority: whose cards sit on the spine, whose `+` adopts a foreign one,
+// who counts as the originator. All of that is only as true as this check.
+//
+// Two things are wrong with an unchecked event and both are checked here: the id must
+// be the hash of the event's OWN contents (or a valid signature could be lifted off one
+// event and pasted onto another), and the signature must be that pubkey's over that id.
+//
+// A verify is ~20ms of BigInt, so this is a queue, not a wall: one at a time with a
+// yield after each real check, so the page paints while the backlog clears — a card
+// appears when it has earned it rather than the whole spine arriving late.
+//
+// What is cached and what is NOT is the load-bearing part. The SIGNATURE verdict is
+// cached by id, so the same event arriving from six relays costs 20ms once. The id is
+// re-derived EVERY time, cache or no cache, because the id is the only thing binding
+// that cached verdict to these bytes — cache the pair and a relay could send the real
+// event, then the same id with a rewritten body, and ride the first one's verdict.
+// A hash is microseconds; that is the whole price of closing it.
+//
+// Only a signature failure is remembered as bad. A body whose id doesn't match is
+// dropped without a verdict: that id may belong to a real event still on its way, and
+// blacklisting it would let a forgery take the real one down with it.
+const vOK = new Set(), vBad = new Set();
+const vQ = [];
+let vBusy = false, vDropped = 0;
+
+function admit(ev, fn){
+  if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id))) return;
+  if (vBad.has(ev.id)) return;
+  vQ.push([ev, fn]);
+  if (!vBusy) drainGate();
+}
+
+async function drainGate(){
+  vBusy = true;
+  while (vQ.length){
+    const [ev, fn] = vQ.shift();
+    if (vBad.has(ev.id)) continue;
+    let hashOK = false, ok = false, spent = false;
+    try {
+      hashOK = (await eventId(ev)) === ev.id;
+      if (hashOK && vOK.has(ev.id)) ok = true;
+      else if (hashOK){ spent = true; ok = await schnorrVerify(ev.id, ev.pubkey, ev.sig); }
+    } catch { ok = false; }
+    if (ok) { vOK.add(ev.id); fn(ev); }
+    else {
+      if (hashOK) vBad.add(ev.id);         // that id can never be signed for; never ask again
+      console.warn("wiki-timechain: dropped an event —",
+                   hashOK ? "signature does not check out" : "id is not the hash of its contents",
+                   ev.id, "— total dropped:", ++vDropped);
+    }
+    if (spent) await new Promise(r => setTimeout(r, 0));   // breathe between real checks
+  }
+  vBusy = false;
+}
 
 // ═══════════════ relay connections ═══════════════
 function connect(url){
@@ -2285,11 +2379,12 @@ function connect(url){
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT"){
-      if (data[1] === "tsieve") sieve(data[2]);
-      if (data[1] === "wtc")    ingest(data[2]);
-      if (data[1] === "prof")  ingestProfile(data[2]);
-      if (data[1] === "cmt")   ingestComment(data[2]);
-      if (data[1] === "rct")   ingestReaction(data[2]);
+      // every path goes through admit() — there is no unchecked way in
+      if (data[1] === "tsieve") admit(data[2], sieve);
+      if (data[1] === "wtc")    admit(data[2], ingest);
+      if (data[1] === "prof")   admit(data[2], ingestProfile);
+      if (data[1] === "cmt")    admit(data[2], ingestComment);
+      if (data[1] === "rct")    admit(data[2], ingestReaction);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
       const t = tallies.get(data[1]);
