@@ -3,6 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page can hold a real secret key, so pin down where it is allowed to talk. Deny
+     everything, then name the exceptions: our own file (nip46.js), our own inline blocks,
+     and websockets. Note what this does NOT buy — 'unsafe-inline' is forced by the no-build
+     design, so injected script would still RUN; what it can no longer do is leave. No
+     fetch, no beacon-by-image, no form post, no second stage from another host.
+     connect-src cannot be pinned to our six relays the way the viewer's is: a bunker://
+     URI names its own relays, so locking the list would break the remote-signer rung.
+     wss: still bars every http(s) exfil channel. frame-ancestors is ignored in a meta tag
+     (Pages cannot set headers) — the frame-buster at the foot of the script covers it. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self' 'unsafe-inline';
+  style-src 'unsafe-inline';
+  connect-src wss:;
+  img-src 'self' data:;
+  base-uri 'none';
+  form-action 'none'">
 <title>Add to the record · Wiki · Timechain</title>
 <style>
   /* Tokens are lifted verbatim from index.html so the two pages are one site. Three
@@ -386,6 +403,17 @@ Source: [label](https://primary-source)"></textarea>
 </main>
 
 <script>
+// A page that takes a secret key has no business inside someone else's frame — the header
+// they draw around it is the whole clickjacking trick. frame-ancestors would say so in one
+// word, but a meta CSP is not allowed to use it and Pages cannot send a header, so say it
+// in script instead: refuse to be framed, and take the form with us on the way out.
+if (self !== top){
+  document.documentElement.textContent =
+    "Wiki·Timechain will not run inside another page. Open it directly.";
+  try { top.location = self.location; } catch {}
+  throw new Error("framed");
+}
+
 // ═══════════════ config — the same relays, kind and marker the viewer reads ═══════════════
 const RELAYS = [
   "wss://relay.damus.io",
@@ -598,7 +626,12 @@ function useNsec(){
     sessionSk = sk;
     $("nsec-in").value = "";
     setSigner({ via:"nsec · this tab only", pubkey: xonlyPub(sk), sign: t => signWithSk(t, sessionSk) });
-  } catch(e){ signMsg(msgOf(e), "bad"); }
+    armIdle();
+    signMsg("your clipboard still holds your key — copy something else over it.");
+  } catch(e){
+    $("nsec-in").value = "";        // a fumbled paste is the last string to leave lying in the DOM
+    signMsg(msgOf(e), "bad");
+  }
 }
 
 function setSigner(s){
@@ -613,10 +646,14 @@ function setSigner(s){
   refresh();
 }
 
-// The nsec never reaches storage, so signing out is enough to be rid of it — but zero it
-// anyway, and do the same on unload, so a key does not sit in a live heap after you leave.
+// The nsec never reaches storage, so dropping the reference is enough to be rid of it —
+// and on unload too, so a key is not still reachable from a page you have left. Be exact
+// about what this is NOT: JS strings are immutable, so this cannot wipe the bytes. It
+// drops the last handle and the collector gets to them when it gets to them. A heap
+// snapshot taken in between still has your key. The rungs above never put it here at all.
 function clearSession(){
   sessionSk = null;
+  clearTimeout(idleT);
   if (bunkerC){ try { bunkerC.close(); } catch {} bunkerC = null; }
   signer = null;
 }
@@ -627,8 +664,29 @@ function signOut(){
   renderMine();
   refresh();
 }
+
+// A pasted key has one exposure the other rungs do not: it goes quiet and stays trusted.
+// The extension re-prompts and the bunker asks your phone, but this rung would sign for
+// whoever sits down at a laptop left open. So it expires. Only this rung arms the timer —
+// the others hold nothing of ours to lose.
+const IDLE_MS = 15 * 60 * 1000;
+let idleT = null;
+function armIdle(){
+  clearTimeout(idleT);
+  if (!sessionSk) return;
+  idleT = setTimeout(() => {
+    signOut();
+    signMsg("signed out — the tab sat idle. Paste again to keep writing.");
+  }, IDLE_MS);
+}
+for (const t of ["pointerdown", "keydown"]) addEventListener(t, armIdle, { passive: true });
+
 addEventListener("pagehide", clearSession);
 addEventListener("beforeunload", clearSession);
+addEventListener("pagehide", () => { $("nsec-in").value = ""; });
+// Back-button restore: pagehide already took the key, so the page would come back showing
+// an npub it can no longer sign for. Put the display back where the truth is.
+addEventListener("pageshow", e => { if (e.persisted) signOut(); });
 
 const msgOf = e => (e && e.message) ? e.message : String(e);
 

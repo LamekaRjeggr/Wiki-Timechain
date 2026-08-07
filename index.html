@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Deny everything, then name the exceptions. The reader never handles a real key — only
+     a minted throwaway — so unlike the writer it can pin connect-src to exactly the relays
+     it reads from: no bunker here, no arbitrary relay to allow for. 'unsafe-inline' is
+     forced by the no-build design, so this stops exfiltration, not execution.
+     No frame-buster here, unlike the writer: a reader worth embedding in someone else's
+     page is a feature, and the worst a clickjack can steal is a throwaway key's reaction. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self' 'unsafe-inline';
+  style-src 'unsafe-inline';
+  connect-src wss://relay.damus.io wss://nos.lol wss://relay.primal.net
+              wss://relay.mostr.pub wss://relay.nostr.band wss://nostr.wine;
+  img-src 'self' data:;
+  base-uri 'none';
+  form-action 'none'">
 <title>Wiki · Timechain</title>
 <style>
   :root{
