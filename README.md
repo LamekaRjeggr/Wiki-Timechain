@@ -1,10 +1,11 @@
 # Wiki-Timechain
 
-A live viewer of timeline events (nostr **kind-30828** cards).
-Reads straight from relays — no server, no login, no build step.
+A live viewer of timeline events (nostr **kind-30828** cards), and a writer for
+publishing them. Reads straight from relays — no server, no login, no build step.
 Any dated event with a source link fits naturally on the rail.
 
-**Live:** https://lamekarjeggr.github.io/Wiki-Timechain/
+**Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
+**Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html)
 
 ![Wiki-Timechain](screenshot.png)
 
@@ -35,7 +36,7 @@ When a timeline follows a document through versions, a card can carry the
 change rather than describe it. A card tags the version it revises with a `fork`
 marker — borrowed in shape from
 [NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md), defined by
-[the convention](CONVENTION.md) now that these cards are their own kind — and
+[the spec](NIP-DRAFT.md#revisions) now that these cards are their own kind — and
 marks the text in djot: `{-removed-}`, `{+added+}`. A mark alone
 on its own line renders as a **gutter row** (a rule and a `−`/`+`, the diff
 idiom); a mark inside a sentence stays inline. Any card carrying both gets a
@@ -46,7 +47,7 @@ There is no new tag for this — the fork marker and the djot marks are both
 already in the format. It works in any timeline. What it buys: a version card
 in *as passed* reconstructs the clean document it was diffed from, so one card
 holds both the text and its history. The
-[convention](CONVENTION.md#revisions-and-diffs--showing-what-a-document-used-to-say)
+[convention](CONVENTION.md#cutting-a-diff)
 covers the authoring rules, including the one that matters most — don't diff
 more finely than a reader can follow.
 
@@ -67,7 +68,7 @@ documentation.
 A timeline entry is a single **kind-30828** addressable event
 ([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) that labels
 itself as belonging here ([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)):
-the `wikitimechain` marker, a `wikitimechain.collection` label, and an
+the `wikitimechain` marker, a `timeline.collection` label, and an
 `event_date`. A collection *is* its slug — publish the first card carrying a new
 one and that timeline exists, with no registration step.
 
@@ -81,9 +82,33 @@ the trade was losing that free rendering.
 Same `d` from the **same** author edits the card; same `d` from a **different**
 author renders beside it — a dispute, never an overwrite.
 
-**The tag scheme lives in one place: [CONVENTION.md](CONVENTION.md).** Don't copy
-it into other docs — copies go stale, and a stale copy tells a contributor to
-publish a card the viewer can't see.
+**The tag scheme lives in one place: [NIP-DRAFT.md](NIP-DRAFT.md)** — normative,
+written to become a NIP. [CONVENTION.md](CONVENTION.md) is house style only: how a
+card's prose is written, sourced and diffed. Don't restate the tags anywhere else —
+copies go stale, and a stale copy tells a contributor to publish a card no client
+can see.
+
+## Run it yourself
+
+Three files, nothing to install.
+
+```
+git clone https://github.com/LamekaRjeggr/Wiki-Timechain.git
+cd Wiki-Timechain
+python3 -m http.server 8000
+```
+
+`http://localhost:8000` is the viewer, `/add.html` the writer. Edit, save, refresh.
+**Don't open the files over `file://`** — a couple of relays reject the `null` origin,
+so cards go missing with nothing to say why.
+
+To host a copy: fork it and turn on GitHub Pages (deploy from `main`, root). That's
+all — no server, no database, no key in the repo. Your copy shows the same cards as
+every other copy, because discovery is by marker and not by author; that is the
+point, not a limitation. A second front door to the same corpus is worth more than
+a separate one. If you truly want a private corpus, change `MARKER` in both HTML
+files; to sandbox against your own relay, point `RELAYS` at it — in both files, or
+the writer's collision guard checks a corpus the viewer never shows you.
 
 ## Deploy
 
@@ -95,10 +120,15 @@ viewer itself — new cards need no deploy, they show up on next page load.
 
 ## Contributing a card
 
-Publish a kind-30828 event with the tags above — see the "Add to the record"
-section on the live page for the exact tag shape, and
-[CONVENTION.md](CONVENTION.md) for the rules. Get keys at
+Use **[add.html](add.html)** — the writer, live at
+[/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html). It builds the
+tags for you, previews the card as the viewer will draw it, and signs with a browser
+extension, a remote signer (`bunker://`), or a secret key held for that tab only. It
+never mints a key: a card is a record, so it wants a real one. Get keys at
 [nstart.me](https://nstart.me).
+
+Publishing by hand works too — the event shape is in [NIP-DRAFT.md](NIP-DRAFT.md),
+the writing rules in [CONVENTION.md](CONVENTION.md).
 
 **A wiki client won't do it.** wikifreedia and wikistr publish kind 30818, which
 this viewer does not read at all — a card published there is invisible here. Use
@@ -123,7 +153,11 @@ nostr NIPs this rests on:
 - **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** —
   comments (kind 1111, scoped to one signed version of a card)
 - **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** —
-  browser signer extensions; used when present, minting is the fallback
+  browser signer extensions; used when present, minting is the fallback in the
+  viewer and the writer's first rung
+- **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** —
+  remote signing; `add.html`'s `bunker://` rung, for a key that lives on another
+  device (see Vendored code)
 - **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** —
   schnorr signatures; the minted key's signer is implemented inline and
   verified against the official test vectors
