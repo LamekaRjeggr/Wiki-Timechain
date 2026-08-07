@@ -293,11 +293,10 @@
 <main>
   <section id="sec-sign">
     <h2><i>1</i>sign in</h2>
-    <p class="note">A card is a record. A record needs a real key behind it — no throwaway
-      identity here. Three ways in, easiest first. Use the one you already have. The last two
-      come back on their own next visit; the secret-key rung never does.</p>
-
     <div id="signed-out">
+      <p class="note">A card is a record. A record needs a real key behind it — no throwaway
+        identity here. Three ways in, easiest first. Use the one you already have. The last two
+        come back on their own next visit; the secret-key rung never does.</p>
       <div class="ladder">
         <div class="rung start">
           <h3>No key yet?</h3>
@@ -350,6 +349,7 @@
         <span class="via" id="who-via"></span>
         <button class="slim" id="b-out" style="margin-left:auto">sign out</button>
       </div>
+      <p class="note" id="who-note"></p>
     </div>
   </section>
 
@@ -720,6 +720,11 @@ function setSigner(s){
   const n = npub(s.pubkey);
   $("who-npub").textContent = n.slice(0, 14) + "…" + n.slice(-6);
   $("who-via").textContent = s.via;
+  // The generic pitch is for people who are not signed in yet. Once you are, the only thing
+  // left worth saying is whether this browser will bring you back — which differs by rung.
+  $("who-note").textContent = sessionSk
+    ? "This browser remembers nothing. Close the tab, or sit idle for fifteen minutes, and you are out."
+    : "This browser will sign you back in on your next visit. Sign out to forget it.";
   signMsg("");
   renderMine();          // your cards can only be listed once we know who you are
   refresh();
