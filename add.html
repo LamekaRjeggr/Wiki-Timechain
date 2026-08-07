@@ -101,6 +101,15 @@
   .row{display:flex;gap:9px}
   .row>*{flex:1 1 0;min-width:0}
 
+  /* d is DERIVED from the title, not a second blank to fill — the arm and the quiet
+     fill say so, and the field only takes on a field's colours once you edit it. */
+  .derives{display:flex;gap:8px;margin:0 0 0 5px}
+  .derives .arm{flex:0 0 auto;color:var(--faint);font-family:var(--mono);font-size:16px;
+    line-height:1;padding-top:24px}
+  .derives .dbody{flex:1 1 auto;min-width:0}
+  #f-d{background:var(--panel-2);color:var(--dim);font-family:var(--mono);font-size:13.5px}
+  #f-d.own{background:var(--panel);color:var(--text)}
+
   button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);
     border-radius:8px;padding:9px 15px;font-family:var(--font);font-size:14px;cursor:pointer}
   button:hover:not(:disabled){border-color:var(--rail)}
@@ -303,8 +312,14 @@
     <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
     <input id="f-title" placeholder="Mirepoix" autocomplete="off">
 
-    <label for="f-d">d · address <span class="h">— suggested from the title until you edit it. Frozen once published: republishing the same d replaces that card.</span></label>
-    <input id="f-d" placeholder="mirepoix" autocomplete="off">
+    <div class="derives">
+      <span class="arm" aria-hidden="true">↳</span>
+      <div class="dbody">
+        <label for="f-d">its address <span class="h" id="d-src"></span></label>
+        <input id="f-d" placeholder="mirepoix" autocomplete="off">
+        <p class="msg" id="d-msg"></p>
+      </div>
+    </div>
 
     <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
@@ -768,6 +783,21 @@ function cardMsg(text, cls){
   el.textContent = text || "";
   el.className = "msg" + (cls ? " " + cls : "");
 }
+// The address's own message line — the d guard belongs at the field you'd fix, not
+// down at the publish button where the only move left is to scroll back up.
+function dMsg(text, cls){
+  const el = $("d-msg");
+  el.textContent = text || "";
+  el.className = "msg" + (cls ? " " + cls : "");
+}
+// It says what it is: made from the title while it follows, yours once you edit it.
+function paintD(){
+  const own = !!$("f-d").dataset.touched;
+  $("f-d").classList.toggle("own", own);
+  $("d-src").textContent = own
+    ? "— yours now, no longer following the title. Frozen once published: republishing the same address replaces that card."
+    : "— made from the title automatically. Edit it only if you want a different one.";
+}
 
 // d follows the title until you touch it — then it is yours, because it is the address.
 $("f-title").addEventListener("input", () => {
@@ -1024,16 +1054,19 @@ function refresh(){
   try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
 
   needGlow();
+  paintD();
   renderInherit();
   renderForks();     // its list filters by collection, so it must follow the field, not the relays
 
+  if (!tmpl) dMsg("");
   if (tmpl){
     const d = (tmpl.tags.find(t => t[0] === "d") || [])[1];
     const col = collisionCheck(d);
     const body = $("f-content").value.trim();
     const noSrc = body && !/\]\(https?:/.test(body);
-    if (col?.block){ err = col.text; }
-    else if (col) cardMsg(col.text, "warnish");
+    dMsg(col ? col.text : "", col?.block ? "bad" : col ? "warnish" : "");
+    // The whole sentence is already under the field; the gate only needs to name the reason.
+    if (col?.block){ err = "that address is already one of your cards — see the note under it"; }
     else if (noSrc) cardMsg("no source yet — say where this comes from: a line like Source: [label](https://…). You can publish without one, but a record wants a source.", "warnish");
     else if (!$("card-msg").classList.contains("ok")) cardMsg("");
   }
