@@ -585,7 +585,9 @@
   #drum .pchip:hover{color:var(--text)}
   #drum.pick .pchip{display:block}
   #drum .pback{top:calc(50% - 46px)}
-  #drum .pstop{top:calc(50% + 30px);color:var(--rail)}
+  /* the commit chip: the one obvious way forward — the facing value, in amber */
+  #drum .pnext{top:calc(50% + 30px);color:var(--rail);font-weight:600}
+  #drum .pstop{top:calc(50% + 64px);color:var(--rail)}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit */
   @media (max-width:899px){
@@ -2047,6 +2049,7 @@ function drumFrame(){
 }
 
 addEventListener("scroll", () => {
+  if (pickStage) pickSyncFromPage();       // add mode: scrolling the timeline spins the wheel
   if (!drumRaf && drumTicks.length) drumRaf = requestAnimationFrame(() => { drumRaf = 0; drumFrame(); });
 }, { passive:true });
 addEventListener("resize", drumMeasure);
@@ -2064,9 +2067,11 @@ const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov
 
 const pickBackEl = Object.assign(document.createElement("button"),
   { className: "pchip pback", type: "button", textContent: "‹ back" });
+const pickNextEl = Object.assign(document.createElement("button"),
+  { className: "pchip pnext", type: "button" });
 const pickStopEl = Object.assign(document.createElement("button"),
   { className: "pchip pstop", type: "button" });
-drumEl.appendChild(pickBackEl); drumEl.appendChild(pickStopEl);
+drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl); drumEl.appendChild(pickStopEl);
 
 const pickFace = () =>
   Math.max(0, Math.min(pickVals.length - 1, Math.round(pickWheelY / PICK_STEP)));
@@ -2123,6 +2128,16 @@ function pickChips(){
   // nothing coarse to keep at the year stage — there the back chip is the only way out
   pickStopEl.style.display = pickStage === "year" ? "none" : "";
   if (pickStage !== "year") pickStopEl.textContent = "use " + draftDate() + " ✓";
+  pickNextLabel();
+}
+
+// the commit chip always names the facing value — the intentional way forward
+function pickNextLabel(){
+  const v = pickVals[pickFace()];
+  pickNextEl.textContent =
+    pickStage === "year"  ? v + " ›" :
+    pickStage === "month" ? MONTHS[+v - 1] + " " + v + " ›" :
+    draft.y + "-" + draft.m + "-" + v + " ✓";
 }
 
 function pickFrame(){
@@ -2143,6 +2158,7 @@ function pickFrame(){
       el.classList.toggle("face", i === face);
     }
   });
+  pickNextLabel();                 // the commit chip tracks whatever comes to face the head
 }
 
 function pickSpin(dy){
@@ -2181,16 +2197,47 @@ function pickPageY(frac){
 }
 function pickTraverse(){
   const y = pickPageY(pickFracNow());
-  if (y != null) scrollTo(0, y - innerHeight / 2);
+  if (y != null){ pickAutoY = Math.max(0, y - innerHeight / 2); scrollTo(0, pickAutoY); }
 }
-// when a value settles at the head, the draft re-sorts to that spot and the page lands on it
+// …and the page steers the wheel: scrolling the timeline IS spinning. The mapping is its
+// own inverse, so even a missed own-scroll guard just recomputes the same wheel position.
+let pickAutoY = null;              // the last scroll WE issued — consumed by one scroll event
+function pickFracAtY(py){
+  const ts = drumTicks.filter(t => !t.draft && t.frac != null);
+  if (!ts.length) return null;
+  const PXY = 260;
+  if (py <= ts[0].y) return ts[0].frac - (ts[0].y - py) / PXY;
+  const last = ts[ts.length - 1];
+  if (py >= last.y) return last.frac + (py - last.y) / PXY;
+  for (let i = 0; i < ts.length - 1; i++){
+    const a = ts[i], b = ts[i + 1];
+    if (py >= a.y && py <= b.y)
+      return b.y > a.y ? a.frac + (b.frac - a.frac) * (py - a.y) / (b.y - a.y) : a.frac;
+  }
+  return last.frac;
+}
+function pickSyncFromPage(){
+  if (pickAutoY !== null && Math.abs(scrollY - pickAutoY) < 4){ pickAutoY = null; return; }
+  pickAutoY = null;
+  const frac = pickFracAtY(scrollY + innerHeight / 2);
+  if (frac == null) return;
+  const idx = pickStage === "year"  ? frac - (+pickVals[0])
+            : pickStage === "month" ? (frac - (+draft.y)) * 12
+            : (frac - (+draft.y) - (+draft.m - 1) / 12) * 365;
+  pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, idx * PICK_STEP));
+  pickFrame();
+  clearTimeout(pickSnapT);
+  pickSnapT = setTimeout(() => { pickWheelY = pickFace() * PICK_STEP; pickFrame(); pickFollow(); }, 140);
+}
+// when a value settles at the head, the draft re-sorts to that spot — no scroll of its
+// own: the page is already where the reader put it, and moving it would fight them
 function pickFollow(){
   if (!pickStage || !draft) return;
   const v = pickVals[pickFace()];
   draft.tent = pickStage === "year" ? v
              : pickStage === "month" ? draft.y + "-" + v
              : draft.y + "-" + draft.m + "-" + v;
-  draftPlaced();
+  render();
 }
 
 // commit the value facing the head, and advance — year → month → day → done
@@ -2231,6 +2278,7 @@ drumEl.addEventListener("touchend", () => { pickTouchY = null; });
 drumEl.addEventListener("click", e => {
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
+  if (e.target === pickNextEl) return pickCommit();
   if (e.target === pickStopEl) return pickDone();
   const pv = e.target.closest(".pv");
   if (!pv) return;
@@ -2617,11 +2665,17 @@ function discardDraft(){
   if (pickStage) pickExit();
   render();
 }
-// after a date commit: the draft re-sorts into place and the page follows it there
+// after a date commit: the draft re-sorts into place and the page follows it there.
+// Mid-pick the jump is instant and marked as ours, so the page→wheel sync doesn't
+// read it back as the reader scrolling.
 function draftPlaced(){
   render();
   const n = areaEl.querySelector(".node.draft");
-  if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (!n) return;
+  if (pickStage){
+    pickAutoY = Math.max(0, pageTop(n) + n.offsetHeight / 2 - innerHeight / 2);
+    scrollTo(0, pickAutoY);
+  } else n.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 // the synthetic spine entry — while the wheel spins it rides the tentative date,
