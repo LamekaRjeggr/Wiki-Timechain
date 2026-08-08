@@ -490,6 +490,9 @@
     width:8px!important;height:8px}
   #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
     width:2px!important;height:14px;left:23px;border-radius:0}
+  /* the draft being composed: hollow amber — the app's own chrome, not yet a note */
+  #drum .tick.draft{background:transparent;border:2px solid var(--rail);border-radius:50%;
+    width:8px!important;height:8px}
   /* Rolodex year tabs: the first card of a year, when the page has room to earn one */
   #drum .tab{position:absolute;left:24px;width:44px;border-top:1px solid var(--faint)}
   #drum .tab b{position:absolute;left:48px;top:-8px;font-family:var(--mono);font-size:10px;
@@ -532,6 +535,52 @@
        the chip stops 2px clear of the drum and still leads the dots */
     .mtl{--gut:52px;--cgap:12px}
     .mtl .nowchip{left:calc(var(--gut) - 10px)}
+  }
+
+  /* ── add-card-as-a-card: the draft node, and the drum's pick mode ──
+     The draft is the app's own chrome acting — amber (--rail), dashed like a proposal —
+     never the record's ocher/cyan, because nothing has been claimed yet. */
+  .node.draft .card{border-style:dashed;border-color:var(--rail)}
+  .node.draft .dot{background:var(--rail)}
+  .mtl .draftcard .ctab .dtab{cursor:pointer;color:var(--rail);
+    text-decoration:underline dotted;text-underline-offset:3px}
+  .draftcard .dx{margin-left:auto;background:none;border:0;color:var(--dim);cursor:pointer;
+    font-size:13px;padding:0 2px}
+  .draftcard .dx:hover{color:var(--text)}
+  /* the tiers teach by SIZE — each editable renders at its live-card size while you type,
+     and the empty state says its own name in the same slot */
+  .draftcard .ded{outline:none;cursor:text;min-height:1.2em}
+  .draftcard .ded:focus{background:var(--rail-tint-2)}
+  .draftcard .ded:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none;font-weight:400}
+  .draftcard .cbody.ded{display:block}    /* editable bodies always render, whatever the depth floor */
+  .draftcard .dline{display:block;font-size:12px;color:var(--warn);margin:4px 0}
+  .draftcard .dline.block{color:var(--rail)}
+  .draftcard .dline.hid{display:none}
+  .draftcard .dfoot{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .draftcard .dpub{font-family:var(--mono);font-size:11px;cursor:pointer;border-radius:6px;
+    background:var(--panel);border:1px solid var(--rail);color:var(--text);padding:5px 12px}
+  .draftcard .dpub:disabled{opacity:.45;cursor:default}
+  .draftcard .cnt{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .draftcard .cnt.hid{display:none}
+  .draftcard .cnt.at{color:var(--warn)}   /* over the cap — orange, never red, meaning also in the count */
+  /* pick mode: the ONE exception to "a gauge, not a control" — scoped to .pick, so gauge
+     mode can never catch a pointer */
+  #drum.pick{pointer-events:auto;cursor:grab}
+  #drum.pick .tick,#drum.pick .tab,#drum.pick .now{display:none!important}
+  #drum .pv{position:absolute;left:28px;display:none;font-family:var(--mono);font-size:12px;
+    color:var(--text);cursor:pointer;white-space:nowrap;line-height:16px}
+  #drum .pv.face{font-weight:600;color:var(--rail);text-shadow:0 0 7px var(--past-glow)}
+  #drum .pchip{position:absolute;left:4px;display:none;z-index:7;font-family:var(--mono);
+    font-size:11px;color:var(--dim);background:var(--panel);border:1px solid var(--border);
+    border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+  #drum .pchip:hover{color:var(--text)}
+  #drum.pick .pchip{display:block}
+  #drum .pback{top:calc(50% - 46px)}
+  #drum .pstop{top:calc(50% + 30px);color:var(--rail)}
+  /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
+     not the rolled-back persistent widening: the gutter goes quiet again on exit */
+  @media (max-width:899px){
+    #drum.pick{width:132px}
   }
 </style>
 <script>
@@ -1275,7 +1324,13 @@ function scheduleReactionFetch(){
 
 function scheduleRender(){
   if (renderTimer) return;
-  renderTimer = setTimeout(() => { renderTimer = null; render(); }, 120);
+  renderTimer = setTimeout(() => {
+    renderTimer = null;
+    // a live event mid-composition would rebuild the draft card and eat the caret —
+    // hold the repaint while an editable has focus; focusout flushes it (write side)
+    if (draftFocused){ pendingRender = true; return; }
+    render();
+  }, 120);
 }
 
 // ═══════════════ data views ═══════════════
@@ -1538,6 +1593,8 @@ function render(){
   renderTabs(V);
 
   const entries = activeF ? entriesOf(activeF) : [];
+  // the draft is a spine entry like any other — it re-sorts as the drum commits its date
+  if (draft){ entries.push(draftEntry()); entries.sort((a,b) => a.frac - b.frac); }
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
@@ -1794,7 +1851,9 @@ function renderTimeline(entries){
     const propHtml = e.prop.length
       ? `<div class="prop">` + e.prop.map(ev => propCard(ev, e.d)).join("") + `</div>` : "";
 
-    if (!e.evs.length){          // a pure addition — a new `d` from a key that isn't on the spine
+    if (e.draft){                // the card being composed — markup lives in the write side
+      html += draftNodeHtml(e, future);
+    } else if (!e.evs.length){   // a pure addition — a new `d` from a key that isn't on the spine
       html += `<div class="node"${nodeAttrs}>${propHtml}</div>`;
     } else if (e.contested){
       html += `<div class="node"${nodeAttrs}><span class="cdot"></span>` +
@@ -1812,7 +1871,8 @@ function renderTimeline(entries){
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
         `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
-        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
+        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>` +
+        (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}${depthMark(ev, e.d)}</h4>` +
         cardBody(ev, e.d) +
@@ -1842,6 +1902,9 @@ function renderTimeline(entries){
   }
   bindTaps();
   drumMeasure();
+  // a rebuild resets the draft card to its markup defaults — re-derive counters,
+  // collision line, and the publish gate from the state that survived it
+  if (draft) draftRefresh();
 }
 
 // ═══════════════ the drum — a passive gauge for where you are on the page ═══════════════
@@ -1876,9 +1939,10 @@ function drumMeasure(){
     const rev       = !!n.querySelector(".dbar");           // this card carries edit marks
     const chars = [...n.querySelectorAll(".cbody")].reduce((a, b) => a + b.textContent.length, 0);
     const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
+    const isDraft = n.classList.contains("draft");   // claim-in-progress, not yet record
     const el = document.createElement("div");
-    el.className = "tick" + (contested ? " contested" : rev ? " rev" : future ? " future" : "");
-    if (!contested && !future) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
+    el.className = "tick" + (isDraft ? " draft" : contested ? " contested" : rev ? " rev" : future ? " future" : "");
+    if (!contested && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
     drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "" });
   });
@@ -1912,6 +1976,7 @@ function project(y, D, headTh, R, cy){
 }
 
 function drumFrame(){
+  if (pickStage) return pickFrame();       // add mode: the drum is the date wheel (see below)
   if (!drumTicks.length || !drumSpan){ drumEl.style.visibility = "hidden"; limbTop.style.visibility = "hidden";
     limbBot.style.visibility = "hidden"; return; }
   drumEl.style.visibility = limbTop.style.visibility = limbBot.style.visibility = "";
@@ -1975,6 +2040,157 @@ addEventListener("scroll", () => {
   if (!drumRaf && drumTicks.length) drumRaf = requestAnimationFrame(() => { drumRaf = 0; drumFrame(); });
 }, { passive:true });
 addEventListener("resize", drumMeasure);
+
+// ═══════════════ the date wheel — add mode borrows the drum ═══════════════
+// The ONE exception to "a gauge, not a control": while a draft's date is being picked, the
+// drum turns into a dense value wheel — spin to a year, commit, spin months, commit, days.
+// Committing is a CLICK on a value (or Enter); stopping early IS the precision — the chips
+// beside the head say "use 2017 ✓". Exiting hands the drum straight back to the gauge.
+let pickStage = null;              // 'year' | 'month' | 'day' while picking; null = gauge mode
+let pickVals = [], pickEls = [], pickWheelY = 0, pickRaf = 0, pickSnapT = 0, pickTouchY = null;
+const PICK_STEP = 46;              // virtual page-px between values on the wheel
+const PICK_VIS  = 14;              // values across the front arc — sets the wheel's density
+const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+
+const pickBackEl = Object.assign(document.createElement("button"),
+  { className: "pchip pback", type: "button", textContent: "‹ back" });
+const pickStopEl = Object.assign(document.createElement("button"),
+  { className: "pchip pstop", type: "button" });
+drumEl.appendChild(pickBackEl); drumEl.appendChild(pickStopEl);
+
+const pickFace = () =>
+  Math.max(0, Math.min(pickVals.length - 1, Math.round(pickWheelY / PICK_STEP)));
+
+function pickEnter(stage){
+  drumEl.classList.add("pick");
+  pickSetStage(stage || "year");
+}
+function pickExit(){
+  pickStage = null;
+  drumEl.classList.remove("pick");
+  pickEls.forEach(el => el.remove()); pickEls = [];
+  drumMeasure();                   // the gauge takes the instrument back
+}
+
+function pickSetStage(stage){
+  pickStage = stage;
+  pickEls.forEach(el => el.remove()); pickEls = [];
+  let start;
+  if (stage === "year"){
+    // span = the collection's own years, with room either side for what isn't written yet
+    const yrs = drumTicks.map(t => +t.yr).filter(Boolean);
+    const nowY = new Date().getFullYear();
+    const y0 = (yrs.length ? Math.min(...yrs) : nowY) - 10, y1 = nowY + 10;
+    pickVals = []; for (let y = y0; y <= y1; y++) pickVals.push(String(y));
+    start = draft.y || draft.seedYr;
+  } else if (stage === "month"){
+    pickVals = MONTHS.map((_, i) => String(i + 1).padStart(2, "0"));
+    start = draft.m || "06";
+  } else {
+    const n = new Date(Date.UTC(+draft.y, +draft.m, 0)).getUTCDate();   // real month lengths, leap years included
+    pickVals = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
+    start = draft.day || "15";
+  }
+  const at = pickVals.indexOf(start);
+  pickWheelY = (at < 0 ? 0 : at) * PICK_STEP;
+  pickEls = pickVals.map(v => {
+    const el = document.createElement("div");
+    el.className = "pv";
+    el.textContent = stage === "month" ? v + " " + MONTHS[+v - 1] : v;
+    drumEl.appendChild(el);
+    return el;
+  });
+  pickChips();
+  // the tab mirrors the stage without waiting for a render — commits render anyway
+  const td = areaEl.querySelector(".draftcard .dtab");
+  if (td) td.textContent = draftTabText();
+  pickFrame();
+}
+
+function pickChips(){
+  // nothing coarse to keep at the year stage — there the back chip is the only way out
+  pickStopEl.style.display = pickStage === "year" ? "none" : "";
+  if (pickStage !== "year") pickStopEl.textContent = "use " + draftDate() + " ✓";
+}
+
+function pickFrame(){
+  drumEl.style.visibility = "";
+  limbTop.style.visibility = limbBot.style.visibility = "hidden";
+  drumEl.style.clipPath = "none";            // the wheel owns the whole strip while it's out
+  const vh = innerHeight, cy = vh / 2, R = (vh - 180) / 2;
+  const D = (PICK_VIS * PICK_STEP) / Math.PI;
+  const headTh = pickWheelY / D;
+  const face = pickFace();
+  pickEls.forEach((el, i) => {
+    const p = project(i * PICK_STEP, D, headTh, R, cy);
+    el.style.display = p.hide ? "none" : "";
+    if (!p.hide){
+      el.style.top = (p.y - 8) + "px";
+      el.style.opacity = (.25 + .75 * p.a).toFixed(2);
+      el.style.transform = `scale(${(.72 + .28 * p.a).toFixed(2)})`;
+      el.classList.toggle("face", i === face);
+    }
+  });
+}
+
+function pickSpin(dy){
+  pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, pickWheelY + dy));
+  if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; pickFrame(); });
+  clearTimeout(pickSnapT);
+  pickSnapT = setTimeout(() => { pickWheelY = pickFace() * PICK_STEP; pickFrame(); }, 140);
+}
+
+// commit the value facing the head, and advance — year → month → day → done
+function pickCommit(){
+  const v = pickVals[pickFace()];
+  if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickSetStage("month"); }
+  else if (pickStage === "month"){ draft.m = v; draft.day = null; pickSetStage("day"); }
+  else { draft.day = v; return pickDone(); }
+  draftPlaced();
+}
+// stop here — what's committed so far IS the claim (2017, 2017-08, or the full day)
+function pickDone(){
+  draft.stage = "set";
+  pickExit();
+  draftPlaced();
+}
+function pickBack(){
+  if (pickStage === "day"){ draft.day = null; pickSetStage("month"); }
+  else if (pickStage === "month"){ draft.m = null; draft.day = null; pickSetStage("year"); draftPlaced(); }
+  else { draft.stage = draft.y ? "set" : "idle"; pickExit(); draftPlaced(); }   // cancel the pick, not the draft
+}
+
+drumEl.addEventListener("wheel", e => {
+  if (!pickStage) return;
+  e.preventDefault();
+  pickSpin(e.deltaY);
+}, { passive: false });
+drumEl.addEventListener("touchstart", e => {
+  if (pickStage) pickTouchY = e.touches[0].clientY;
+}, { passive: true });
+drumEl.addEventListener("touchmove", e => {
+  if (!pickStage || pickTouchY === null) return;
+  pickSpin((pickTouchY - e.touches[0].clientY) * 2);
+  pickTouchY = e.touches[0].clientY;
+}, { passive: true });
+drumEl.addEventListener("touchend", () => { pickTouchY = null; });
+drumEl.addEventListener("click", e => {
+  if (!pickStage) return;
+  if (e.target === pickBackEl) return pickBack();
+  if (e.target === pickStopEl) return pickDone();
+  const pv = e.target.closest(".pv");
+  if (!pv) return;
+  const i = pickEls.indexOf(pv);
+  if (i < 0) return;
+  pickWheelY = i * PICK_STEP;                // clicking any value faces it — and commits it
+  pickCommit();
+});
+addEventListener("keydown", e => {
+  if (!pickStage || (e.target.closest && e.target.closest(".ded,.cmp-ta"))) return;
+  if (e.key === "Enter"){ e.preventDefault(); pickCommit(); }
+  else if (e.key === "ArrowDown"){ e.preventDefault(); pickSpin(PICK_STEP); }
+  else if (e.key === "ArrowUp"){ e.preventDefault(); pickSpin(-PICK_STEP); }
+});
 
 // ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
 // The viewer's only writes, ever: reactions and comments the visitor taps out,
@@ -2210,9 +2426,301 @@ function rememberPk(pk){
   try { localStorage.setItem(PK_KEY, pk); } catch {}
 }
 
+// ═══════════════ authoring core — ported from add.html, so a draft composed here builds
+// the SAME event the writer would. Trimmed on purpose: no fork tags and no extra-tags box
+// (add.html stays the revision tool); d is always wikiSlug(title), frozen at publish. ═══════
+const NS_COLL = "timeline.collection";
+const NS_DATE = "timeline.date";
+// NIP-54 subject normalization: two authors writing the same subject land on the same d.
+function wikiSlug(s){
+  return String(s).toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+// djot link targets can't contain whitespace — a space or line-wrap inside [label](url) is
+// always a copy/paste artifact (chat clients and terminals soft-wrap long URLs).
+function fixLinkTargets(s){
+  return String(s).replace(/\]\(([^)]*)\)/g, (_, url) => "](" + url.replace(/\s+/g, "") + ")");
+}
+
+// What a collection's cards AGREE on — the exact tags present on every one of them. Topic
+// t's (never the marker) and location L/l ladders (never the spec's own namespaces). NOT
+// optional: inheritance is an intersection, so one bare card published from here would
+// prune it for every future writer card too.
+function inheritedTags(c){
+  const list = [...events.values()].filter(ev => collectionSlug(ev) === c);
+  if (!list.length) return [];
+  const cand = t =>
+    (t[0] === "t" && t[1] !== MARKER) ||
+    ((t[0] === "L" || t[0] === "l") &&
+      !/^timeline\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
+  let common = null;   // key -> original tag array, so a value with a space survives
+  for (const ev of list){
+    const m = new Map(ev.tags.filter(cand).map(t => [JSON.stringify(t), t]));
+    common = common === null ? m : new Map([...common].filter(([k]) => m.has(k)));
+  }
+  return [...common.values()];
+}
+
+// draft.date is the RAW precision string (YYYY | YYYY-MM | YYYY-MM-DD) — the padding to a
+// full event_date, the APPROXIMATE DATE line, and the date-bucket labels all happen here,
+// exactly as add.html's buildTemplate does them. Throws on anything the sieve would drop.
+function buildDraftTemplate(draft){
+  const now     = Math.floor(Date.now() / 1000);
+  const title   = (draft.title || "").trim();
+  const summary = (draft.summary || "").trim();
+  const c       = wikiSlug(draft.coll || "");
+  let  content  = fixLinkTargets(draft.content || "");
+
+  const d = wikiSlug(title);
+  if (!d) throw new Error("a title is required — it is the card's address");
+  if (!c) throw new Error("a collection is required — every card joins a timeline");
+
+  const dm = String(draft.date || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!dm) throw new Error("pick a date on the drum — a year is enough");
+  const [, wy, wmIn, wdIn] = dm;
+  const wm = wmIn || "01";
+  const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
+  const dchk = new Date(fullDate + "T00:00:00Z");
+  if (isNaN(dchk) || dchk.toISOString().slice(0, 10) !== fullDate)
+    throw new Error(`${draft.date} is not a real date`);
+
+  // A coarse date is placed on day 01 and the precision recorded where the convention puts
+  // it, in the content — unless the content already declares a date, which is never stomped.
+  let prec = wdIn ? "day" : wmIn ? "month" : "year";
+  if (prec === "day"){
+    if      (/APPROXIMATE DATE:\s*known to the year/i.test(content))  prec = "year";
+    else if (/APPROXIMATE DATE:\s*known to the month/i.test(content)) prec = "month";
+  }
+  if (!wdIn && content.trim() && !/APPROXIMATE DATE:/i.test(content)){
+    const line = `APPROXIMATE DATE: known to the ${prec} — placed at ${fullDate}.`;
+    const src  = content.search(/^Sources?:/m);
+    content = src === -1
+      ? content.trimEnd() + "\n\n" + line
+      : content.slice(0, src).trimEnd() + "\n\n" + line + "\n\n" + content.slice(src);
+  }
+
+  const tags = [["d", d]];
+  if (title) tags.push(["title", title]);
+  tags.push(["published_at", String(now)]);
+  tags.push(["event_date", fullDate]);
+  tags.push(["t", MARKER]);
+  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
+  tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
+  if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
+  if (summary) tags.push(["summary", summary]);
+  const have = new Set(tags.map(t => JSON.stringify(t)));
+  for (const t of inheritedTags(c))
+    if (!have.has(JSON.stringify(t))) tags.push(t);
+
+  return { kind: KIND, created_at: now, tags, content };
+}
+
+// Same pubkey:d REPLACES, unrecoverably — your own collision is refused, never merged. A
+// DIFFERENT author holding that d coexists as a rival version: said out loud and allowed.
+function draftCollision(d, pk){
+  if (pk && events.has(pk + ":" + d)){
+    const hit = events.get(pk + ":" + d);
+    return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Edit it in the writer, or give this one its own title.` };
+  }
+  const rival = [...events.values()].find(e => tag(e,"d") === d && e.pubkey !== pk);
+  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which shows as contested. That is allowed; just make sure you meant it.` };
+  return null;
+}
+
+// ═══════════════ add-card-as-a-card — composing ON the timeline ═══════════════
+// The draft renders exactly like a live card and is edited in place: there is no form and
+// no preview, because there is nothing to preview. The date is picked on the drum (above);
+// the three text tiers teach by SIZE — the title edits at title size while you type.
+// NIP-07 publishes right here; with no extension the draft hands off to add.html.
+let draft = null;         // {title,summary,content, y,m,day, stage:'year'|'month'|'day'|'set'|'idle', seedYr}
+let draftFocused = false; // an editable has the caret — scheduleRender holds repaints
+let pendingRender = false;
+let justPub = null;       // {d, id} — shows the relay tally on the card just published
+const CAP_T = 50, CAP_S = 500;   // soft caps: the counter appears, typing is never blocked
+
+const draftDate = () => draft && draft.y
+  ? draft.y + (draft.m ? "-" + draft.m + (draft.day ? "-" + draft.day : "") : "") : null;
+
+function startDraft(){
+  if (draft || !activeF) return;
+  // seed the wheel where the reader already is — the year facing the drum head
+  const face = drumTicks.length
+    ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
+    : null;
+  draft = { title:"", summary:"", content:"", y:null, m:null, day:null,
+            stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
+  pickEnter("year");            // before render, so the tab already reads ···· spinning
+  render();
+  const n = areaEl.querySelector(".node.draft");
+  if (n) n.scrollIntoView({ block: "center" });
+}
+function discardDraft(){
+  if (!draft) return;
+  draft = null;
+  if (pickStage) pickExit();
+  render();
+}
+// after a date commit: the draft re-sorts into place and the page follows it there
+function draftPlaced(){
+  render();
+  const n = areaEl.querySelector(".node.draft");
+  if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+// the synthetic spine entry — before any commit it sits at the seeded year
+function draftEntry(){
+  const date = draftDate() || draft.seedYr;
+  return { d: "__draft__", draft: true, evs: [], prop: [],
+           date, frac: yearFrac(date), title: draft.title, contested: false };
+}
+
+// the date tab shows exactly the claim committed so far — the spinning segment reads ··
+function draftTabText(){
+  if (pickStage === "year")  return draft.y || "····";
+  if (pickStage === "month") return draft.y + "-··";
+  if (pickStage === "day")   return draft.y + "-" + draft.m + "-··";
+  return draftDate() || "pick a date";
+}
+
+function draftNodeHtml(e, future){
+  const yr = String(e.date).slice(0, 4);
+  const ed = (cls, tagName, ph, text) =>
+    `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
+    ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
+  const btn = hasSigner
+    ? `<button class="dpub" type="button" disabled>sign &amp; publish</button>`
+    : `<button class="dpub dhand" type="button" disabled title="no NIP-07 extension here — add.html signs with a bunker or nsec">finish in the writer →</button>`;
+  return `<div class="node draft" data-yr="${esc(yr)}">` +
+    `<span class="dot${future ? " future" : ""}"></span>` +
+    `<div class="card draftcard">` +
+    `<div class="ctab"><span class="td dtab" role="button" title="pick the date on the drum">${esc(draftTabText())}</span>` +
+    `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
+    `<button class="dx" type="button" title="discard this draft (Esc)">✕</button></div>` +
+    ed("ded-t", "h4", "Title — the event, one line", draft.title) +
+    `<div class="dline dcol hid"></div>` +
+    ed("ded-s", "div", "Summary — a paragraph, if the title needs one", draft.summary) +
+    ed("ded-b", "div", "The record — what happened, with Sources: [label](https://…)", draft.content) +
+    `<div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
+    `<span class="dline derr hid"></span></div>` +
+    `</div></div>`;
+}
+
+// live updates that must not re-render (the caret dies with the innerHTML) — counters,
+// collision line, and the publish gate all write into the standing DOM
+function draftRefresh(){
+  const card = areaEl.querySelector(".draftcard");
+  if (!card || !draft) return;
+  for (const [sel, len, cap, near] of [[".cnt-t", draft.title.length, CAP_T, 10],
+                                       [".cnt-s", draft.summary.length, CAP_S, 40]]){
+    const n = card.querySelector(sel);
+    const left = cap - len;
+    n.textContent = left;
+    n.classList.toggle("hid", left > near);
+    n.classList.toggle("at", left < 0);
+  }
+  const d = wikiSlug(draft.title);
+  const col = d && myPk ? draftCollision(d, myPk) : null;
+  const line = card.querySelector(".dcol");
+  line.textContent = col ? col.text : "";
+  line.classList.toggle("hid", !col);
+  line.classList.toggle("block", !!(col && col.block));
+  const b = card.querySelector(".dpub");
+  b.disabled = !(draftDate() && d && !(col && col.block));
+}
+
+areaEl.addEventListener("input", e => {
+  const ed = e.target.closest(".ded");
+  if (!ed || !draft) return;
+  const v = ed.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
+  if      (ed.classList.contains("ded-t")) draft.title   = v.replace(/\n/g, " ");
+  else if (ed.classList.contains("ded-s")) draft.summary = v;
+  else                                     draft.content = v;
+  draftRefresh();
+});
+areaEl.addEventListener("keydown", e => {
+  // the title is one line — Enter moves on to the summary instead of breaking it
+  if (e.key === "Enter" && e.target.closest && e.target.closest(".ded-t")){
+    e.preventDefault();
+    const s = areaEl.querySelector(".ded-s");
+    if (s) s.focus();
+  }
+});
+areaEl.addEventListener("focusin", e => {
+  if (e.target.closest && e.target.closest(".draftcard")) draftFocused = true;
+});
+areaEl.addEventListener("focusout", e => {
+  if (e.target.closest && e.target.closest(".draftcard")){
+    draftFocused = false;
+    if (pendingRender){ pendingRender = false; render(); }
+  }
+});
+areaEl.addEventListener("click", e => {
+  if (!draft) return;
+  if (e.target.closest(".dx"))   return discardDraft();
+  if (e.target.closest(".dtab")) { if (!pickStage) pickEnter("year"); return; }
+  const b = e.target.closest(".dpub");
+  if (b) b.classList.contains("dhand") ? handoffDraft() : publishDraft(b);
+});
+addEventListener("keydown", e => {
+  if (e.key !== "Escape" || !draft) return;
+  const ed = e.target.closest && e.target.closest(".ded");
+  if (ed) return ed.blur();     // first Esc only leaves the text — the next one discards
+  discardDraft();
+});
+
+// entry: the "add a card" link composes here when a timeline is active. Modified clicks
+// (middle, cmd) keep the href — the writer page is still the long-form door.
+addLink.addEventListener("click", e => {
+  if (!activeF || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  e.preventDefault();
+  startDraft();
+});
+
+async function publishDraft(btn){
+  btn.disabled = true;
+  const err = areaEl.querySelector(".derr");
+  err.classList.add("hid");
+  try {
+    const tmpl = buildDraftTemplate({ ...draft, date: draftDate(), coll: activeF.slice(2) });
+    const s = await getSigner();
+    // wtc:pk can be stale — the collision that matters is against the key that will sign
+    const col = draftCollision(tmpl.tags[0][1], s.pubkey);
+    if (col && col.block) throw new Error(col.text);
+    const ev = await s.sign(tmpl);
+    rememberPk(ev.pubkey);
+    justPub = { d: tmpl.tags[0][1], id: ev.id };
+    setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
+    draft = null;
+    if (pickStage) pickExit();
+    ingest(ev);                                  // reward first: the card is live in place now
+    publish(ev);
+  } catch (ex){
+    err.textContent = (ex && ex.message) || "signer declined — try again";
+    err.classList.remove("hid");
+    btn.disabled = false;
+  }
+}
+
+// no extension: the draft crosses to add.html, whose bunker/nsec ladder takes over.
+// RAW precision string and RAW content — add.html's builder owns the padding and the
+// APPROXIMATE DATE line; baking them here would write the line twice.
+function handoffDraft(){
+  const rec = { v: 1, at: Date.now(), coll: activeF.slice(2), date: draftDate(),
+                title: draft.title, summary: draft.summary, content: draft.content };
+  try { localStorage.setItem("wtc:draft", JSON.stringify(rec)); } catch {}
+  location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
+}
+
 // test hook — headless harness only, no runtime consumer
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
-                 admit, dropped: () => vDropped };
+                 admit, dropped: () => vDropped,
+                 buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
+                 startDraft, discardDraft, pickCommit, pickBack, pickDone, pickSpin,
+                 draftDate, draftTabText,
+                 draftGet: () => draft, draftSet: p => { draft = { ...draft, ...p }; } };
 
 // ═══════════════ the gate ═══════════════
 // Nothing a relay says is believed until the signature checks out. Every event arrives

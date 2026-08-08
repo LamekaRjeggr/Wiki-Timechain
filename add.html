@@ -1330,6 +1330,27 @@ $("b-pub").addEventListener("click", publish);
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
 
+// ?draft=1: a card composed on the viewer's timeline, crossing here to be signed (no
+// NIP-07 there). Consume-once — the key is deleted on read, and gated twice (query param
+// + freshness) so a leftover never surprises a direct visit. The date arrives as the RAW
+// precision string and the content RAW: buildTemplate owns the padding and the
+// APPROXIMATE DATE line, exactly as if it had been typed here.
+if (new URLSearchParams(location.search).get("draft") === "1"){
+  try {
+    const rec = JSON.parse(localStorage.getItem("wtc:draft") || "null");
+    localStorage.removeItem("wtc:draft");
+    if (rec && rec.v === 1 && Date.now() - rec.at < 24*3600*1000){
+      $("f-title").value   = rec.title || "";
+      $("f-coll").value    = rec.coll || qc || "";
+      $("f-date").value    = rec.date || "";
+      $("f-summary").value = rec.summary || "";
+      $("f-content").value = rec.content || "";
+      // fire the follower, not just the value — d is made from the title
+      $("f-title").dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  } catch {}
+}
+
 refresh();
 
 // The test harness drives THIS code, never a copy of it — same discipline as the viewer's
