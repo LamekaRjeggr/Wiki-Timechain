@@ -639,7 +639,8 @@ const remember = v => { try { localStorage.setItem(SIGNIN, JSON.stringify(v)); }
 const forget   = () => { try { localStorage.removeItem(SIGNIN); } catch {} };
 
 async function useNip07(quiet){
-  if (!window.nostr){
+  // the object alone isn't a signer — Safari carries a bare `nostr` with no methods on it
+  if (!window.nostr || typeof window.nostr.signEvent !== "function"){
     if (!quiet) signMsg("no NIP-07 extension answered — is one installed and unlocked?", "bad");
     return;
   }

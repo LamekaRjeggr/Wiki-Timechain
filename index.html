@@ -2061,6 +2061,7 @@ addEventListener("resize", drumMeasure);
 // beside the head say "use 2017 ✓". Exiting hands the drum straight back to the gauge.
 let pickStage = null;              // 'year' | 'month' | 'day' while picking; null = gauge mode
 let pickVals = [], pickEls = [], pickWheelY = 0, pickRaf = 0, pickSnapT = 0, pickTouchY = null;
+let pickAnimRaf = 0, pickAnimTo = null, pickVel = 0;   // the eased settle, and flick momentum
 const PICK_STEP = 46;              // virtual page-px between values on the wheel
 const PICK_VIS  = 14;              // values across the front arc — sets the wheel's density
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
@@ -2081,6 +2082,7 @@ function pickEnter(stage){
   pickSetStage(stage || "year");
 }
 function pickExit(){
+  pickHalt();
   pickStage = null;
   if (draft) draft.tent = null;
   drumEl.classList.remove("pick");
@@ -2088,7 +2090,15 @@ function pickExit(){
   drumMeasure();                   // the gauge takes the instrument back
 }
 
+// a glide from the old stage would keep easing toward an index that no longer exists
+function pickHalt(){
+  if (pickAnimRaf) cancelAnimationFrame(pickAnimRaf);
+  pickAnimRaf = 0; pickAnimTo = null; pickVel = 0;
+  clearTimeout(pickSnapT);
+}
+
 function pickSetStage(stage){
+  pickHalt();
   pickStage = stage;
   if (draft) draft.tent = null;    // the tentative claim doesn't outlive its stage
   pickEls.forEach(el => el.remove()); pickEls = [];
@@ -2161,11 +2171,36 @@ function pickFrame(){
   pickNextLabel();                 // the commit chip tracks whatever comes to face the head
 }
 
+const pickClamp = y => Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, y));
+
+// Under your finger the wheel is 1:1 — direct is what makes it feel attached. The SETTLE is
+// what used to read as jank: it teleported up to half a step in one frame. Now it eases, and
+// while it's easing the page traverses with it, so wheel and timeline arrive together.
+function pickGlide(to, withScroll){
+  pickAnimTo = to;
+  if (pickAnimRaf) return;
+  const step = () => {
+    const d = pickAnimTo - pickWheelY;
+    if (Math.abs(d) < .5){
+      pickAnimRaf = 0; pickWheelY = pickAnimTo; pickAnimTo = null;
+      pickFrame(); if (withScroll) pickTraverse(); pickFollow(); return;
+    }
+    pickWheelY += d * .24;                 // ≈8 frames to land, no overshoot to un-wind
+    pickFrame(); if (withScroll) pickTraverse();
+    pickAnimRaf = requestAnimationFrame(step);
+  };
+  pickAnimRaf = requestAnimationFrame(step);
+}
+// page-driven settles pass withScroll=false: the reader's thumb put the page there, and
+// scrolling it back under them is the one thing the two-way sync must never do
+function pickSettle(withScroll){ pickGlide(pickFace() * PICK_STEP, withScroll !== false); }
+
 function pickSpin(dy){
-  pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, pickWheelY + dy));
+  pickAnimTo = null;                       // a live glide yields to the hand
+  pickWheelY = pickClamp(pickWheelY + dy);
   if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; pickFrame(); pickTraverse(); });
   clearTimeout(pickSnapT);
-  pickSnapT = setTimeout(() => { pickWheelY = pickFace() * PICK_STEP; pickFrame(); pickFollow(); }, 140);
+  pickSnapT = setTimeout(pickSettle, 140);
 }
 
 // ── the wheel TRAVERSES the record ──
@@ -2227,7 +2262,7 @@ function pickSyncFromPage(){
   pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, idx * PICK_STEP));
   pickFrame();
   clearTimeout(pickSnapT);
-  pickSnapT = setTimeout(() => { pickWheelY = pickFace() * PICK_STEP; pickFrame(); pickFollow(); }, 140);
+  pickSnapT = setTimeout(() => pickSettle(false), 140);
 }
 // when a value settles at the head, the draft re-sorts to that spot — no scroll of its
 // own: the page is already where the reader put it, and moving it would fight them
@@ -2264,17 +2299,37 @@ function pickBack(){
 drumEl.addEventListener("wheel", e => {
   if (!pickStage) return;
   e.preventDefault();
-  pickSpin(e.deltaY);
+  // line- and page-mode wheels report 3, not 300 — unnormalized, a real mouse barely moved
+  // the wheel while a trackpad flung it. Capping per event is what kills the lurch.
+  const raw = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
+  pickSpin(Math.max(-PICK_STEP * 2, Math.min(PICK_STEP * 2, raw)));
 }, { passive: false });
 drumEl.addEventListener("touchstart", e => {
-  if (pickStage) pickTouchY = e.touches[0].clientY;
+  if (!pickStage) return;
+  pickTouchY = e.touches[0].clientY;
+  pickVel = 0; pickAnimTo = null;         // catching the wheel mid-glide stops it dead
 }, { passive: true });
 drumEl.addEventListener("touchmove", e => {
   if (!pickStage || pickTouchY === null) return;
-  pickSpin((pickTouchY - e.touches[0].clientY) * 2);
-  pickTouchY = e.touches[0].clientY;
+  const y = e.touches[0].clientY, dy = (pickTouchY - y) * 2;
+  pickVel = pickVel * .7 + dy * .3;       // smoothed: one jittery sample can't fling the wheel
+  pickSpin(dy);
+  pickTouchY = y;
 }, { passive: true });
-drumEl.addEventListener("touchend", () => { pickTouchY = null; });
+drumEl.addEventListener("touchend", () => {
+  pickTouchY = null;
+  if (Math.abs(pickVel) < 6) return;      // a slow release settles where it already is
+  clearTimeout(pickSnapT);
+  const coast = () => {                   // a flick keeps going, decaying, then lands on a value
+    if (pickTouchY !== null) return;      // a second finger down owns the wheel again
+    pickVel *= .93;
+    if (Math.abs(pickVel) < 1.5) return pickSettle();
+    pickWheelY = pickClamp(pickWheelY + pickVel);
+    pickFrame(); pickTraverse();
+    requestAnimationFrame(coast);
+  };
+  requestAnimationFrame(coast);
+});
 drumEl.addEventListener("click", e => {
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
@@ -2290,8 +2345,9 @@ drumEl.addEventListener("click", e => {
 addEventListener("keydown", e => {
   if (!pickStage || (e.target.closest && e.target.closest(".ded,.cmp-ta"))) return;
   if (e.key === "Enter"){ e.preventDefault(); pickCommit(); }
-  else if (e.key === "ArrowDown"){ e.preventDefault(); pickSpin(PICK_STEP); }
-  else if (e.key === "ArrowUp"){ e.preventDefault(); pickSpin(-PICK_STEP); }
+  // arrows GLIDE a whole step — spin-then-snap made a key press two motions
+  else if (e.key === "ArrowDown"){ e.preventDefault(); pickGlide(pickClamp((pickFace() + 1) * PICK_STEP), true); }
+  else if (e.key === "ArrowUp"){ e.preventDefault(); pickGlide(pickClamp((pickFace() - 1) * PICK_STEP), true); }
 });
 
 // ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
@@ -2314,10 +2370,15 @@ let myPk = null;                // my pubkey once a signer produced one — ligh
 // and the whole margin block when there's nothing there to read either.
 // The bunker rung is deliberately NOT here: it lives in add.html, and reaching it from the
 // reader means widening this page's connect-src to arbitrary relays. See CLAUDE.md.
-let hasSigner = !!window.nostr;
+// Ask for the METHOD, not the namespace. `!!window.nostr` was too weak: Safari here carries a
+// bare `nostr` object with no keys on it, so the page offered the whole write UI against a
+// signer that cannot sign — every tap would fail at the last step. Presence of the object is
+// a claim; signEvent is the capability.
+const signerReady = () => !!(window.nostr && typeof window.nostr.signEvent === "function");
+let hasSigner = signerReady();
 // extensions can inject after first paint — look twice more, then stop asking
 if (!hasSigner) [400, 1500].forEach(ms => setTimeout(() => {
-  if (!hasSigner && window.nostr){ hasSigner = true; scheduleRender(); }
+  if (!hasSigner && signerReady()){ hasSigner = true; scheduleRender(); }
 }, ms));
 // the extension's pubkey, remembered across loads so .mine and the compose gate are right
 // on arrival — asking for it up front would fire a permission prompt at a reader
@@ -2443,7 +2504,7 @@ let signerP = null;
 function getSigner(){
   if (!signerP){
     signerP = (async () => {
-      if (!window.nostr) throw new Error("no signer");
+      if (!signerReady()) throw new Error("no signer");   // same capability test as hasSigner
       return { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
     })();
     signerP.catch(() => { signerP = null; });    // a declined prompt can retry
