@@ -2302,11 +2302,21 @@ function pickFracSet(){
   return +draft.y + (draft.m ? (+draft.m - 1) / 12 : 0) + (draft.day ? (+draft.day - 1) / 365 : 0);
 }
 // date-fraction → page px, interpolated between the real cards' own positions; beyond
-// the record's edges the empty years pass at a constant rate
+// the record's edges the empty years pass at a constant rate — but never past the SPINE.
+// A 2026 date on a record ending 2017 extrapolates 2340px below the last card, which is off
+// the end of the track: the page then clamped to the document bottom and landed you in the
+// manifesto, and the ghost floated over the prose. The record's own extent is the limit.
 function pickPageY(frac){
   const ts = drumTicks.filter(t => !t.draft && t.frac != null);
   if (!ts.length) return null;
   const PXY = 260;                                  // px per year outside the record
+  const y = pickRawY(frac, ts, PXY);
+  const track = areaEl.querySelector(".mtl .track");
+  if (!track) return y;
+  const top = pageTop(track);
+  return Math.max(top, Math.min(top + track.offsetHeight, y));
+}
+function pickRawY(frac, ts, PXY){
   if (frac <= ts[0].frac) return ts[0].y - (ts[0].frac - frac) * PXY;
   const last = ts[ts.length - 1];
   if (frac >= last.frac) return last.y + (frac - last.frac) * PXY;
