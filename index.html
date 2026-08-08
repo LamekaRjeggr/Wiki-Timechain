@@ -2059,7 +2059,6 @@ function drumFrame(){
 }
 
 addEventListener("scroll", () => {
-  if (pickStage) pickSyncFromPage();       // add mode: scrolling the timeline spins the wheel
   if (!drumRaf && drumTicks.length) drumRaf = requestAnimationFrame(() => { drumRaf = 0; drumFrame(); });
 }, { passive:true });
 addEventListener("resize", drumMeasure);
@@ -2088,7 +2087,6 @@ let pickUnits = [], pickEls = [], pickFade = [];
 let pickPos = 0;                   // continuous index into pickUnits — THE position, in units
 let pickVel = 0, pickTo = null, pickDrag = false, pickIdle = 0, pickRaf = 0, pickTouchY = null;
 let pickSpan = 14, pickSpanTo = 14;   // units across the front arc; eases on a level change
-let pickNoScroll = false;          // this frame's move came FROM the page — don't scroll it back
 let pickDrawn = null;              // {pos,span} last PAINTED. Redraw when state differs from that,
                                    // not from the tick's own start — a gesture landing between two
                                    // ticks changes nothing during a tick, and never got drawn.
@@ -2110,11 +2108,13 @@ const pickFace  = () => Math.round(pickClamp(pickPos));
 
 function pickEnter(stage){
   drumEl.classList.add("pick");
+  pickGrab(true);                   // the wheel takes the viewport's gesture for as long as it's out
   pickSpan = pickSpanTo = BAND;     // a fresh pick starts already at rest, with no zoom to play
   pickZoom(stage || "year");
 }
 function pickExit(){
   pickStage = null;
+  pickGrab(false);
   if (pickRaf) cancelAnimationFrame(pickRaf);
   pickRaf = 0; pickVel = 0; pickTo = null; pickDrag = false; pickTouchY = null;
   drumEl.classList.remove("pick");
@@ -2193,9 +2193,8 @@ function pickTick(){
   if (!pickDrawn || pickPos !== pickDrawn.pos || pickSpan !== pickDrawn.span){
     pickDrawn = { pos: pickPos, span: pickSpan };
     pickFrame();
-    if (!pickNoScroll) pickTraverse();
+    pickTraverse();
   }
-  pickNoScroll = false;
 }
 
 // every gesture says the same thing: move this many UNITS. Never pixels, never an index.
@@ -2270,11 +2269,16 @@ function pickGhost(){
 }
 function pickGhostClear(){ if (pickGhostEl){ pickGhostEl.remove(); pickGhostEl = null; } }
 
-// ── the wheel TRAVERSES the record ──
+// ── the wheel TRAVERSES the record — ONE DIRECTION, at every scope ──
 // Spinning doesn't happen beside the timeline, it moves THROUGH it: the page scrolls to where
 // the facing date sits among the cards that already exist, so the publisher reads the
 // neighborhood before committing anything. The drum's own rate is constant; the page's is not,
 // and that is correct — a lurch there is real structure, and your hand is on the wheel.
+// The page NEVER steers back (2026-08-08, user's call). It used to, at year scope only, and
+// that one exception cost the own-scroll guard, the inverse mapping, the bottom-clamp bug,
+// and a control that went deaf the moment you committed a year. While the wheel is out, the
+// whole viewport is its gesture surface and page scrolling is suppressed — there are not two
+// surfaces to keep in agreement, so there is nothing left to fight.
 function pickFracNow(){
   const i = pickClamp(pickPos);
   if (pickStage === "year")  return +pickUnits[0] + i;
@@ -2297,44 +2301,11 @@ function pickPageY(frac){
   }
   return last.y;
 }
-let pickAutoY = null;              // the last scroll WE issued — consumed by one scroll event
 function pickTraverse(){
   const y = pickPageY(pickFracNow());
   if (y == null) return;
-  // clamp to what the document can ACTUALLY scroll to, or past the ends of the record the
-  // browser clamps while pickAutoY doesn't, the own-scroll guard misses, and the page yanks
-  // the wheel back from a position it never reached
   const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
-  pickAutoY = Math.max(0, Math.min(max, y - innerHeight / 2));
-  scrollTo(0, pickAutoY);
-}
-function pickFracAtY(py){
-  const ts = drumTicks.filter(t => !t.draft && t.frac != null);
-  if (!ts.length) return null;
-  const PXY = 260;
-  if (py <= ts[0].y) return ts[0].frac - (ts[0].y - py) / PXY;
-  const last = ts[ts.length - 1];
-  if (py >= last.y) return last.frac + (py - last.y) / PXY;
-  for (let i = 0; i < ts.length - 1; i++){
-    const a = ts[i], b = ts[i + 1];
-    if (py >= a.y && py <= b.y)
-      return b.y > a.y ? a.frac + (b.frac - a.frac) * (py - a.y) / (b.y - a.y) : a.frac;
-  }
-  return last.frac;
-}
-// …and the page steers the wheel — but ONLY at year scope. Once a year is committed the
-// neighborhood freezes into context: a whole month of days lives between two adjacent cards,
-// so one screen of scroll down there would throw you years, which is the exact opposite of
-// the intentional selection fine scope exists for. Deeper in, the drum leads and only leads.
-function pickSyncFromPage(){
-  if (pickStage !== "year") return;
-  if (pickAutoY !== null && Math.abs(scrollY - pickAutoY) < 4){ pickAutoY = null; return; }
-  pickAutoY = null;
-  const frac = pickFracAtY(scrollY + innerHeight / 2);
-  if (frac == null) return;
-  pickTo = null; pickVel = 0; pickIdle = 0;
-  pickPos = pickClamp(frac - (+pickUnits[0]));
-  pickNoScroll = true;             // the reader's own thumb put the page here
+  scrollTo(0, Math.max(0, Math.min(max, y - innerHeight / 2)));
 }
 
 // commit the value facing the head, and zoom in — year → month → day → done
@@ -2356,30 +2327,41 @@ function pickBack(){
   else { draft.stage = draft.y ? "set" : "idle"; pickExit(); draftPlaced(); }   // cancel the pick, not the draft
 }
 
-drumEl.addEventListener("wheel", e => {
-  if (!pickStage) return;
-  e.preventDefault();
-  // line- and page-mode wheels report 3, not 300 — unnormalized, a real mouse barely moved
-  // the wheel while a trackpad flung it
-  const raw = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
-  pickNudge(Math.max(-2, Math.min(2, raw / PX_PER_UNIT)));
-}, { passive: false });
-drumEl.addEventListener("touchstart", e => {
-  if (!pickStage) return;
-  pickTouchY = e.touches[0].clientY;
-  pickDrag = true; pickVel = 0; pickTo = null;   // catching the wheel mid-glide stops it dead
-}, { passive: true });
-drumEl.addEventListener("touchmove", e => {
-  if (!pickStage || pickTouchY === null) return;
-  const y = e.touches[0].clientY, du = (pickTouchY - y) * 2 / PX_PER_UNIT;
-  pickVel = pickVel * .7 + du * .3;       // smoothed: one jittery sample can't fling the wheel
-  pickNudge(du);
-  pickTouchY = y;
-}, { passive: true });
-drumEl.addEventListener("touchend", () => {
-  pickDrag = false; pickTouchY = null;
-  if (Math.abs(pickVel) < .13) pickVel = 0;   // a slow release settles where it already is
-});
+// The gesture is taken on the WINDOW, not the drum's 40px hit area — while the wheel is out
+// it IS the page's scroll gesture, anywhere you put your hand. preventDefault is what stops
+// the page moving under you; it only moves because pickTraverse tells it to.
+// BOUND AND UNBOUND with pick mode, not left standing: a non-passive wheel listener on window
+// takes the whole page off the browser's fast scroll path even when it early-returns, and this
+// page is nothing but scrolling the rest of the time.
+const pickGestures = {
+  wheel: e => {
+    e.preventDefault();
+    // line- and page-mode wheels report 3, not 300 — unnormalized, a real mouse barely moved
+    // the wheel while a trackpad flung it
+    const raw = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
+    pickNudge(Math.max(-2, Math.min(2, raw / PX_PER_UNIT)));
+  },
+  touchstart: e => {
+    pickTouchY = e.touches[0].clientY;
+    pickDrag = true; pickVel = 0; pickTo = null;   // catching the wheel mid-glide stops it dead
+  },
+  touchmove: e => {
+    if (pickTouchY === null) return;
+    e.preventDefault();                   // the page does not scroll while the wheel is out
+    const y = e.touches[0].clientY, du = (pickTouchY - y) * 2 / PX_PER_UNIT;
+    pickVel = pickVel * .7 + du * .3;     // smoothed: one jittery sample can't fling the wheel
+    pickNudge(du);
+    pickTouchY = y;
+  },
+  touchend: () => {
+    pickDrag = false; pickTouchY = null;
+    if (Math.abs(pickVel) < .13) pickVel = 0;   // a slow release settles where it already is
+  }
+};
+function pickGrab(on){
+  for (const [k, fn] of Object.entries(pickGestures))
+    (on ? addEventListener : removeEventListener)(k, fn, { passive: k === "touchstart" });
+}
 drumEl.addEventListener("click", e => {
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
@@ -2394,6 +2376,10 @@ addEventListener("keydown", e => {
     pickIdle = 0;                         // so held keys accumulate instead of stuttering
     pickTo = pickClamp((pickTo !== null ? pickTo : Math.round(pickPos)) + (e.key === "ArrowDown" ? 1 : -1));
   }
+  // the keys that scroll are suppressed for the same reason the wheel is: the page has one
+  // driver while the wheel is out, and it isn't your thumb
+  else if (e.key === " " || e.key === "PageDown" || e.key === "PageUp" ||
+           e.key === "Home" || e.key === "End") e.preventDefault();
 });
 
 // ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
