@@ -589,6 +589,10 @@
      visible here, or the whole wheel renders as nothing (it did) */
   #drum.pick .pv{display:block}
   #drum .pv.face{font-weight:600;color:var(--rail);text-shadow:0 0 7px var(--past-glow)}
+  /* the "stop at this scope" value, above january and above the 1st: cyan, and italic, so it
+     reads as a different KIND of value from either hue alone */
+  #drum .pv.whole{color:var(--future);font-style:italic}
+  #drum .pv.whole.face{color:var(--future);text-shadow:0 0 7px var(--future-dim)}
   #drum .pchip{position:absolute;left:4px;display:none;z-index:7;font-family:var(--mono);
     font-size:11px;color:var(--dim);background:var(--panel);border:1px solid var(--border);
     border-radius:5px;padding:3px 8px;cursor:pointer;white-space:nowrap}
@@ -598,10 +602,9 @@
   /* the commit chip: the one obvious way forward — so it is the one FILLED control here,
      not another outline among outlines */
   #drum .pnext{top:calc(50% + 34px);font-size:12px;font-weight:700;padding:5px 11px;
-    color:var(--bg);background:var(--rail);border-color:var(--rail);
+    color:var(--ink);background:var(--rail);border-color:var(--rail);
     box-shadow:0 0 10px var(--past-glow)}
-  #drum .pnext:hover{color:var(--bg);filter:brightness(1.12)}
-  #drum .pstop{top:calc(50% + 64px);color:var(--rail)}
+  #drum .pnext:hover{color:var(--ink);filter:brightness(1.12)}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit */
   @media (max-width:899px){
@@ -2099,14 +2102,13 @@ const BAND = 14;                   // units across the arc once a level has sett
 const PX_PER_UNIT = 46;            // gesture pixels per unit — the one speed constant
 const UNIT_YEARS = { year: 1, month: 1/12, day: 1/365 };
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+const WHOLE = "*";                 // the wheel's own "stop here" — index 0 at month and day
 
 const pickBackEl = Object.assign(document.createElement("button"),
   { className: "pchip pback", type: "button", textContent: "‹ back" });
 const pickNextEl = Object.assign(document.createElement("button"),
   { className: "pchip pnext", type: "button" });
-const pickStopEl = Object.assign(document.createElement("button"),
-  { className: "pchip pstop", type: "button" });
-drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl); drumEl.appendChild(pickStopEl);
+drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl);
 
 const pickClamp = p => Math.max(0, Math.min(Math.max(0, pickUnits.length - 1), p));
 const pickFace  = () => Math.round(pickClamp(pickPos));
@@ -2151,24 +2153,28 @@ function pickZoom(level){
     pickUnits = []; for (let y = y0; y <= y1; y++) pickUnits.push(String(y));
     start = Math.max(0, pickUnits.indexOf(draft.y || draft.seedYr));
   } else if (level === "month"){
-    pickUnits = MONTHS.map((_, i) => String(i + 1).padStart(2, "0"));
-    start = draft.m ? +draft.m - 1 : 0;         // the year you just committed opens in January…
+    // WHOLE sits above january: "stop at the year" is a value on the wheel, not a chip beside
+    // it. It is never the default — the head opens one notch past it, on January…
+    pickUnits = [WHOLE, ...MONTHS.map((_, i) => String(i + 1).padStart(2, "0"))];
+    start = draft.m ? +draft.m : 1;
   } else {
     const n = new Date(Date.UTC(+draft.y, +draft.m, 0)).getUTCDate();   // real month lengths, leap years included
-    pickUnits = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
-    start = draft.day ? +draft.day - 1 : 0;     // …and that month opens on the 1st
+    pickUnits = [WHOLE, ...Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"))];
+    start = draft.day ? +draft.day : 1;         // …and that month opens on the 1st
   }
   pickPos = start; pickTo = null; pickVel = 0; pickIdle = 0; pickDrawn = null;
   pickEls = pickUnits.map(v => {
     const el = document.createElement("div");
     el.className = "pv";
     el.dataset.v = v;                    // the value, apart from however it reads
+    // WHOLE reads as the scope it stops at — "2015" over the months, "mar" over the days
+    el.classList.toggle("whole", v === WHOLE);
     // the month wheel shows the NAME only — "03 Mar" read as the 3rd of March
-    el.textContent = level === "month" ? MONTHS[+v - 1] : v;
+    el.textContent = v === WHOLE ? pickWholeText()
+                   : level === "month" ? MONTHS[+v - 1] : v;
     drumEl.appendChild(el);
     return el;
   });
-  pickChips();
   pickFrame();
   pickTraverse();                    // the page moves ONCE per level, here — never per notch
   if (!pickRaf) pickRaf = requestAnimationFrame(pickTick);
@@ -2208,18 +2214,15 @@ function pickNudge(du){
   pickPos = pickClamp(pickPos + du);
 }
 
-function pickChips(){
-  // nothing coarse to keep at the year level — there the back chip is the only way out
-  pickStopEl.style.display = pickStage === "year" ? "none" : "";
-  if (pickStage !== "year") pickStopEl.textContent = "use " + draftDate() + " ✓";
-  pickNextLabel();
-}
+// what WHOLE stands for at this level: the date already committed, kept as the claim
+const pickWholeText = () => pickStage === "month" ? draft.y : MONTHS[+draft.m - 1];
 
 // the commit chip always names the facing value — the intentional way forward
 function pickNextLabel(){
   const v = pickUnits[pickFace()];
   if (v == null) return;
   pickNextEl.textContent =
+    v === WHOLE           ? draftDate() + " ✓" :
     pickStage === "year"  ? v + " ›" :
     pickStage === "month" ? MONTHS[+v - 1] + " ›" :
     draft.y + "-" + draft.m + "-" + v + " ✓";
@@ -2325,6 +2328,7 @@ function pickTraverse(){
 // commit the value facing the head, and zoom in — year → month → day → done
 function pickCommit(){
   const v = pickUnits[pickFace()];
+  if (v === WHOLE) return pickDone();           // stop at the scope you're already in
   if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickZoom("month"); }
   else if (pickStage === "month"){ draft.m = v; draft.day = null; pickZoom("day"); }
   else { draft.day = v; pickDone(); }
@@ -2380,7 +2384,6 @@ drumEl.addEventListener("click", e => {
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
   if (e.target === pickNextEl) return pickCommit();
-  if (e.target === pickStopEl) return pickDone();
 });
 addEventListener("keydown", e => {
   if (!pickStage || (e.target.closest && e.target.closest(".ded,.cmp-ta"))) return;
