@@ -581,7 +581,9 @@
   #drum.pick .head .ln{width:120px;left:6px;height:2px;background:var(--rail)}
   #drum.pick .head .tri{border-left-color:var(--rail)}
   #drum .pv{position:absolute;left:28px;display:none;font-family:var(--mono);font-size:12px;
-    color:var(--text);cursor:pointer;white-space:nowrap;line-height:16px}
+    color:var(--text);cursor:pointer;white-space:nowrap;line-height:16px;
+    /* grow from the left edge — scaled about the centre, the head value drifts off the rail */
+    transform-origin:left center}
   /* pickFrame shows a value by CLEARING inline display — so the un-hidden state must be
      visible here, or the whole wheel renders as nothing (it did) */
   #drum.pick .pv{display:block}
@@ -2155,7 +2157,9 @@ function pickZoom(level){
   pickEls = pickUnits.map(v => {
     const el = document.createElement("div");
     el.className = "pv";
-    el.textContent = level === "month" ? v + " " + MONTHS[+v - 1] : v;
+    el.dataset.v = v;                    // the value, apart from however it reads
+    // the month wheel shows the NAME only — "03 Mar" read as the 3rd of March
+    el.textContent = level === "month" ? MONTHS[+v - 1] : v;
     drumEl.appendChild(el);
     return el;
   });
@@ -2213,7 +2217,7 @@ function pickNextLabel(){
   if (v == null) return;
   pickNextEl.textContent =
     pickStage === "year"  ? v + " ›" :
-    pickStage === "month" ? MONTHS[+v - 1] + " " + v + " ›" :
+    pickStage === "month" ? MONTHS[+v - 1] + " ›" :
     draft.y + "-" + draft.m + "-" + v + " ✓";
 }
 
@@ -2236,7 +2240,8 @@ function pickFrame(){
     el._a = .25 + .75 * p.a;                 // remembered for the fade-out, at no DOM cost
     el.style.top = (p.y - 8) + "px";
     el.style.opacity = (bloom * el._a).toFixed(2);
-    el.style.transform = `scale(${(.72 + .28 * p.a).toFixed(2)})`;
+    // the head is where you READ — the facing value is 1.35×, and falls off steeply either side
+    el.style.transform = `scale(${(.6 + .75 * p.a).toFixed(2)})`;
     el.classList.toggle("face", i === face);
   });
   if (pickFade.length){
