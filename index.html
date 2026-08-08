@@ -563,6 +563,13 @@
   .draftcard .cnt{font-family:var(--mono);font-size:11px;color:var(--dim)}
   .draftcard .cnt.hid{display:none}
   .draftcard .cnt.at{color:var(--warn)}   /* over the cap — orange, never red, meaning also in the count */
+  /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
+     into place on every settle is what read as jarring: the page relayouts and the cards you
+     were reading move under you. A hollow node gliding the spine carries the same claim and
+     costs no layout at all. Amber because it's the app acting, not yet a note. */
+  .mtl .pghost{position:absolute;left:calc(var(--gut) - 5px);width:12px;height:12px;
+    border-radius:50%;background:transparent;border:2px solid var(--rail);margin-top:-6px;
+    box-shadow:0 0 0 5px var(--rail-tint-2);pointer-events:none;z-index:3}
   /* pick mode: the ONE exception to "a gauge, not a control" — scoped to .pick, so gauge
      mode can never catch a pointer */
   #drum.pick{pointer-events:auto;cursor:grab;
@@ -1604,8 +1611,9 @@ function render(){
   renderTabs(V);
 
   const entries = activeF ? entriesOf(activeF) : [];
-  // the draft is a spine entry like any other — it re-sorts as the drum commits its date
-  if (draft){ entries.push(draftEntry()); entries.sort((a,b) => a.frac - b.frac); }
+  // the draft is a spine entry like any other — but NOT while its date is being picked:
+  // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
+  if (draft && !pickStage){ entries.push(draftEntry()); entries.sort((a,b) => a.frac - b.frac); }
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
@@ -2084,9 +2092,9 @@ function pickEnter(stage){
 function pickExit(){
   pickHalt();
   pickStage = null;
-  if (draft) draft.tent = null;
   drumEl.classList.remove("pick");
   pickEls.forEach(el => el.remove()); pickEls = [];
+  pickGhostClear();                // the ghost's job ends where the card's begins
   drumMeasure();                   // the gauge takes the instrument back
 }
 
@@ -2100,7 +2108,6 @@ function pickHalt(){
 function pickSetStage(stage){
   pickHalt();
   pickStage = stage;
-  if (draft) draft.tent = null;    // the tentative claim doesn't outlive its stage
   pickEls.forEach(el => el.remove()); pickEls = [];
   let start;
   if (stage === "year"){
@@ -2128,9 +2135,6 @@ function pickSetStage(stage){
     return el;
   });
   pickChips();
-  // the tab mirrors the stage without waiting for a render — commits render anyway
-  const td = areaEl.querySelector(".draftcard .dtab");
-  if (td) td.textContent = draftTabText();
   pickFrame();
 }
 
@@ -2169,7 +2173,26 @@ function pickFrame(){
     }
   });
   pickNextLabel();                 // the commit chip tracks whatever comes to face the head
+  pickGhost();                     // …and the ghost rides the spine at the facing date
 }
+
+// ── the ghost: the draft node, before there is a card ──
+// It lives inside .track (already position:relative) at the same gutter offset as a real
+// dot, so it sits ON the spine among the cards it's being filed between. Re-attached on
+// demand because every render rebuilds the track underneath it.
+let pickGhostEl = null;
+function pickGhost(){
+  const track = areaEl.querySelector(".mtl .track");
+  if (!pickStage || !track) return pickGhostClear();
+  if (!pickGhostEl || pickGhostEl.parentNode !== track){
+    pickGhostEl = Object.assign(document.createElement("div"), { className: "pghost" });
+    track.appendChild(pickGhostEl);
+  }
+  const y = pickPageY(pickFracNow());
+  pickGhostEl.style.display = y == null ? "none" : "";
+  if (y != null) pickGhostEl.style.top = (y - pageTop(track)) + "px";
+}
+function pickGhostClear(){ if (pickGhostEl){ pickGhostEl.remove(); pickGhostEl = null; } }
 
 const pickClamp = y => Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, y));
 
@@ -2183,7 +2206,7 @@ function pickGlide(to, withScroll){
     const d = pickAnimTo - pickWheelY;
     if (Math.abs(d) < .5){
       pickAnimRaf = 0; pickWheelY = pickAnimTo; pickAnimTo = null;
-      pickFrame(); if (withScroll) pickTraverse(); pickFollow(); return;
+      pickFrame(); if (withScroll) pickTraverse(); return;
     }
     pickWheelY += d * .24;                 // ≈8 frames to land, no overshoot to un-wind
     pickFrame(); if (withScroll) pickTraverse();
@@ -2264,17 +2287,6 @@ function pickSyncFromPage(){
   clearTimeout(pickSnapT);
   pickSnapT = setTimeout(() => pickSettle(false), 140);
 }
-// when a value settles at the head, the draft re-sorts to that spot — no scroll of its
-// own: the page is already where the reader put it, and moving it would fight them
-function pickFollow(){
-  if (!pickStage || !draft) return;
-  const v = pickVals[pickFace()];
-  draft.tent = pickStage === "year" ? v
-             : pickStage === "month" ? draft.y + "-" + v
-             : draft.y + "-" + draft.m + "-" + v;
-  render();
-}
-
 // commit the value facing the head, and advance — year → month → day → done
 function pickCommit(){
   clearTimeout(pickSnapT);         // a pending snap-follow must not land after the commit
@@ -2282,7 +2294,6 @@ function pickCommit(){
   if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickSetStage("month"); }
   else if (pickStage === "month"){ draft.m = v; draft.day = null; pickSetStage("day"); }
   else { draft.day = v; return pickDone(); }
-  draftPlaced();
 }
 // stop here — what's committed so far IS the claim (2017, 2017-08, or the full day)
 function pickDone(){
@@ -2292,7 +2303,7 @@ function pickDone(){
 }
 function pickBack(){
   if (pickStage === "day"){ draft.day = null; pickSetStage("month"); }
-  else if (pickStage === "month"){ draft.m = null; draft.day = null; pickSetStage("year"); draftPlaced(); }
+  else if (pickStage === "month"){ draft.m = null; draft.day = null; pickSetStage("year"); }
   else { draft.stage = draft.y ? "set" : "idle"; pickExit(); draftPlaced(); }   // cancel the pick, not the draft
 }
 
@@ -2713,12 +2724,11 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", y:null, m:null, day:null, tent:null,
+  draft = { title:"", summary:"", content:"", y:null, m:null, day:null,
             stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
-  pickEnter("year");            // before render, so the tab already reads ···· spinning
+  pickEnter("year");            // before render, so the spine renders the ghost, not a card
   render();
-  const n = areaEl.querySelector(".node.draft");
-  if (n) n.scrollIntoView({ block: "center" });
+  pickGhost(); pickTraverse();  // land on the seeded year among the cards already there
 }
 function discardDraft(){
   if (!draft) return;
@@ -2729,31 +2739,26 @@ function discardDraft(){
 // after a date commit: the draft re-sorts into place and the page follows it there.
 // Mid-pick the jump is instant and marked as ours, so the page→wheel sync doesn't
 // read it back as the reader scrolling.
+// only ever called for a card: mid-pick there is no card to place, and the traverse has
+// already put the page where the ghost is
 function draftPlaced(){
+  if (pickStage) return;
   render();
   const n = areaEl.querySelector(".node.draft");
-  if (!n) return;
-  if (pickStage){
-    pickAutoY = Math.max(0, pageTop(n) + n.offsetHeight / 2 - innerHeight / 2);
-    scrollTo(0, pickAutoY);
-  } else n.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 // the synthetic spine entry — while the wheel spins it rides the tentative date,
 // before any commit it sits at the seeded year
 function draftEntry(){
-  const date = draft.tent || draftDate() || draft.seedYr;
+  const date = draftDate() || draft.seedYr;
   return { d: "__draft__", draft: true, evs: [], prop: [],
            date, frac: yearFrac(date), title: draft.title, contested: false };
 }
 
-// the date tab shows exactly the claim committed so far — the spinning segment reads ··
-function draftTabText(){
-  if (pickStage === "year")  return draft.y || "····";
-  if (pickStage === "month") return draft.y + "-··";
-  if (pickStage === "day")   return draft.y + "-" + draft.m + "-··";
-  return draftDate() || "pick a date";
-}
+// the date tab shows the claim committed so far. It never has to speak mid-spin: the card
+// isn't on the spine while the wheel is out — the ghost is.
+const draftTabText = () => draftDate() || "pick a date";
 
 function draftNodeHtml(e, future){
   const yr = String(e.date).slice(0, 4);
@@ -2888,7 +2893,7 @@ function handoffDraft(){
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
-                 startDraft, discardDraft, pickCommit, pickBack, pickDone, pickSpin, pickFollow,
+                 startDraft, discardDraft, pickCommit, pickBack, pickDone, pickSpin,
                  pickFracNow, pickPageY,
                  draftDate, draftTabText,
                  draftGet: () => draft, draftSet: p => { draft = { ...draft, ...p }; } };
