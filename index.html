@@ -1850,9 +1850,9 @@ function renderTimeline(entries){
 
     const future = e.frac > nowFrac;
     const yr = String(e.date).slice(0,4);
-    // the node carries its year and address as data: the drum reads the year without
-    // scraping rendered text, and `d` stays recoverable now that nothing prints it
-    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}"`;
+    // the node carries its year, address, and date-fraction as data: the drum reads them
+    // without scraping rendered text, and `d` stays recoverable now that nothing prints it
+    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"`;
 
     const propHtml = e.prop.length
       ? `<div class="prop">` + e.prop.map(ev => propCard(ev, e.d)).join("") + `</div>` : "";
@@ -1950,7 +1950,8 @@ function drumMeasure(){
     el.className = "tick" + (isDraft ? " draft" : contested ? " contested" : rev ? " rev" : future ? " future" : "");
     if (!contested && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
-    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "" });
+    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "",
+                     frac: n.dataset.frac ? +n.dataset.frac : null, draft: isDraft });
   });
   areaEl.querySelectorAll(".mtl .gap-c").forEach(g => {
     const el = document.createElement("div"); el.className = "tick gapmark";
@@ -2143,14 +2144,43 @@ function pickFrame(){
 
 function pickSpin(dy){
   pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, pickWheelY + dy));
-  if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; pickFrame(); });
+  if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; pickFrame(); pickTraverse(); });
   clearTimeout(pickSnapT);
   pickSnapT = setTimeout(() => { pickWheelY = pickFace() * PICK_STEP; pickFrame(); pickFollow(); }, 140);
 }
 
-// the wheel steers the page: when a value settles at the head, the draft moves to where
-// that date would land and the timeline scrolls to it — the publisher watches the card
-// find its place BEFORE committing anything
+// ── the wheel TRAVERSES the record ──
+// Spinning doesn't happen beside the timeline, it moves THROUGH it: every frame the page
+// scrolls to where the facing date sits among the cards that already exist, so the
+// publisher reads the neighborhood before committing anything.
+// the date the wheel is facing right now, as a fractional year — mid-spin included
+function pickFracNow(){
+  const idx = Math.max(0, Math.min(pickVals.length - 1, pickWheelY / PICK_STEP));
+  if (pickStage === "year")  return +pickVals[0] + idx;
+  if (pickStage === "month") return +draft.y + idx / 12;
+  return +draft.y + (+draft.m - 1) / 12 + idx / 365;
+}
+// date-fraction → page px, interpolated between the real cards' own positions; beyond
+// the record's edges the empty years pass at a constant rate
+function pickPageY(frac){
+  const ts = drumTicks.filter(t => !t.draft && t.frac != null);
+  if (!ts.length) return null;
+  const PXY = 260;                                  // px per year outside the record
+  if (frac <= ts[0].frac) return ts[0].y - (ts[0].frac - frac) * PXY;
+  const last = ts[ts.length - 1];
+  if (frac >= last.frac) return last.y + (frac - last.frac) * PXY;
+  for (let i = 0; i < ts.length - 1; i++){
+    const a = ts[i], b = ts[i + 1];
+    if (frac >= a.frac && frac <= b.frac)
+      return b.frac > a.frac ? a.y + (b.y - a.y) * (frac - a.frac) / (b.frac - a.frac) : a.y;
+  }
+  return last.y;
+}
+function pickTraverse(){
+  const y = pickPageY(pickFracNow());
+  if (y != null) scrollTo(0, y - innerHeight / 2);
+}
+// when a value settles at the head, the draft re-sorts to that spot and the page lands on it
 function pickFollow(){
   if (!pickStage || !draft) return;
   const v = pickVals[pickFace()];
@@ -2741,6 +2771,7 @@ window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eve
                  admit, dropped: () => vDropped,
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
                  startDraft, discardDraft, pickCommit, pickBack, pickDone, pickSpin, pickFollow,
+                 pickFracNow, pickPageY,
                  draftDate, draftTabText,
                  draftGet: () => draft, draftSet: p => { draft = { ...draft, ...p }; } };
 
