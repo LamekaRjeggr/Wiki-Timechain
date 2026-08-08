@@ -2063,15 +2063,36 @@ addEventListener("scroll", () => {
 addEventListener("resize", drumMeasure);
 
 // ═══════════════ the date wheel — add mode borrows the drum ═══════════════
-// The ONE exception to "a gauge, not a control": while a draft's date is being picked, the
-// drum turns into a dense value wheel — spin to a year, commit, spin months, commit, days.
-// Committing is a CLICK on a value (or Enter); stopping early IS the precision — the chips
-// beside the head say "use 2017 ✓". Exiting hands the drum straight back to the gauge.
+// The ONE exception to "a gauge, not a control". While a draft's date is being picked the
+// drum becomes a ZOOM over time. year → month → day is NOT three wheels swapped for one
+// another — it is one wheel getting closer. Committing a year narrows the SCOPE to that year
+// and eases the SCALE until twelve months fill the band. Nothing is replaced, so there is
+// nothing to jump. (The old array-swap is what made commits feel abrupt: 32 elements deleted,
+// 12 created at final position, and the head teleporting to a hardcoded "06".)
+//
+// THE SCALE IS A CONSTANT, never read off the record: BAND units across the front arc and
+// PX_PER_UNIT gesture-pixels per unit, at every level, in every collection, forever. A
+// four-card timeline and a forty-card one spin identically. What the record decides is only
+// where the PAGE goes — the drum leads at a fixed rate, the page follows to wherever that
+// date actually lives. (Before this, one notch scrolled however far apart two cards happened
+// to sit, so the same gesture meant something different in every collection.)
+//
+// ONE INTEGRATOR owns motion: pickTick. Everything else only states intent — drag to here,
+// coast at this velocity, ease to that unit, zoom to that level — and the loop reconciles.
+// That is why there are no instant paths left. There used to be six writers to the position
+// and easing one of them is why it still felt abrupt.
 let pickStage = null;              // 'year' | 'month' | 'day' while picking; null = gauge mode
-let pickVals = [], pickEls = [], pickWheelY = 0, pickRaf = 0, pickSnapT = 0, pickTouchY = null;
-let pickAnimRaf = 0, pickAnimTo = null, pickVel = 0;   // the eased settle, and flick momentum
-const PICK_STEP = 46;              // virtual page-px between values on the wheel
-const PICK_VIS  = 14;              // values across the front arc — sets the wheel's density
+let pickUnits = [], pickEls = [], pickFade = [];
+let pickPos = 0;                   // continuous index into pickUnits — THE position, in units
+let pickVel = 0, pickTo = null, pickDrag = false, pickIdle = 0, pickRaf = 0, pickTouchY = null;
+let pickSpan = 14, pickSpanTo = 14;   // units across the front arc; eases on a level change
+let pickNoScroll = false;          // this frame's move came FROM the page — don't scroll it back
+let pickDrawn = null;              // {pos,span} last PAINTED. Redraw when state differs from that,
+                                   // not from the tick's own start — a gesture landing between two
+                                   // ticks changes nothing during a tick, and never got drawn.
+const BAND = 14;                   // units across the arc once a level has settled
+const PX_PER_UNIT = 46;            // gesture pixels per unit — the one speed constant
+const UNIT_YEARS = { year: 1, month: 1/12, day: 1/365 };
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 
 const pickBackEl = Object.assign(document.createElement("button"),
@@ -2082,64 +2103,105 @@ const pickStopEl = Object.assign(document.createElement("button"),
   { className: "pchip pstop", type: "button" });
 drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl); drumEl.appendChild(pickStopEl);
 
-const pickFace = () =>
-  Math.max(0, Math.min(pickVals.length - 1, Math.round(pickWheelY / PICK_STEP)));
+const pickClamp = p => Math.max(0, Math.min(Math.max(0, pickUnits.length - 1), p));
+const pickFace  = () => Math.round(pickClamp(pickPos));
 
 function pickEnter(stage){
   drumEl.classList.add("pick");
-  pickSetStage(stage || "year");
+  pickSpan = pickSpanTo = BAND;     // a fresh pick starts already at rest, with no zoom to play
+  pickZoom(stage || "year");
 }
 function pickExit(){
-  pickHalt();
   pickStage = null;
+  if (pickRaf) cancelAnimationFrame(pickRaf);
+  pickRaf = 0; pickVel = 0; pickTo = null; pickDrag = false; pickTouchY = null;
   drumEl.classList.remove("pick");
-  pickEls.forEach(el => el.remove()); pickEls = [];
+  [...pickEls, ...pickFade].forEach(el => el.remove());
+  pickEls = []; pickFade = [];
   pickGhostClear();                // the ghost's job ends where the card's begins
   drumMeasure();                   // the gauge takes the instrument back
 }
 
-// a glide from the old stage would keep easing toward an index that no longer exists
-function pickHalt(){
-  if (pickAnimRaf) cancelAnimationFrame(pickAnimRaf);
-  pickAnimRaf = 0; pickAnimTo = null; pickVel = 0;
-  clearTimeout(pickSnapT);
-}
-
-function pickSetStage(stage){
-  pickHalt();
-  pickStage = stage;
-  pickEls.forEach(el => el.remove()); pickEls = [];
+// ── the zoom ──
+// The date under the head does NOT move: committing 2015 puts you at 2015-01, which is the
+// same instant, so there is no position change to see. What changes is the scale, and it
+// eases. The incoming units start crammed at the head (span is still the old level's reach,
+// expressed in the new unit) and spread outward as it settles.
+function pickZoom(level){
+  if (pickStage) pickSpan *= UNIT_YEARS[pickStage] / UNIT_YEARS[level];
+  pickSpanTo = BAND;
+  pickFade.forEach(el => el.remove());          // a second commit mid-zoom drops the older set
+  pickFade = pickEls;
+  pickFade.forEach(el => { el.classList.remove("face"); el.classList.add("gone"); });
+  pickEls = [];
+  pickStage = level;
   let start;
-  if (stage === "year"){
-    // span = the collection's own years, with room either side for what isn't written yet
+  if (level === "year"){
+    // scope = the collection's own years, with room either side for what isn't written yet
     const yrs = drumTicks.map(t => +t.yr).filter(Boolean);
     const nowY = new Date().getFullYear();
     const y0 = (yrs.length ? Math.min(...yrs) : nowY) - 10, y1 = nowY + 10;
-    pickVals = []; for (let y = y0; y <= y1; y++) pickVals.push(String(y));
-    start = draft.y || draft.seedYr;
-  } else if (stage === "month"){
-    pickVals = MONTHS.map((_, i) => String(i + 1).padStart(2, "0"));
-    start = draft.m || "06";
+    pickUnits = []; for (let y = y0; y <= y1; y++) pickUnits.push(String(y));
+    start = Math.max(0, pickUnits.indexOf(draft.y || draft.seedYr));
+  } else if (level === "month"){
+    pickUnits = MONTHS.map((_, i) => String(i + 1).padStart(2, "0"));
+    start = draft.m ? +draft.m - 1 : 0;         // the year you just committed opens in January…
   } else {
     const n = new Date(Date.UTC(+draft.y, +draft.m, 0)).getUTCDate();   // real month lengths, leap years included
-    pickVals = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
-    start = draft.day || "15";
+    pickUnits = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
+    start = draft.day ? +draft.day - 1 : 0;     // …and that month opens on the 1st
   }
-  const at = pickVals.indexOf(start);
-  pickWheelY = (at < 0 ? 0 : at) * PICK_STEP;
-  pickEls = pickVals.map(v => {
+  pickPos = start; pickTo = null; pickVel = 0; pickIdle = 0; pickDrawn = null;
+  pickEls = pickUnits.map(v => {
     const el = document.createElement("div");
     el.className = "pv";
-    el.textContent = stage === "month" ? v + " " + MONTHS[+v - 1] : v;
+    el.textContent = level === "month" ? v + " " + MONTHS[+v - 1] : v;
     drumEl.appendChild(el);
     return el;
   });
   pickChips();
   pickFrame();
+  if (!pickRaf) pickRaf = requestAnimationFrame(pickTick);
+}
+
+// ── the integrator: the only thing that ever moves the wheel ──
+function pickTick(){
+  pickRaf = pickStage ? requestAnimationFrame(pickTick) : 0;
+  if (!pickStage) return;
+  // the zoom is log-eased, because a 30× change of scale is multiplicative, not additive
+  const gap = Math.log(pickSpanTo / pickSpan);
+  if (Math.abs(gap) < .01) pickSpan = pickSpanTo;
+  else pickSpan = Math.exp(Math.log(pickSpan) + gap * .28);
+  // …and the position, in exactly one of four moods
+  if (pickDrag) pickIdle = 0;                            // your finger owns it
+  else if (pickTo !== null){                             // easing to a unit
+    pickIdle = 0;
+    const d = pickTo - pickPos;
+    if (Math.abs(d) < .002){ pickPos = pickTo; pickTo = null; }
+    else pickPos += d * .24;
+  } else if (Math.abs(pickVel) > .004){                  // coasting off a flick
+    pickIdle = 0;
+    pickPos = pickClamp(pickPos + pickVel); pickVel *= .93;
+  } else {                                               // quiet — land on a whole unit
+    pickVel = 0;
+    if (++pickIdle === 9 && pickPos !== Math.round(pickPos)) pickTo = pickClamp(Math.round(pickPos));
+  }
+  if (!pickDrawn || pickPos !== pickDrawn.pos || pickSpan !== pickDrawn.span){
+    pickDrawn = { pos: pickPos, span: pickSpan };
+    pickFrame();
+    if (!pickNoScroll) pickTraverse();
+  }
+  pickNoScroll = false;
+}
+
+// every gesture says the same thing: move this many UNITS. Never pixels, never an index.
+function pickNudge(du){
+  pickTo = null; pickIdle = 0;
+  pickPos = pickClamp(pickPos + du);
 }
 
 function pickChips(){
-  // nothing coarse to keep at the year stage — there the back chip is the only way out
+  // nothing coarse to keep at the year level — there the back chip is the only way out
   pickStopEl.style.display = pickStage === "year" ? "none" : "";
   if (pickStage !== "year") pickStopEl.textContent = "use " + draftDate() + " ✓";
   pickNextLabel();
@@ -2147,7 +2209,8 @@ function pickChips(){
 
 // the commit chip always names the facing value — the intentional way forward
 function pickNextLabel(){
-  const v = pickVals[pickFace()];
+  const v = pickUnits[pickFace()];
+  if (v == null) return;
   pickNextEl.textContent =
     pickStage === "year"  ? v + " ›" :
     pickStage === "month" ? MONTHS[+v - 1] + " " + v + " ›" :
@@ -2159,19 +2222,27 @@ function pickFrame(){
   limbTop.style.visibility = limbBot.style.visibility = "hidden";
   drumEl.style.clipPath = "none";            // the wheel owns the whole strip while it's out
   const vh = innerHeight, cy = vh / 2, R = (vh - 180) / 2;
-  const D = (PICK_VIS * PICK_STEP) / Math.PI;
-  const headTh = pickWheelY / D;
+  const D = pickSpan / Math.PI;              // pickSpan units span the front arc, always
+  const headTh = pickPos / D;
   const face = pickFace();
+  // Mid-zoom the incoming set is crammed at the head while the outgoing one is still spread.
+  // The cross-fade rides the SCALE itself — no timer, so the two sets hand over at exactly
+  // the rate the wheel is actually moving, in or out.
+  const bloom = Math.min(pickSpan / BAND, BAND / pickSpan);
   pickEls.forEach((el, i) => {
-    const p = project(i * PICK_STEP, D, headTh, R, cy);
+    const p = project(i, D, headTh, R, cy);
     el.style.display = p.hide ? "none" : "";
-    if (!p.hide){
-      el.style.top = (p.y - 8) + "px";
-      el.style.opacity = (.25 + .75 * p.a).toFixed(2);
-      el.style.transform = `scale(${(.72 + .28 * p.a).toFixed(2)})`;
-      el.classList.toggle("face", i === face);
-    }
+    if (p.hide) return;
+    el._a = .25 + .75 * p.a;                 // remembered for the fade-out, at no DOM cost
+    el.style.top = (p.y - 8) + "px";
+    el.style.opacity = (bloom * el._a).toFixed(2);
+    el.style.transform = `scale(${(.72 + .28 * p.a).toFixed(2)})`;
+    el.classList.toggle("face", i === face);
   });
+  if (pickFade.length){
+    if (bloom > .96){ pickFade.forEach(el => el.remove()); pickFade = []; }
+    else pickFade.forEach(el => { el.style.opacity = ((1 - bloom) * (el._a || .6)).toFixed(2); });
+  }
   pickNextLabel();                 // the commit chip tracks whatever comes to face the head
   pickGhost();                     // …and the ghost rides the spine at the facing date
 }
@@ -2194,48 +2265,16 @@ function pickGhost(){
 }
 function pickGhostClear(){ if (pickGhostEl){ pickGhostEl.remove(); pickGhostEl = null; } }
 
-const pickClamp = y => Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, y));
-
-// Under your finger the wheel is 1:1 — direct is what makes it feel attached. The SETTLE is
-// what used to read as jank: it teleported up to half a step in one frame. Now it eases, and
-// while it's easing the page traverses with it, so wheel and timeline arrive together.
-function pickGlide(to, withScroll){
-  pickAnimTo = to;
-  if (pickAnimRaf) return;
-  const step = () => {
-    const d = pickAnimTo - pickWheelY;
-    if (Math.abs(d) < .5){
-      pickAnimRaf = 0; pickWheelY = pickAnimTo; pickAnimTo = null;
-      pickFrame(); if (withScroll) pickTraverse(); return;
-    }
-    pickWheelY += d * .24;                 // ≈8 frames to land, no overshoot to un-wind
-    pickFrame(); if (withScroll) pickTraverse();
-    pickAnimRaf = requestAnimationFrame(step);
-  };
-  pickAnimRaf = requestAnimationFrame(step);
-}
-// page-driven settles pass withScroll=false: the reader's thumb put the page there, and
-// scrolling it back under them is the one thing the two-way sync must never do
-function pickSettle(withScroll){ pickGlide(pickFace() * PICK_STEP, withScroll !== false); }
-
-function pickSpin(dy){
-  pickAnimTo = null;                       // a live glide yields to the hand
-  pickWheelY = pickClamp(pickWheelY + dy);
-  if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; pickFrame(); pickTraverse(); });
-  clearTimeout(pickSnapT);
-  pickSnapT = setTimeout(pickSettle, 140);
-}
-
 // ── the wheel TRAVERSES the record ──
-// Spinning doesn't happen beside the timeline, it moves THROUGH it: every frame the page
-// scrolls to where the facing date sits among the cards that already exist, so the
-// publisher reads the neighborhood before committing anything.
-// the date the wheel is facing right now, as a fractional year — mid-spin included
+// Spinning doesn't happen beside the timeline, it moves THROUGH it: the page scrolls to where
+// the facing date sits among the cards that already exist, so the publisher reads the
+// neighborhood before committing anything. The drum's own rate is constant; the page's is not,
+// and that is correct — a lurch there is real structure, and your hand is on the wheel.
 function pickFracNow(){
-  const idx = Math.max(0, Math.min(pickVals.length - 1, pickWheelY / PICK_STEP));
-  if (pickStage === "year")  return +pickVals[0] + idx;
-  if (pickStage === "month") return +draft.y + idx / 12;
-  return +draft.y + (+draft.m - 1) / 12 + idx / 365;
+  const i = pickClamp(pickPos);
+  if (pickStage === "year")  return +pickUnits[0] + i;
+  if (pickStage === "month") return +draft.y + i / 12;
+  return +draft.y + (+draft.m - 1) / 12 + i / 365;
 }
 // date-fraction → page px, interpolated between the real cards' own positions; beyond
 // the record's edges the empty years pass at a constant rate
@@ -2253,13 +2292,17 @@ function pickPageY(frac){
   }
   return last.y;
 }
+let pickAutoY = null;              // the last scroll WE issued — consumed by one scroll event
 function pickTraverse(){
   const y = pickPageY(pickFracNow());
-  if (y != null){ pickAutoY = Math.max(0, y - innerHeight / 2); scrollTo(0, pickAutoY); }
+  if (y == null) return;
+  // clamp to what the document can ACTUALLY scroll to, or past the ends of the record the
+  // browser clamps while pickAutoY doesn't, the own-scroll guard misses, and the page yanks
+  // the wheel back from a position it never reached
+  const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+  pickAutoY = Math.max(0, Math.min(max, y - innerHeight / 2));
+  scrollTo(0, pickAutoY);
 }
-// …and the page steers the wheel: scrolling the timeline IS spinning. The mapping is its
-// own inverse, so even a missed own-scroll guard just recomputes the same wheel position.
-let pickAutoY = null;              // the last scroll WE issued — consumed by one scroll event
 function pickFracAtY(py){
   const ts = drumTicks.filter(t => !t.draft && t.frac != null);
   if (!ts.length) return null;
@@ -2274,26 +2317,27 @@ function pickFracAtY(py){
   }
   return last.frac;
 }
+// …and the page steers the wheel — but ONLY at year scope. Once a year is committed the
+// neighborhood freezes into context: a whole month of days lives between two adjacent cards,
+// so one screen of scroll down there would throw you years, which is the exact opposite of
+// the intentional selection fine scope exists for. Deeper in, the drum leads and only leads.
 function pickSyncFromPage(){
+  if (pickStage !== "year") return;
   if (pickAutoY !== null && Math.abs(scrollY - pickAutoY) < 4){ pickAutoY = null; return; }
   pickAutoY = null;
   const frac = pickFracAtY(scrollY + innerHeight / 2);
   if (frac == null) return;
-  const idx = pickStage === "year"  ? frac - (+pickVals[0])
-            : pickStage === "month" ? (frac - (+draft.y)) * 12
-            : (frac - (+draft.y) - (+draft.m - 1) / 12) * 365;
-  pickWheelY = Math.max(0, Math.min((pickVals.length - 1) * PICK_STEP, idx * PICK_STEP));
-  pickFrame();
-  clearTimeout(pickSnapT);
-  pickSnapT = setTimeout(() => pickSettle(false), 140);
+  pickTo = null; pickVel = 0; pickIdle = 0;
+  pickPos = pickClamp(frac - (+pickUnits[0]));
+  pickNoScroll = true;             // the reader's own thumb put the page here
 }
-// commit the value facing the head, and advance — year → month → day → done
+
+// commit the value facing the head, and zoom in — year → month → day → done
 function pickCommit(){
-  clearTimeout(pickSnapT);         // a pending snap-follow must not land after the commit
-  const v = pickVals[pickFace()];
-  if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickSetStage("month"); }
-  else if (pickStage === "month"){ draft.m = v; draft.day = null; pickSetStage("day"); }
-  else { draft.day = v; return pickDone(); }
+  const v = pickUnits[pickFace()];
+  if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickZoom("month"); }
+  else if (pickStage === "month"){ draft.m = v; draft.day = null; pickZoom("day"); }
+  else { draft.day = v; pickDone(); }
 }
 // stop here — what's committed so far IS the claim (2017, 2017-08, or the full day)
 function pickDone(){
@@ -2302,8 +2346,8 @@ function pickDone(){
   draftPlaced();
 }
 function pickBack(){
-  if (pickStage === "day"){ draft.day = null; pickSetStage("month"); }
-  else if (pickStage === "month"){ draft.m = null; draft.day = null; pickSetStage("year"); }
+  if (pickStage === "day"){ draft.day = null; pickZoom("month"); }
+  else if (pickStage === "month"){ draft.m = null; draft.day = null; pickZoom("year"); }
   else { draft.stage = draft.y ? "set" : "idle"; pickExit(); draftPlaced(); }   // cancel the pick, not the draft
 }
 
@@ -2311,54 +2355,40 @@ drumEl.addEventListener("wheel", e => {
   if (!pickStage) return;
   e.preventDefault();
   // line- and page-mode wheels report 3, not 300 — unnormalized, a real mouse barely moved
-  // the wheel while a trackpad flung it. Capping per event is what kills the lurch.
+  // the wheel while a trackpad flung it
   const raw = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
-  pickSpin(Math.max(-PICK_STEP * 2, Math.min(PICK_STEP * 2, raw)));
+  pickNudge(Math.max(-2, Math.min(2, raw / PX_PER_UNIT)));
 }, { passive: false });
 drumEl.addEventListener("touchstart", e => {
   if (!pickStage) return;
   pickTouchY = e.touches[0].clientY;
-  pickVel = 0; pickAnimTo = null;         // catching the wheel mid-glide stops it dead
+  pickDrag = true; pickVel = 0; pickTo = null;   // catching the wheel mid-glide stops it dead
 }, { passive: true });
 drumEl.addEventListener("touchmove", e => {
   if (!pickStage || pickTouchY === null) return;
-  const y = e.touches[0].clientY, dy = (pickTouchY - y) * 2;
-  pickVel = pickVel * .7 + dy * .3;       // smoothed: one jittery sample can't fling the wheel
-  pickSpin(dy);
+  const y = e.touches[0].clientY, du = (pickTouchY - y) * 2 / PX_PER_UNIT;
+  pickVel = pickVel * .7 + du * .3;       // smoothed: one jittery sample can't fling the wheel
+  pickNudge(du);
   pickTouchY = y;
 }, { passive: true });
 drumEl.addEventListener("touchend", () => {
-  pickTouchY = null;
-  if (Math.abs(pickVel) < 6) return;      // a slow release settles where it already is
-  clearTimeout(pickSnapT);
-  const coast = () => {                   // a flick keeps going, decaying, then lands on a value
-    if (pickTouchY !== null) return;      // a second finger down owns the wheel again
-    pickVel *= .93;
-    if (Math.abs(pickVel) < 1.5) return pickSettle();
-    pickWheelY = pickClamp(pickWheelY + pickVel);
-    pickFrame(); pickTraverse();
-    requestAnimationFrame(coast);
-  };
-  requestAnimationFrame(coast);
+  pickDrag = false; pickTouchY = null;
+  if (Math.abs(pickVel) < .13) pickVel = 0;   // a slow release settles where it already is
 });
 drumEl.addEventListener("click", e => {
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
   if (e.target === pickNextEl) return pickCommit();
   if (e.target === pickStopEl) return pickDone();
-  const pv = e.target.closest(".pv");
-  if (!pv) return;
-  const i = pickEls.indexOf(pv);
-  if (i < 0) return;
-  pickWheelY = i * PICK_STEP;                // clicking any value faces it — and commits it
-  pickCommit();
 });
 addEventListener("keydown", e => {
   if (!pickStage || (e.target.closest && e.target.closest(".ded,.cmp-ta"))) return;
   if (e.key === "Enter"){ e.preventDefault(); pickCommit(); }
-  // arrows GLIDE a whole step — spin-then-snap made a key press two motions
-  else if (e.key === "ArrowDown"){ e.preventDefault(); pickGlide(pickClamp((pickFace() + 1) * PICK_STEP), true); }
-  else if (e.key === "ArrowUp"){ e.preventDefault(); pickGlide(pickClamp((pickFace() - 1) * PICK_STEP), true); }
+  else if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+    e.preventDefault();                   // arrows state a target; the integrator eases there,
+    pickIdle = 0;                         // so held keys accumulate instead of stuttering
+    pickTo = pickClamp((pickTo !== null ? pickTo : Math.round(pickPos)) + (e.key === "ArrowDown" ? 1 : -1));
+  }
 });
 
 // ═══════════════ write side — checkpoints 2b + 2c: the tap & the margin note ═══════════════
@@ -2893,7 +2923,7 @@ function handoffDraft(){
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
-                 startDraft, discardDraft, pickCommit, pickBack, pickDone, pickSpin,
+                 startDraft, discardDraft, pickCommit, pickBack, pickDone,
                  pickFracNow, pickPageY,
                  draftDate, draftTabText,
                  draftGet: () => draft, draftSet: p => { draft = { ...draft, ...p }; } };
