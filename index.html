@@ -578,7 +578,8 @@
     border-right:1px solid var(--border)}
   #drum.pick .tick,#drum.pick .tab,#drum.pick .now,#drum.pick .band{display:none!important}
   /* the head line IS where selection happens — in pick mode it says so, in amber */
-  #drum.pick .head .ln{width:120px;left:6px;height:2px;background:var(--rail)}
+  /* stops short of the value at left:28px — a 120px rule struck the selection through */
+  #drum.pick .head .ln{width:18px;left:6px;height:2px;background:var(--rail)}
   #drum.pick .head .tri{border-left-color:var(--rail)}
   #drum .pv{position:absolute;left:28px;display:none;font-family:var(--mono);font-size:12px;
     color:var(--text);cursor:pointer;white-space:nowrap;line-height:16px;
@@ -594,8 +595,12 @@
   #drum .pchip:hover{color:var(--text)}
   #drum.pick .pchip{display:block}
   #drum .pback{top:calc(50% - 46px)}
-  /* the commit chip: the one obvious way forward — the facing value, in amber */
-  #drum .pnext{top:calc(50% + 30px);color:var(--rail);font-weight:600}
+  /* the commit chip: the one obvious way forward — so it is the one FILLED control here,
+     not another outline among outlines */
+  #drum .pnext{top:calc(50% + 34px);font-size:12px;font-weight:700;padding:5px 11px;
+    color:var(--bg);background:var(--rail);border-color:var(--rail);
+    box-shadow:0 0 10px var(--past-glow)}
+  #drum .pnext:hover{color:var(--bg);filter:brightness(1.12)}
   #drum .pstop{top:calc(50% + 64px);color:var(--rail)}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit */
@@ -2239,8 +2244,8 @@ function pickFrame(){
     el._a = .25 + .75 * p.a;                 // remembered for the fade-out, at no DOM cost
     el.style.top = (p.y - 8) + "px";
     el.style.opacity = (bloom * el._a).toFixed(2);
-    // the head is where you READ — the facing value is 1.35×, and falls off steeply either side
-    el.style.transform = `scale(${(.6 + .75 * p.a).toFixed(2)})`;
+    // the head is where you READ — the facing value is 1.9×, and falls off steeply either side
+    el.style.transform = `scale(${(.55 + 1.35 * p.a).toFixed(2)})`;
     el.classList.toggle("face", i === face);
   });
   if (pickFade.length){
