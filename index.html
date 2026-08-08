@@ -606,9 +606,16 @@
     box-shadow:0 0 10px var(--past-glow)}
   #drum .pnext:hover{color:var(--ink);filter:brightness(1.12)}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
-     not the rolled-back persistent widening: the gutter goes quiet again on exit */
+     not the rolled-back persistent widening: the gutter goes quiet again on exit.
+     88px, not 132: the column only has to hold the widest VALUE ("2026" at the head's 1.9×,
+     ~55px past left:28). What used to set 132 was the commit chip — "2015-07-15 ✓" is twelve
+     mono characters — so on a phone the chips leave the column for the bottom edge, where a
+     thumb already is, and the column costs a third of the screen less. */
   @media (max-width:899px){
-    #drum.pick{width:132px}
+    #drum.pick{width:88px}
+    #drum.pick .pchip{position:fixed;top:auto;bottom:14px;z-index:8;font-size:12px;padding:7px 13px}
+    #drum.pick .pback{left:12px}
+    #drum.pick .pnext{left:auto;right:12px;font-size:13px;padding:8px 15px}
   }
 </style>
 <script>
