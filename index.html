@@ -248,9 +248,16 @@
     max-width:720px;margin:18px auto 0;
     --gut:64px;--cgap:16px}      /* ONE gutter number: spine, dots, dashline and chip derive
        from it, so slim mode can narrow the empty column and hand the width to the cards */
-  .mtl .track{position:relative;padding:6px 6px 6px 0}
+  /* `anywhere`, inherited by everything on the spine: a 67-char txid or a bc1q address is
+     one word to the layout, and one such word used to set the card's width (see the track
+     below). The tab is `nowrap` and unaffected — a date still never breaks. */
+  .mtl .track{position:relative;padding:6px 6px 6px 0;overflow-wrap:anywhere}
   .mtl .spine{position:absolute;left:var(--gut);top:8px;bottom:8px;width:2px;background:var(--border)}
-  .mtl .node{position:relative;display:grid;grid-template-columns:var(--gut) 1fr;column-gap:var(--cgap)}
+  /* minmax(0,·) is the card's width cap, in all three of these grids. A bare `1fr` track's
+     automatic minimum is MIN-CONTENT, so the longest unbreakable word in a card sized the
+     card — past the viewport, which handed the page a horizontal scroll and slid the fixed
+     drum over the cards. The 0 floor says the column is the column, whatever the content wants. */
+  .mtl .node{position:relative;display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
   /* the first column is deliberately EMPTY. The date used to live here and is now on the
      card's own tab; the column stays because the spine, the dots, the gap dashline and the
      now-chip are all keyed to it — and because the empty gutter is where the drum goes. */
@@ -332,7 +339,7 @@
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
   /* gaps: proportional spacer, or a collapsed marker for long silences */
   .mtl .gap{width:100%}
-  .mtl .gap-c{position:relative;display:grid;grid-template-columns:var(--gut) 1fr;column-gap:var(--cgap);
+  .mtl .gap-c{position:relative;display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap);
      align-items:center;cursor:pointer}
   /* present threshold: the SEAM. A zero-height box, so its two borders stack into one
      3px rule whose upper half is the ocher past and lower half the cyan ahead — the
@@ -388,7 +395,7 @@
     border:1px dashed var(--gutline);border-radius:5px}
   /* the fold — cards from keys with no standing here. Nothing is deleted, only resisted, and
      the count IS the information. */
-  .mtl .foldrow{display:grid;grid-template-columns:var(--gut) 1fr;column-gap:var(--cgap)}
+  .mtl .foldrow{display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
   .mtl .foldrow .lab{grid-column:2;padding:13px 0 2px;color:var(--dim);
     font-family:var(--mono);font-size:11.5px;cursor:pointer}
   .mtl .foldrow .go{color:var(--accent);margin-left:7px}
@@ -606,18 +613,22 @@
   #drum .pnext:hover{color:var(--ink);filter:brightness(1.12)}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit.
-     88px, not 132: the column only has to hold the widest VALUE ("2026" at the head's 1.9×,
+     86px, not 132: the column only has to hold the widest VALUE ("2026" at the head's 1.9×,
      ~55px past left:28). What used to set 132 was the commit chip — "2015-07-15 ✓" is twelve
      mono characters — so on a phone the chips leave the column for the bottom edge, where a
      thumb already is, and the column costs a third of the screen less. */
   @media (max-width:899px){
     /* opaque, not 88%: on a phone the header sits full-width UNDER the column, so its own
        words ("Wiki · Ti", the intro prose) read straight through the years. */
-    #drum.pick{width:88px;background:var(--bg)}
+    /* 86, not 88: the card's left edge is 20 (main) + 2 (.mtl) + 52 (--gut) + 12 (--cgap)
+       = 86px, so 88 sat ON the card's border. Narrowing the column pays the 2px instead of
+       --gut, which would take it off the cards. The widest value ("2026" at the head's 1.9×)
+       ends at 84px, so it still fits. */
+    #drum.pick{width:86px;background:var(--bg)}
     /* and the rest of the page is BACKGROUNDED while you pick — it still scrolls under the
        veil, so the wheel visibly leads it. --scrim dims on all three themes; mixing the
-       page's own bg fogged light with white. left:88px is the column, never dimmed. */
-    #drum.pick::after{content:"";position:fixed;top:0;right:0;bottom:0;left:88px;
+       page's own bg fogged light with white. left:86px is the column, never dimmed. */
+    #drum.pick::after{content:"";position:fixed;top:0;right:0;bottom:0;left:86px;
       background:var(--scrim);pointer-events:none}
     #drum.pick .pchip{position:fixed;top:auto;bottom:14px;z-index:8;font-size:12px;padding:7px 13px}
     #drum.pick .pback{left:12px}
