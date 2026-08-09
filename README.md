@@ -7,8 +7,6 @@ Any dated event with a source link fits naturally on the rail.
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
 **Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html)
 
-![Wiki-Timechain](screenshot.png)
-
 ## What it does
 
 Timelines are discovered automatically, not hardcoded — the viewer pulls
@@ -17,53 +15,22 @@ tag. Pick one from the picker and it shows up. Add a new card to a new
 collection and it appears there too — no fixed list, no publish-side
 registration.
 
-## Navigating
-
-The chips organize the same list of timelines three ways — by **topic**, by
-**place**, or flat — and the dropdown below picks one. Whatever the grouping,
-the spine always shows a single timeline, never a merge; under places each
-timeline is filed once, at its most specific rung. Time runs down the page:
-scroll is the time axis, and the whitespace between cards is proportional
-to the real gap between events — long silences collapse to a `⋯ N years`
-marker you can expand in place. A bold amber rule marks *now*; anything
-below it is scheduled, not history. **⧉ Copy link** copies a shareable URL
-to whatever timeline you're viewing — opening it drops the recipient
-straight onto that collection.
-
 ## Documents that change
 
-When a timeline follows a document through versions, a card can carry the
-change rather than describe it. A card tags the version it revises with a `fork`
-marker — borrowed in shape from
-[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md), defined by
-[the spec](NIP-DRAFT.md#revisions) now that these cards are their own kind — and
-marks the text in djot: `{-removed-}`, `{+added+}`. A mark alone
-on its own line renders as a **gutter row** (a rule and a `−`/`+`, the diff
-idiom); a mark inside a sentence stays inline. Any card carrying both gets a
-key and an **as passed / what changed** switch, whose state travels in the URL
-so a link can open either view.
-
-There is no new tag for this — the fork marker and the djot marks are both
-already in the format. It works in any timeline. What it buys: a version card
-in *as passed* reconstructs the clean document it was diffed from, so one card
-holds both the text and its history. The
-[convention](CONVENTION.md#cutting-a-diff)
-covers the authoring rules, including the one that matters most — don't diff
-more finely than a reader can follow.
+When a timeline follows a document through versions, a card can carry the change
+rather than describe it: it tags the version it revises with a `fork` marker and
+marks the text in djot, `{-removed-}` / `{+added+}`. No new tag — both are already
+in the format, and it works in any timeline. The event shape is in
+[NIP-DRAFT.md](NIP-DRAFT.md#revisions); the authoring rules, including the one that
+matters most — don't diff more finely than a reader can follow — are in
+[CONVENTION.md](CONVENTION.md#cutting-a-diff).
 
 ## Reactions and comments
 
-Cards carry reactions ([NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)
-kind-7) and comments ([NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)
-kind-1111), read live from the same relays and written from the page — signed
-by a browser signer extension ([NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md):
-nos2x, Alby, and others). Without one you can read everything; the reaction
-buttons and the comment box are not drawn, since there is nothing to sign with.
-The page never asks for a secret key and never mints one for you.
-
-Cards themselves are read-only forever: reactions and comments are the only
-things this page ever writes. Try it on the live site; the behavior is the
-documentation.
+Cards are read-only forever. The only things this page ever writes are
+[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md) reactions and
+[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md) comments, signed
+by the visitor's own browser extension — never a key the page asks for or mints.
 
 ## The convention
 
@@ -112,14 +79,6 @@ a separate one. If you truly want a private corpus, change `MARKER` in both HTML
 files; to sandbox against your own relay, point `RELAYS` at it — in both files, or
 the writer's collision guard checks a corpus the viewer never shows you.
 
-## Deploy
-
-```
-git push origin main
-```
-GitHub Pages redeploys in about a minute. This is only for changes to the
-viewer itself — new cards need no deploy, they show up on next page load.
-
 ## Contributing a card
 
 Use **[add.html](add.html)** — the writer, live at
@@ -166,8 +125,6 @@ Tools & references:
 - Get keys — [nstart.me](https://nstart.me)
 - Inspect any event or author — [njump.me](https://njump.me)
 - Content format — [djot](https://djot.net)
-- Relays queried — `relay.damus.io`, `nos.lol`, `relay.primal.net`,
-  `relay.mostr.pub`, `relay.nostr.band`, `nostr.wine`
 
 ## Design constraints
 
