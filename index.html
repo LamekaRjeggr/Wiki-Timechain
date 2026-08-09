@@ -200,19 +200,21 @@
   /* depth + theme: the same segmented control the diff bar uses (.dtog/.ds) */
   .pickrow .dtog,.mast .dtog{border-radius:7px}
   .pickrow .ds,.mast .ds{padding:5px 10px;font-size:11px}
-  /* the floor glyph: the same three-line pyramid every card wears, as page-wide toggles.
-     Fixed widths — a mnemonic for how much text each field is, not a measurement. The
-     title line is not a control: it is always lit, which is the rule made visible. */
-  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:0;
-    border:1px solid var(--border);border-radius:7px;padding:6px 16px}
-  .fglyph .fs{background:transparent;border:0;padding:4px 10px;cursor:pointer;line-height:0}
-  .fglyph .fs.t{cursor:default}
-  .fglyph .fs i{display:block;height:4.5px;border-radius:2px;background:var(--faint);
-    transition:background .12s}
-  .fglyph .fs.t i{width:18px}.fglyph .fs.s i{width:33px}.fglyph .fs.c i{width:48px}
-  .fglyph .fs.on i{background:var(--rail)}
-  .fglyph button.fs:hover i{background:var(--text)}
-  .fglyph button.fs.on:hover i{background:var(--rail)}
+  /* the floor glyph: the same three-line pyramid every card wears, as page-wide toggles —
+     here the lines are wide enough to say their own names. Fixed widths, a mnemonic for
+     how much text each field is, not a measurement. The title line is not a control: it
+     is always lit, which is the rule made visible. */
+  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+    border:1px solid var(--border);border-radius:7px;padding:7px 14px}
+  .fglyph .fs{display:block;border:0;cursor:pointer;font-family:inherit;font-size:11px;
+    font-weight:500;line-height:1;padding:5px 0;text-align:center;border-radius:4px;
+    background:var(--band);color:var(--dim);transition:background .12s,color .12s}
+  .fglyph .fs.t{cursor:default;width:76px}
+  .fglyph .fs.s{width:110px}
+  .fglyph .fs.c{width:144px}
+  .fglyph .fs.on{background:var(--rail);color:var(--ink)}
+  .fglyph button.fs:hover{color:var(--text)}
+  .fglyph button.fs.on:hover{color:var(--ink)}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
     cursor:pointer;transition:color .12s,border-color .12s;
@@ -277,7 +279,7 @@
   .mtl .dot{position:absolute;left:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
-  .mtl .card{grid-column:2;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  .mtl .card{grid-column:2;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
      part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
@@ -338,21 +340,23 @@
   .mtl .leadtag{display:inline-block;margin-right:7px;padding:1px 6px;vertical-align:2px;
     border:1px dashed var(--gutline);border-radius:4px;font-family:var(--mono);font-size:9.5px;
     letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:400}
-  /* depth mark: the card's pyramid, riding the date/author tab. Three fixed-width lines —
+  /* depth mark: the card's pyramid, pinned to the card's top-right — level with the
+     date/author tab but outside it. Three fixed-width lines —
      title, summary, record — lit when that field is SHOWING, dim when carried but hidden,
      blank (space kept) when the card doesn't have it: a lead is a shape, not a special
      case, and the glyph sits in the same place on every card. The mark IS the control —
      tap cycles this one card past the floor, which is the only way anyone discovers the
      swipe. Same glyph as the floor control, smaller. */
-  .mtl .dmk{display:inline-flex;flex-direction:column;gap:2.5px;align-items:center;
-    align-self:center;margin-left:2px;
-    background:transparent;border:0;padding:3px;cursor:pointer;line-height:0;flex:none}
+  .mtl .dmk{position:absolute;top:8px;right:12px;
+    display:inline-flex;flex-direction:column;gap:2.5px;align-items:center;
+    background:transparent;border:0;padding:4px;cursor:pointer;line-height:0}
   .mtl .dpb{display:block;height:2.5px;border-radius:1.25px;background:var(--faint)}
   .mtl .dpb.t{width:8px}.mtl .dpb.s{width:14px}.mtl .dpb.b{width:20px}
   .mtl .dpb.no{visibility:hidden}   /* rung the card doesn't have — keeps the glyph's
                                        geometry stable, so the mark never jumps between cards */
-  .mtl .dpb.on{background:var(--gutline)}
-  .mtl .dmk:hover .dpb{background:var(--text)}
+  .mtl .dpb.on{background:var(--text)}    /* lit has to clear the dim rung by more than a shade */
+  .mtl .dmk:hover .dpb{background:var(--dim)}
+  .mtl .dmk:hover .dpb.on{background:var(--text)}
   .mtl .dmk.open .dpb{background:var(--rail-dim)}       /* cycled off the floor = rail, same as .ds.on */
   .mtl .dmk.open .dpb.on{background:var(--rail)}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
@@ -393,7 +397,7 @@
   .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:var(--rail-tint-2);
     border:1px solid var(--rail-dim);color:var(--rail);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
-  .mtl .vcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  .mtl .vcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:12px 14px;margin-top:8px}
   .mtl .vcard:first-of-type{margin-top:0}
   .mtl .byline{display:flex;align-items:center;gap:8px;font-family:var(--mono);
@@ -697,9 +701,9 @@
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
-          <span class="fs t on" title="titles — always shown"><i></i></span>
-          <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading"><i></i></button>
-          <button class="fs c" type="button" data-r="c" title="records — what happened, cited"><i></i></button>
+          <span class="fs t on" title="titles — always shown">titles</span>
+          <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
+          <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
         </div>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
@@ -1912,7 +1916,7 @@ function renderTimeline(entries){
   // where it sits (inset, dashed) and that it says so.
   const propCard = (ev, d) =>
     `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
-    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${depthMark(ev, d)}</div>` +
+    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
     cardBody(ev, d) +
     (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
@@ -1967,7 +1971,7 @@ function renderTimeline(entries){
         e.evs.map((ev, vi) =>
           `<div class="vcard${lens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${depthMark(ev, e.d)}</div>` +
+          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>${depthMark(ev, e.d)}` +
           `<h4>${headTitle(ev, e.d)}</h4>` + cardBody(ev, e.d) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
@@ -1977,7 +1981,7 @@ function renderTimeline(entries){
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
         `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>` +
-        (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `${depthMark(ev, e.d)}</div>` +
+        (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
         cardBody(ev, e.d) +
