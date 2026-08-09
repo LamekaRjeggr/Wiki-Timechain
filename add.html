@@ -414,6 +414,8 @@ Source: [label](https://primary-source)"></textarea>
     <p class="msg" id="card-msg"></p>
     <!-- Only shown when the revision section is folded away (handoff mode) — it is the way back. -->
     <p class="note" id="fork-wake" style="display:none"><a href="#sec-fork">this card revises an existing one →</a></p>
+    <!-- Revise mode: section 3 collapsed to the one fact it holds. The section is the way back. -->
+    <p class="note" id="rev-chip" style="display:none"></p>
   </section>
 
   <section id="sec-fork">
@@ -839,7 +841,7 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); }, 150);
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
 }
 
 function connect(url){
@@ -1370,7 +1372,64 @@ if (qrev){
   $("f-fork-d").value  = qrev.d;
   $("f-fork-pk").value = qrev.p;
   $("f-fork-e").value  = qrev.e;
-  cardMsg(`revising "${qrev.d}" — your card becomes a proposed revision of it`, "ok");
+  reviseMode();
+  refresh();
+}
+
+// Arriving addressed is one job, so the page shows that job — the same fold handoffMode does
+// for a carried draft. The edit picker goes first and is the urgent one: its change handler
+// calls resetForm(), which blanks the three fork fields the link just filled, undoing the
+// revise with one click. Section 3 is already decided, so it collapses to the one fact it
+// holds; nothing is removed, and the section itself is the way back.
+function reviseMode(){
+  $("mine-row").style.display = "none";
+  $("sec-fork").style.display = "none";
+  $("rev-chip").style.display = "";
+  reviseChip(null);
+  document.querySelector("header h1").textContent = "Revise a card";
+  document.querySelector("header .sub").innerHTML =
+    'Your card becomes a proposed revision of the one you clicked: the viewer draws the ' +
+    'lineage, and djot marks — <code>{-removed-}</code> and <code>{+added+}</code> — render ' +
+    'as a diff against what it said. <a href="CONVENTION.md">How to cut one</a> · ' +
+    '<a href="NIP-DRAFT.md">the spec</a>.';
+  $("card-note").textContent = "The card you are revising, loaded as it stands. Mark up what changed.";
+}
+// Named while it can be — the target may still be in flight from the relays, so this runs
+// once with nothing and again the moment the card lands.
+function reviseChip(ev){
+  const who = ev ? npub(ev.pubkey).slice(0, 12) + "…" : "";
+  $("rev-chip").innerHTML = `revising <strong>${esc(ev ? tagOf(ev,"title") || dOf(ev) : qrev.d)}</strong>` +
+    (who ? ` by <code>${esc(who)}</code>` : "") +
+    ` · <a href="#sec-fork" id="rev-open">the fork fields →</a>`;
+  $("rev-open").addEventListener("click", () => { $("sec-fork").style.display = ""; });
+  // The picker below reads "not a revision" while the hex fields under it say otherwise —
+  // silent no-op until the card lands and renderForks has an option for it.
+  if (ev) $("f-fork").value = ev.id;
+}
+
+// The target's own text is the starting point of a revision — the convention says build the
+// marked text from the source, never retype it. It is already here: the read pulls the whole
+// corpus, so the card is in `cards` as soon as it lands. Only the not-yours door: a card of
+// your own is an edit, and tryRevise hands it to loadMine instead. Consume-once, and never
+// over anything typed.
+let prefilled = false;
+function tryPrefill(){
+  if (!qrev || prefilled) return;
+  const ev = cards.get(qrev.p + ":" + qrev.d);
+  if (!ev) return;                                  // not landed yet — ingest retries
+  reviseChip(ev);
+  if (signer && signer.pubkey === qrev.p) return;   // yours: tryRevise owns this
+  prefilled = true;
+  if (val("f-title") || $("f-content").value.trim()) return;
+  $("f-title").value   = tagOf(ev,"title").replace(/^\d{4}\s*·\s*/, "");
+  $("f-coll").value    = collOf(ev);
+  $("f-date").value    = dateOf(ev);
+  $("f-summary").value = tagOf(ev,"summary");
+  $("f-content").value = ev.content;
+  // d is left to derive from the title: this is a new card under YOUR key, and pubkey:d is
+  // the dedup key, so the same slug under a different key is a different card.
+  $("f-title").dispatchEvent(new Event("input", { bubbles: true }));
+  cardMsg("loaded as it stands — mark up what changed, then publish", "ok");
   refresh();
 }
 
@@ -1384,6 +1443,13 @@ function tryRevise(){
   ["f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
   $("f-load").value = qrev.d;
   qrev = null;
+  // It is an edit of your own card now, so the picker is the thing that names it — give it
+  // back, drop the chip, and leave section 3 folded behind fork-wake as handoff mode does.
+  $("mine-row").style.display = "";
+  $("rev-chip").style.display = "none";
+  $("fork-wake").style.display = "";
+  document.querySelector("header h1").textContent = "Edit your card";
+  $("card-note").textContent = "This card is yours, so publishing replaces it — no fork, no proposal.";
   loadMine();
 }
 
