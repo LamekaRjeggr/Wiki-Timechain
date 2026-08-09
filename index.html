@@ -196,12 +196,17 @@
   /* the floor glyph: the same three-line pyramid every card wears, as page-wide toggles —
      here the lines are wide enough to say their own names. Fixed widths, a mnemonic for
      how much text each field is, not a measurement. The title line is not a control: it
-     is always lit, which is the rule made visible. */
+     is always shown, which is the rule made visible. Filled means you switched it on;
+     the title line is outlined instead — a fixture, not a switch you could flip off.
+     Same amber either way: the page has one hue, and on-state is fill, never colour.
+     The transparent border on every line keeps all three the same height. */
   .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
-  .fglyph .fs{display:block;border:0;cursor:pointer;font-family:inherit;font-size:11px;
+  .fglyph .fs{display:block;border:1px solid transparent;cursor:pointer;font-family:inherit;
+    font-size:11px;
     font-weight:500;line-height:1;padding:5px 0;text-align:center;border-radius:4px;
     background:var(--border);color:var(--dim);transition:background .12s,color .12s}
-  .fglyph .fs.t{cursor:default;width:76px}
+  .fglyph .fs.t{cursor:default;width:76px;background:transparent;
+    border-color:var(--rail-dim);color:var(--rail)}
   .fglyph .fs.s{width:110px}
   .fglyph .fs.c{width:144px}
   .fglyph .fs.on{background:var(--rail);color:var(--ink)}
@@ -702,12 +707,14 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <button id="copylink" class="linkbtn" type="button"
-          title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <!-- Add leads: it is the one verb the convention wants, and it is always here.
+             Copy hides when no timeline is selected, so it can't hold the first slot. -->
         <a id="addlink" class="linkbtn go" href="add.html"
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
+        <button id="copylink" class="linkbtn" type="button"
+          title="Copy a shareable link to the selected view">⧉ Copy link</button>
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
-          <span class="fs t on" title="titles — always shown">titles</span>
+          <span class="fs t" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
           <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
         </div>
