@@ -174,6 +174,11 @@
     border-bottom-left-radius:9px}
   .armtip::after{content:"";position:absolute;right:-7px;bottom:-5px;
     border:6px solid transparent;border-left-color:var(--rail);border-right-width:0}
+  /* Arrived from the viewer with a key already in hand: no signpost, so no arm to point it,
+     so no gutter column either. Hiding alone would leave a 26px empty track. */
+  .ladder.plain{grid-template-columns:1fr}
+  .ladder.plain>.rung{grid-column:1}
+  .ladder.plain>.rung.start,.ladder.plain>.arm,.ladder.plain>.armtip{display:none}
   .rung{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:9px 0;
     background:var(--panel)}
   .rung h3{margin:0 0 2px;font-size:14px;font-weight:600}
@@ -360,13 +365,15 @@
 
   <section id="sec-card">
     <h2><i>2</i>the card</h2>
-    <p class="note">One fact per card. The collection is the timeline it joins — pick an
+    <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
       existing one or type a new slug, which is all it takes to start one.</p>
 
-    <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
-    <div class="row">
-      <select id="f-load"><option value="">— new card —</option></select>
-      <button class="slim" id="b-load" style="flex:0 0 auto">load</button>
+    <div id="mine-row">
+      <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
+      <div class="row">
+        <select id="f-load"><option value="">— new card —</option></select>
+        <button class="slim" id="b-load" style="flex:0 0 auto">load</button>
+      </div>
     </div>
 
     <label for="f-coll">collection <span class="h">— the timeline this joins. Required.</span></label>
@@ -405,6 +412,8 @@ Source: [label](https://primary-source)"></textarea>
       <textarea id="f-extra" rows="3" placeholder="key value"></textarea>
     </details>
     <p class="msg" id="card-msg"></p>
+    <!-- Only shown when the revision section is folded away (handoff mode) — it is the way back. -->
+    <p class="note" id="fork-wake" style="display:none"><a href="#sec-fork">this card revises an existing one →</a></p>
   </section>
 
   <section id="sec-fork">
@@ -980,7 +989,10 @@ function renderCollections(){
   sel.innerHTML = '<option value="">— pick one —</option>' +
     seen.map(c => `<option value="${esc(c)}">${esc(c)} · ${
       [...cards.values()].filter(e => collOf(e) === c).length} cards</option>`).join("");
-  sel.value = keep;
+  // A prefilled collection — a ?c= deep link or a handoff draft — is a choice already made
+  // elsewhere. Show it as chosen; "— pick one —" beside a filled field reads as unset.
+  const pre = wikiSlug(val("f-coll"));
+  sel.value = keep || (seen.includes(pre) ? pre : "");
 }
 
 // Your own cards, for editing. Needs a signer — before that there is nobody to filter on,
@@ -1360,9 +1372,38 @@ if (new URLSearchParams(location.search).get("draft") === "1"){
       $("f-content").value = rec.content || "";
       // fire the follower, not just the value — d is made from the title
       $("f-title").dispatchEvent(new Event("input", { bubbles: true }));
+      handoffMode();
     }
   } catch {}
 }
+
+// A draft carried from the viewer arrives with its decisions already made: the timeline is
+// chosen, the fields are filled, and it is a NEW card by construction. So the page shows that
+// job and stands the others down. The edit picker goes first and is the urgent one — its
+// change handler calls resetForm(), and the draft is consume-once (deleted from storage on
+// read), so one click there would blank the only copy. Nothing is removed, only folded: the
+// revision link wakes its section, and an ordinary visit never enters this function.
+function handoffMode(){
+  $("mine-row").style.display = "none";
+  $("sec-fork").style.display = "none";
+  $("fork-wake").style.display = "";
+  $("card-note").textContent = "Carried over from the timeline. Check it, then publish.";
+  // You are here because the viewer had no extension to offer, so don't open by recommending
+  // one: drop the "no key yet?" signpost with its arm, and hand "start here" to the rung that
+  // can sign for someone who already has a key elsewhere.
+  let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
+  if (!window.nostr && !saved){
+    document.querySelector(".ladder").classList.add("plain");
+    const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
+    ext.classList.remove("picked");
+    bunk.classList.add("picked");
+    bunk.prepend(ext.querySelector(".kick"));
+  }
+}
+$("fork-wake").addEventListener("click", () => {
+  $("sec-fork").style.display = "";
+  $("fork-wake").style.display = "none";
+});
 
 refresh();
 
