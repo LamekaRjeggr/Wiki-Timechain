@@ -49,8 +49,7 @@
     --glow:rgba(255,176,46,.07);      /* header wash */
     --rail-tint:rgba(255,176,46,.16); /* inserted text */
     --rail-tint-2:rgba(255,176,46,.12);/* contested badge */
-    --scrim:rgba(0,0,0,.62);
-    --shadow:rgba(0,0,0,.5);
+    --scrim:rgba(0,0,0,.62);          /* the page, backgrounded — read only by pick mode */
     --band:rgba(233,234,238,.035);    /* drum: ink-on-paper tints, so they invert */
     --hair:rgba(233,234,238,.07);
     --hairline:rgba(233,234,238,.4);
@@ -79,7 +78,7 @@
     --ink:#2a1c06; --warn:#ffc492;
     --glow:rgba(255,194,102,.10);
     --rail-tint:rgba(255,194,102,.22); --rail-tint-2:rgba(255,194,102,.16);
-    --scrim:rgba(28,21,12,.62); --shadow:rgba(28,21,12,.5);
+    --scrim:rgba(28,21,12,.62);
     --band:rgba(248,243,234,.05); --hair:rgba(248,243,234,.10);
     --hairline:rgba(248,243,234,.45);
     --past-glow:rgba(238,188,132,.55); --future-glow:rgba(79,216,232,.55);
@@ -104,7 +103,7 @@
     --ink:#fffaf2; --warn:#9a4a00;
     --glow:rgba(163,92,0,.06);
     --rail-tint:rgba(163,92,0,.16); --rail-tint-2:rgba(163,92,0,.10);
-    --scrim:rgba(25,27,31,.42); --shadow:rgba(25,27,31,.18);
+    --scrim:rgba(25,27,31,.42);
     --band:rgba(25,27,31,.035); --hair:rgba(25,27,31,.09);
     --hairline:rgba(25,27,31,.45);
     --past-glow:rgba(138,84,16,.5); --future-glow:rgba(13,111,134,.45);
@@ -616,10 +615,10 @@
        words ("Wiki · Ti", the intro prose) read straight through the years. */
     #drum.pick{width:88px;background:var(--bg)}
     /* and the rest of the page is BACKGROUNDED while you pick — it still scrolls under the
-       haze, so the wheel visibly leads it. The haze is the page's own bg, so it fogs on
-       light and darkens on dark. left:88px is the column: the wheel is never dimmed. */
+       veil, so the wheel visibly leads it. --scrim dims on all three themes; mixing the
+       page's own bg fogged light with white. left:88px is the column, never dimmed. */
     #drum.pick::after{content:"";position:fixed;top:0;right:0;bottom:0;left:88px;
-      background:color-mix(in srgb,var(--bg) 78%,transparent);pointer-events:none}
+      background:var(--scrim);pointer-events:none}
     #drum.pick .pchip{position:fixed;top:auto;bottom:14px;z-index:8;font-size:12px;padding:7px 13px}
     #drum.pick .pback{left:12px}
     #drum.pick .pnext{left:auto;right:12px;font-size:13px;padding:8px 15px}
