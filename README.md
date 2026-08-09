@@ -37,29 +37,17 @@ To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 
 ## Built on
 
-nostr NIPs this rests on:
-- **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)** —
-  events, relays, and *addressable events* (the `d`-tag, replace-per-author
-  behavior kind-30828 uses)
-- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** —
-  Wiki: where the card shape came from — `title` / `d` / djot, and the `fork` marker
-- **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** —
-  bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump links
-- **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)** —
-  reactions (the `+` tap, kind 7)
-- **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** —
-  comments (kind 1111, scoped to one signed version of a card)
-- **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** —
-  browser signer extensions; how a visitor signs anything
-- **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** —
-  remote signing; the `bunker://` option, for a key on another device
-- **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** —
-  schnorr signatures; verified inline against the official test vectors
-
-Tools & references:
-- Get keys — [nstart.me](https://nstart.me)
-- Inspect any event or author — [njump.me](https://njump.me)
-- Content format — [djot](https://djot.net)
+- **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)** — events, relays, addressable events
+- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** — card shape: `title` / `d` / djot, and the `fork` marker
+- **[NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)** — labels
+- **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** — bech32 entities
+- **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)** — reactions, kind 7
+- **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** — comments, kind 1111
+- **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** — browser signer extensions
+- **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** — remote signing, `bunker://`
+- **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** — schnorr signatures
+- [djot](https://djot.net) — content format
+- [nstart.me](https://nstart.me) — get keys · [njump.me](https://njump.me) — inspect an event
 
 ## Vendored code
 
