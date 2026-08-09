@@ -86,17 +86,6 @@ Tools & references:
 - Inspect any event or author — [njump.me](https://njump.me)
 - Content format — [djot](https://djot.net)
 
-## Design constraints
-
-- The viewer is read-only forever: `index.html` never writes or edits a 30828.
-  Its only writes are reactions and comments the visitor signs with their own
-  key — and it never asks for a secret key. Writing cards is `add.html`'s job,
-  and it is a separate page for exactly that reason
-- Zero dependencies fetched at runtime: nothing loads from a third-party host.
-  `index.html` is one self-contained file; `add.html` adds one vendored sibling
-  (see Vendored code)
-- Colorblind-safe (no meaning carried by hue alone)
-
 ## Vendored code
 
 `nip46.js` is [nostr-tools](https://github.com/nbd-wtf/nostr-tools) 2.23.9's
