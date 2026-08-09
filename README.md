@@ -1,7 +1,7 @@
 # Wiki-Timechain
 
 A live viewer of timeline events (nostr **kind-30828** cards), and a writer for
-publishing them. Reads straight from relays — no server, no login, no build step.
+publishing them. Reads straight from relays — no server, no login required, no build step.
 Any dated event with a source link fits naturally on the rail.
 
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
@@ -24,12 +24,9 @@ the `wikitimechain` marker, a `timeline.collection` label, and an
 `event_date`. A collection *is* its slug — publish the first card carrying a new
 one and that timeline exists, with no registration step.
 
-**30828 is our own kind.** The cards were originally published as NIP-54 wiki
-articles (kind 30818) to inherit wiki-client rendering for free; asked whether that
-was the right shape, nostr's maintainer said plainly to use a new kind number
-([nips#2426](https://github.com/nostr-protocol/nips/issues/2426)), so the corpus
-moved. The tag scheme came across unchanged — only the kind integer differs, and
-the trade was losing that free rendering.
+**30828 is our own kind**, started from
+[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)'s wiki article
+(kind 30818) — same card shape, different kind number.
 
 Same `d` from the **same** author edits the card; same `d` from a **different**
 author renders beside it — a dispute, never an overwrite.
@@ -69,10 +66,7 @@ nostr NIPs this rests on:
   events, relays, and *addressable events* (the `d`-tag, replace-per-author
   behavior kind-30828 uses)
 - **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** —
-  Wiki: where the card shape came from. The cards rode its kind 30818 until
-  2026-07-29 and still borrow its `title` / `d` / djot conventions and the
-  shape of its `fork` marker — but they are kind 30828 now, not wiki articles,
-  and 30818 is no longer read
+  Wiki: where the card shape came from — `title` / `d` / djot, and the `fork` marker
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** —
   bech32 entities; the viewer encodes `npub`s inline (zero-dep) for njump links
 - **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)** —
@@ -80,10 +74,9 @@ nostr NIPs this rests on:
 - **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** —
   comments (kind 1111, scoped to one signed version of a card)
 - **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** —
-  browser signer extensions; the viewer's ONLY signer, and the writer's first rung
+  browser signer extensions; how a visitor signs anything
 - **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** —
-  remote signing; `add.html`'s `bunker://` rung, for a key that lives on another
-  device (see Vendored code)
+  remote signing; the `bunker://` option, for a key on another device
 - **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** —
   schnorr signatures; verification is implemented inline and checked against
   the official test vectors, sign and verify
