@@ -23,20 +23,17 @@ Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTIO
 
 ## Run it yourself
 
-Three files, nothing to install.
-
 ```
 git clone https://github.com/LamekaRjeggr/Wiki-Timechain.git
 cd Wiki-Timechain
 python3 -m http.server 8000
 ```
 
-`http://localhost:8000` is the viewer, `/add.html` the writer. **Don't open them over
-`file://`** — some relays reject the `null` origin and cards go missing silently.
+**Not `file://`** — some relays reject the `null` origin and cards go missing silently.
 
-To host a copy: fork it and turn on GitHub Pages (deploy from `main`, root). Your copy
-shows the same cards as every other, because discovery is by marker and not by author.
-`MARKER` and `RELAYS` are the two knobs; change either in **both** HTML files.
+To host a copy: fork, then GitHub Pages, deploy from `main`, root.
+
+`MARKER` and `RELAYS` are the two knobs. Change either in **both** HTML files.
 
 ## Built on
 
