@@ -54,10 +54,16 @@ To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 `nip46.js` is [nostr-tools](https://github.com/nbd-wtf/nostr-tools) 2.23.9's NIP-46
 bundle, verbatim. It is **MIT-licensed** — Paul Miller's `@noble/hashes`,
 `@noble/curves`, `@noble/ciphers` and `@scure/base` travel inside it, and their
-license block ships at the foot of the file. The CC0 dedication below does not
-cover it.
+license block ships at the foot of the file, and its terms match the repo's own
+code license.
 
 ## License
 
-[CC0 1.0 Universal](LICENSE) — public domain dedication, code and convention both.
-Copy it, fork it, ship it, no attribution required.
+Code — `index.html`, `add.html`, `nip46.js`, `tools/` — is
+[MIT](LICENSE).
+
+Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-EDITS.md` — is
+[CC0 1.0 Universal](LICENSE-SPEC), matching the
+[nips repo](https://github.com/nostr-protocol/nips), so the text can be absorbed
+there without an attribution clause riding along. Card content in `cards/` is CC0
+as well.
