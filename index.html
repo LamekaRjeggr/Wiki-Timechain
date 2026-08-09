@@ -204,12 +204,12 @@
      Fixed widths — a mnemonic for how much text each field is, not a measurement. The
      title line is not a control: it is always lit, which is the rule made visible. */
   .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:0;
-    border:1px solid var(--border);border-radius:7px;padding:4px 12px}
-  .fglyph .fs{background:transparent;border:0;padding:3px 6px;cursor:pointer;line-height:0}
+    border:1px solid var(--border);border-radius:7px;padding:6px 16px}
+  .fglyph .fs{background:transparent;border:0;padding:4px 10px;cursor:pointer;line-height:0}
   .fglyph .fs.t{cursor:default}
-  .fglyph .fs i{display:block;height:3px;border-radius:1.5px;background:var(--faint);
+  .fglyph .fs i{display:block;height:4.5px;border-radius:2px;background:var(--faint);
     transition:background .12s}
-  .fglyph .fs.t i{width:12px}.fglyph .fs.s i{width:22px}.fglyph .fs.c i{width:32px}
+  .fglyph .fs.t i{width:18px}.fglyph .fs.s i{width:33px}.fglyph .fs.c i{width:48px}
   .fglyph .fs.on i{background:var(--rail)}
   .fglyph button.fs:hover i{background:var(--text)}
   .fglyph button.fs.on:hover i{background:var(--rail)}
@@ -338,16 +338,19 @@
   .mtl .leadtag{display:inline-block;margin-right:7px;padding:1px 6px;vertical-align:2px;
     border:1px dashed var(--gutline);border-radius:4px;font-family:var(--mono);font-size:9.5px;
     letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:400}
-  /* depth mark: the card's pyramid. Three fixed-width lines — title, summary, record —
-     lit when that field is SHOWING, dim when carried but hidden, not drawn when the card
-     doesn't have it (a lead is then a shape, not a special case: two lines, no third).
-     The mark IS the control — tap cycles this one card past the floor, which is the only
-     way anyone discovers the swipe. Same glyph as the floor control, smaller. */
-  .mtl .dmk{display:inline-flex;flex-direction:column;gap:2px;align-items:center;
-    margin-left:9px;vertical-align:1px;
-    background:transparent;border:0;padding:3px;cursor:pointer;line-height:0}
-  .mtl .dpb{display:block;height:2px;border-radius:1px;background:var(--faint)}
-  .mtl .dpb.t{width:6px}.mtl .dpb.s{width:11px}.mtl .dpb.b{width:16px}
+  /* depth mark: the card's pyramid, riding the date/author tab. Three fixed-width lines —
+     title, summary, record — lit when that field is SHOWING, dim when carried but hidden,
+     blank (space kept) when the card doesn't have it: a lead is a shape, not a special
+     case, and the glyph sits in the same place on every card. The mark IS the control —
+     tap cycles this one card past the floor, which is the only way anyone discovers the
+     swipe. Same glyph as the floor control, smaller. */
+  .mtl .dmk{display:inline-flex;flex-direction:column;gap:2.5px;align-items:center;
+    align-self:center;margin-left:2px;
+    background:transparent;border:0;padding:3px;cursor:pointer;line-height:0;flex:none}
+  .mtl .dpb{display:block;height:2.5px;border-radius:1.25px;background:var(--faint)}
+  .mtl .dpb.t{width:8px}.mtl .dpb.s{width:14px}.mtl .dpb.b{width:20px}
+  .mtl .dpb.no{visibility:hidden}   /* rung the card doesn't have — keeps the glyph's
+                                       geometry stable, so the mark never jumps between cards */
   .mtl .dpb.on{background:var(--gutline)}
   .mtl .dmk:hover .dpb{background:var(--text)}
   .mtl .dmk.open .dpb{background:var(--rail-dim)}       /* cycled off the floor = rail, same as .ds.on */
@@ -1179,13 +1182,14 @@ function depthMark(ev, d){
   const nxt = lad[(i + 1) % lad.length], prv = lad[(i - 1 + lad.length) % lad.length];
   const fv = visOf(ev, d, showStr(floor));           // what the floor alone would show —
   const eff = showStr({ s: fv.sum, c: fv.body });    // landing back on it clears the override
-  const rung = (k, on, what) => `<span class="dpb ${k}${on ? " on" : ""}" title="${what}"></span>`;
+  const rung = (k, has, on, what) =>
+    `<span class="dpb ${k}${has ? (on ? " on" : "") : " no"}" title="${what}"></span>`;
   return `<button class="dmk${openCards.has(d) ? " open" : ""}" type="button" data-open="${esc(d)}"` +
     ` data-next="${nxt}" data-prev="${prv}" data-eff="${eff}"` +
     ` title="tap to cycle this card — a lit line is showing">` +
-    rung("t", true, "title") +
-    (c.sum ? rung("s", v.sum, "summary") : "") +
-    (c.body ? rung("b", v.body, "record") : "") + `</button>`;
+    rung("t", true, true, "title") +
+    rung("s", c.sum, v.sum, "summary") +
+    rung("b", c.body, v.body, "record") + `</button>`;
 }
 
 function dateOf(ev){
@@ -1908,8 +1912,8 @@ function renderTimeline(entries){
   // where it sits (inset, dashed) and that it says so.
   const propCard = (ev, d) =>
     `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
-    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
-    `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span>${depthMark(ev, d)}</h4>` +
+    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${depthMark(ev, d)}</div>` +
+    `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
     cardBody(ev, d) +
     (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
 
@@ -1963,8 +1967,8 @@ function renderTimeline(entries){
         e.evs.map((ev, vi) =>
           `<div class="vcard${lens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
-          `<h4>${headTitle(ev, e.d)}${depthMark(ev, e.d)}</h4>` + cardBody(ev, e.d) +
+          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${depthMark(ev, e.d)}</div>` +
+          `<h4>${headTitle(ev, e.d)}</h4>` + cardBody(ev, e.d) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
@@ -1973,9 +1977,9 @@ function renderTimeline(entries){
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
         `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>` +
-        (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>` +
+        (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `${depthMark(ev, e.d)}</div>` +
         `<h4>${headTitle(ev, e.d)}` +
-        `${future ? `<span class="upcoming">upcoming</span>` : ""}${depthMark(ev, e.d)}</h4>` +
+        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
         cardBody(ev, e.d) +
         (beyond(ev, e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
         propHtml + `</div>`;
