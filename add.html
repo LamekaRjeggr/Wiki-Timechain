@@ -742,6 +742,7 @@ function setSigner(s){
     : "This browser will sign you back in on your next visit. Sign out to forget it.";
   signMsg("");
   renderMine();          // your cards can only be listed once we know who you are
+  tryRevise();           // an addressed card might turn out to be this key's own
   refresh();
 }
 
@@ -838,7 +839,7 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); }, 150);
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); }, 150);
 }
 
 function connect(url){
@@ -1354,6 +1355,37 @@ $("b-pub").addEventListener("click", publish);
 // timeline already chosen.
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
+
+// ?d/&e/&p: a card arrives addressed — the "revise" link beside any card's pyramid in the
+// viewer. Which door it opens is decided late: the fork fields fill NOW, so a visitor can
+// propose without signing in first, and if sign-in reveals the target key is YOURS, the
+// same address flips to the edit path instead (tryRevise below).
+let qrev = (() => {
+  const u = new URLSearchParams(location.search);
+  const d = u.get("d"), e = u.get("e"), p = u.get("p");
+  return d && /^[0-9a-f]{64}$/i.test(e || "") && /^[0-9a-f]{64}$/i.test(p || "")
+    ? { d, e, p } : null;
+})();
+if (qrev){
+  $("f-fork-d").value  = qrev.d;
+  $("f-fork-pk").value = qrev.p;
+  $("f-fork-e").value  = qrev.e;
+  cardMsg(`revising "${qrev.d}" — your card becomes a proposed revision of it`, "ok");
+  refresh();
+}
+
+// The flip: the addressed card belongs to the signed-in key, so this is an edit, not a
+// proposal. Consume-once — cleared on success so later ingests can't reload over the
+// user's edits; the card itself may still be in flight from the relays, so ingest keeps
+// retrying until it lands.
+function tryRevise(){
+  if (!qrev || !signer || signer.pubkey !== qrev.p) return;
+  if (!cards.get(signer.pubkey + ":" + qrev.d)) return;   // not landed yet — ingest retries
+  ["f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
+  $("f-load").value = qrev.d;
+  qrev = null;
+  loadMine();
+}
 
 // ?draft=1: a card composed on the viewer's timeline, crossing here to be signed (no
 // NIP-07 there). Consume-once — the key is deleted on read, and gated twice (query param
