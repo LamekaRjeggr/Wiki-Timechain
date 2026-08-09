@@ -200,6 +200,19 @@
   /* depth + theme: the same segmented control the diff bar uses (.dtog/.ds) */
   .pickrow .dtog,.mast .dtog{border-radius:7px}
   .pickrow .ds,.mast .ds{padding:5px 10px;font-size:11px}
+  /* the floor glyph: the same three-line pyramid every card wears, as page-wide toggles.
+     Fixed widths — a mnemonic for how much text each field is, not a measurement. The
+     title line is not a control: it is always lit, which is the rule made visible. */
+  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:0;
+    border:1px solid var(--border);border-radius:7px;padding:4px 12px}
+  .fglyph .fs{background:transparent;border:0;padding:3px 6px;cursor:pointer;line-height:0}
+  .fglyph .fs.t{cursor:default}
+  .fglyph .fs i{display:block;height:3px;border-radius:1.5px;background:var(--faint);
+    transition:background .12s}
+  .fglyph .fs.t i{width:12px}.fglyph .fs.s i{width:22px}.fglyph .fs.c i{width:32px}
+  .fglyph .fs.on i{background:var(--rail)}
+  .fglyph button.fs:hover i{background:var(--text)}
+  .fglyph button.fs.on:hover i{background:var(--rail)}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
     cursor:pointer;transition:color .12s,border-color .12s;
@@ -325,15 +338,19 @@
   .mtl .leadtag{display:inline-block;margin-right:7px;padding:1px 6px;vertical-align:2px;
     border:1px dashed var(--gutline);border-radius:4px;font-family:var(--mono);font-size:9.5px;
     letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:400}
-  /* depth mark: what this card still carries. Left box = summary, right = record; filled = it
-     has one. The lead is then a shape, not a special case. And the mark IS the control — tap
-     opens this one card past the floor, which is the only way anyone discovers the swipe. */
-  .mtl .dmk{display:inline-flex;gap:3px;align-items:center;margin-left:9px;vertical-align:2px;
+  /* depth mark: the card's pyramid. Three fixed-width lines — title, summary, record —
+     lit when that field is SHOWING, dim when carried but hidden, not drawn when the card
+     doesn't have it (a lead is then a shape, not a special case: two lines, no third).
+     The mark IS the control — tap cycles this one card past the floor, which is the only
+     way anyone discovers the swipe. Same glyph as the floor control, smaller. */
+  .mtl .dmk{display:inline-flex;flex-direction:column;gap:2px;align-items:center;
+    margin-left:9px;vertical-align:1px;
     background:transparent;border:0;padding:3px;cursor:pointer;line-height:0}
-  .mtl .dpb{display:block;width:6px;height:10px;border:1px solid var(--gutline);border-radius:1.5px}
+  .mtl .dpb{display:block;height:2px;border-radius:1px;background:var(--faint)}
+  .mtl .dpb.t{width:6px}.mtl .dpb.s{width:11px}.mtl .dpb.b{width:16px}
   .mtl .dpb.on{background:var(--gutline)}
-  .mtl .dmk:hover .dpb{border-color:var(--text)}
-  .mtl .dmk.open .dpb{border-color:var(--rail)}         /* open = filled rail, same as .ds.on */
+  .mtl .dmk:hover .dpb{background:var(--text)}
+  .mtl .dmk.open .dpb{background:var(--rail-dim)}       /* cycled off the floor = rail, same as .ds.on */
   .mtl .dmk.open .dpb.on{background:var(--rail)}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
@@ -676,10 +693,10 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <div class="dtog" id="sumtog" title="How much of each card to show — the floor. Any one card can be opened past it.">
-          <button class="ds" type="button" data-depth="0">titles</button>
-          <button class="ds" type="button" data-depth="1">summary</button>
-          <button class="ds" type="button" data-depth="2">full</button>
+        <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
+          <span class="fs t on" title="titles — always shown"><i></i></span>
+          <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading"><i></i></button>
+          <button class="fs c" type="button" data-r="c" title="records — what happened, cited"><i></i></button>
         </div>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
@@ -896,13 +913,25 @@ const wantedF = ["c","l","t"].map(a => _q.has(a) && a + ":" + _q.get(a)).find(Bo
 // link lands the reader on the view you meant. Deliberately NOT a page-wide switch: a global
 // one lets a page be silently put in a state where nothing was ever removed, then screenshot.
 const plainCards = new Set((_q.get("plain") || "").split(",").filter(Boolean));
-// reading depth. Three levels — 0 titles, 1 summary, 2 full — and the page-wide switch is a
-// FLOOR, not a cap: any single card can be opened past it, and stays open. Safe as a global
-// (unlike `plain` above) because it hides nothing selectively, and because every card wears a
-// mark saying what it still has underneath. `sum=1` is the old two-level link; it still lands.
-let depth = _q.has("depth") ? Math.max(0, Math.min(2, +_q.get("depth") || 0))
-                            : (_q.get("sum") === "1" ? 1 : 2);
-const openCards = new Set((_q.get("open") || "").split(",").filter(Boolean));
+// reading depth. The page-wide switch is a FLOOR, not a cap: any single card can be cycled
+// past it, and stays there. Safe as a global (unlike `plain` above) because it hides nothing
+// selectively, and because every card wears a glyph saying what it still has underneath.
+// The floor is two independent switches — summary and record — over an always-on title.
+// A state travels as a string: "t" (title only), "s", "c", or "sc". Legacy links map on:
+// depth 0/1/2 → t/s/c (old "full" showed the record WITHOUT the summary, and still does),
+// sum=1 → s. The default stays the old default: records.
+function parseShow(v){ return { s: v.includes("s"), c: v.includes("c") }; }
+function showStr(v){ return (v.s ? "s" : "") + (v.c ? "c" : "") || "t"; }
+let floor = _q.has("show")  ? parseShow(_q.get("show"))
+          : _q.has("depth") ? [{s:0,c:0},{s:1,c:0},{s:0,c:1}][Math.max(0,Math.min(2,+_q.get("depth")||0))]
+          : _q.get("sum") === "1" ? { s: true, c: false }
+          : { s: false, c: true };
+floor = { s: !!floor.s, c: !!floor.c };
+// cards cycled past the floor: d → state string. Legacy `open=d` (no state) meant "full".
+const openCards = new Map((_q.get("open") || "").split(",").filter(Boolean).map(x => {
+  const i = x.lastIndexOf("~");
+  return i < 0 ? [x, "c"] : [x.slice(0, i), x.slice(i + 1)];
+}));
 const AXES = [["t","topics"],["l","places"],["c","timelines"]];
 let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
@@ -933,11 +962,11 @@ rosterEl.addEventListener("click", e => {
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","l","t","plain","sum","depth","open"].forEach(a => u.searchParams.delete(a));
+  ["c","l","t","plain","sum","depth","show","open"].forEach(a => u.searchParams.delete(a));
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
   if (plainCards.size) u.searchParams.set("plain", [...plainCards].join(","));
-  if (depth !== 2) u.searchParams.set("depth", String(depth));
-  if (openCards.size) u.searchParams.set("open", [...openCards].join(","));
+  if (showStr(floor) !== "c") u.searchParams.set("show", showStr(floor));
+  if (openCards.size) u.searchParams.set("open", [...openCards].map(([d,v]) => `${d}~${v}`).join(","));
   return u;
 }
 const COPY_LABEL = "⧉ Copy link";
@@ -975,11 +1004,12 @@ paintThm();
 // the way `?c=` and `?plain=` are — the theme is about your eyes, this is about the page.
 const sumTog = document.getElementById("sumtog");
 function paintSum(){
-  for (const b of sumTog.children) b.classList.toggle("on", +b.dataset.depth === depth);
+  sumTog.querySelector(".fs.s").classList.toggle("on", floor.s);
+  sumTog.querySelector(".fs.c").classList.toggle("on", floor.c);
 }
 sumTog.addEventListener("click", e => {
-  const b = e.target.closest("[data-depth]"); if (!b) return;
-  depth = +b.dataset.depth;
+  const b = e.target.closest("[data-r]"); if (!b) return;
+  floor[b.dataset.r] = !floor[b.dataset.r];
   openCards.clear();          // moving the floor is the "reset" — no second bulk control
   history.replaceState(null, "", timelineUrl());
   paintSum();
@@ -1106,19 +1136,25 @@ function diffBar(ev, d){
 function carries(ev){ return { sum: !!tag(ev,"summary"), body: !!(ev.content || "").trim() }; }
 const LEAD_RE = /^\s*Lead\s*[—–-]\s*/;
 
-// the level this card actually renders at: the floor, unless it's been opened past it
-function lvlOf(d){ return openCards.has(d) ? 2 : depth; }
+// what this card actually shows: the floor, unless the card was cycled past it. A lead's
+// summary stands in for the record — with the record line lit and nothing under it, the
+// summary is all there is, so the floor can't blank a lead into a bare line.
+function visOf(ev, d, base){
+  const c = carries(ev), v = parseShow(base || openCards.get(d) || showStr(floor));
+  return { sum: c.sum && (v.s || (v.c && !c.body)), body: c.body && v.c };
+}
+function beyond(ev, d){ const v = visOf(ev, d); return v.sum || v.body; }
 
-// A card's text at that level. A lead shows its summary at any level above titles — there is
-// nothing else to show it, so the floor can't blank it into a bare line with no explanation.
+// A card's text: each lit line renders, summary above record. They are two voices — the
+// publisher's reading over the cited record — not two zoom levels of one text.
 function cardBody(ev, d){
-  const c = carries(ev), lvl = lvlOf(d);
-  if (!lvl) return "";
-  if (c.sum && !c.body)
-    return `<div class="cbody sum lead" title="a lead — the publisher's reading, with no record under it yet">${esc(tag(ev,"summary"))}</div>`;
-  if (lvl === 1 && c.sum)
-    return `<div class="cbody sum" title="the publisher's own summary — the sources are in the full card">${esc(tag(ev,"summary"))}</div>`;
-  return diffBar(ev, d) + `<div class="cbody">${renderContent(ev.content || "", plainCards.has(d))}</div>`;
+  const c = carries(ev), v = visOf(ev, d);
+  let h = "";
+  if (v.sum) h += c.body
+    ? `<div class="cbody sum" title="the publisher's own summary — the sources are in the record">${esc(tag(ev,"summary"))}</div>`
+    : `<div class="cbody sum lead" title="a lead — the publisher's reading, with no record under it yet">${esc(tag(ev,"summary"))}</div>`;
+  if (v.body) h += diffBar(ev, d) + `<div class="cbody">${renderContent(ev.content || "", plainCards.has(d))}</div>`;
+  return h;
 }
 
 // the heading: the `Lead — ` prefix comes off the text and stands as its own mark, so it stops
@@ -1134,11 +1170,22 @@ function headTitle(ev, d){
 function depthMark(ev, d){
   const c = carries(ev);
   if (!c.sum && !c.body) return "";
-  const open = openCards.has(d);
-  const box = (on, what) => `<span class="dpb${on ? " on" : ""}" title="${what}"></span>`;
-  return `<button class="dmk${open ? " open" : ""}" type="button" data-open="${esc(d)}"` +
-    ` title="${open ? "close this card" : "open this card"} — left box is a summary, right is a record">` +
-    box(c.sum, "has a summary") + box(c.body, "has a record") + `</button>`;
+  // the card's ladder of states: title, then whatever its fields allow. The cycle walks it.
+  const v = visOf(ev, d), cur = showStr({ s: v.sum, c: v.body });
+  const lad = ["t"]; if (c.sum) lad.push("s"); if (c.body) lad.push(c.sum ? "sc" : "c");
+  let i = lad.indexOf(cur);
+  if (i < 0) i = lad.length - 2;   // "c" on a card that also has a summary — record lit, middle
+                                   // dim — sits one rung below "everything": tap adds, never takes
+  const nxt = lad[(i + 1) % lad.length], prv = lad[(i - 1 + lad.length) % lad.length];
+  const fv = visOf(ev, d, showStr(floor));           // what the floor alone would show —
+  const eff = showStr({ s: fv.sum, c: fv.body });    // landing back on it clears the override
+  const rung = (k, on, what) => `<span class="dpb ${k}${on ? " on" : ""}" title="${what}"></span>`;
+  return `<button class="dmk${openCards.has(d) ? " open" : ""}" type="button" data-open="${esc(d)}"` +
+    ` data-next="${nxt}" data-prev="${prv}" data-eff="${eff}"` +
+    ` title="tap to cycle this card — a lit line is showing">` +
+    rung("t", true, "title") +
+    (c.sum ? rung("s", v.sum, "summary") : "") +
+    (c.body ? rung("b", v.body, "record") : "") + `</button>`;
 }
 
 function dateOf(ev){
@@ -1683,11 +1730,12 @@ function humanSpan(g){
   return Math.max(1, Math.round(g*365)) + " days";
 }
 
-// open one card past the floor, or shut it again. Sticky — it survives scrolling away, and it
-// rides in the URL like `plain` does, so a link lands the reader on the view you meant.
-function setOpen(d, on){
-  if (!d || openCards.has(d) === on) return;
-  on ? openCards.add(d) : openCards.delete(d);
+// cycle one card past the floor, or back onto it. Sticky — it survives scrolling away, and
+// rides in the URL like `plain` does, so a link lands the reader on the view you meant. The
+// glyph precomputed its own next/prev states; landing on the floor's state drops the override.
+function stepOpen(dm, fwd){
+  const v = fwd ? dm.dataset.next : dm.dataset.prev;
+  v === dm.dataset.eff ? openCards.delete(dm.dataset.open) : openCards.set(dm.dataset.open, v);
   history.replaceState(null, "", timelineUrl());
   render();
 }
@@ -1697,27 +1745,27 @@ function bindTaps(){                                      // gap expanders + com
   if (tapsBound) return;
   tapsBound = true;
 
-  // swipe a card open or shut. The timeline scrolls on one axis only, so the horizontal one is
-  // free and nothing has to be arbitrated. It's the fast path, never the only one — a gesture
-  // announces itself to nobody, which is why the depth mark is also a button.
+  // swipe a card up or down its ladder. The timeline scrolls on one axis only, so the
+  // horizontal one is free and nothing has to be arbitrated. It's the fast path, never the
+  // only one — a gesture announces itself to nobody, which is why the glyph is also a button.
   let sw = null;
   areaEl.addEventListener("touchstart", ev => {
     const n = ev.target.closest(".card,.vcard") && ev.target.closest(".node");
     const t = ev.touches[0];
-    sw = n && n.dataset.d ? { d: n.dataset.d, x: t.clientX, y: t.clientY } : null;
+    sw = n && n.dataset.d ? { dm: n.querySelector(".dmk"), x: t.clientX, y: t.clientY } : null;
   }, { passive: true });
   areaEl.addEventListener("touchend", ev => {
     const s = sw; sw = null;
-    if (!s) return;
+    if (!s || !s.dm) return;
     const t = ev.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.6) return;   // that was a scroll
-    setOpen(s.d, dx > 0);
+    stepOpen(s.dm, dx > 0);
   }, { passive: true });
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b.dataset.g, b); return; }
     const dm = e.target.closest(".dmk");
-    if (dm){ setOpen(dm.dataset.open, !openCards.has(dm.dataset.open)); return; }
+    if (dm){ stepOpen(dm, true); return; }
     const dv = e.target.closest(".ds");
     if (dv){                                              // diff view switch, per card, in the URL
       dv.dataset.v === "p" ? plainCards.add(dv.dataset.d) : plainCards.delete(dv.dataset.d);
@@ -1863,7 +1911,7 @@ function renderTimeline(entries){
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span>${depthMark(ev, d)}</h4>` +
     cardBody(ev, d) +
-    (lvlOf(d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
+    (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
 
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
   const gaps = entries.slice(1).map((e,i) => e.frac - entries[i].frac);
@@ -1917,7 +1965,7 @@ function renderTimeline(entries){
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>` +
           `<h4>${headTitle(ev, e.d)}${depthMark(ev, e.d)}</h4>` + cardBody(ev, e.d) +
-          (lvlOf(e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
+          (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
     } else {
@@ -1929,7 +1977,7 @@ function renderTimeline(entries){
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}${depthMark(ev, e.d)}</h4>` +
         cardBody(ev, e.d) +
-        (lvlOf(e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
+        (beyond(ev, e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
         propHtml + `</div>`;
     }
   });
