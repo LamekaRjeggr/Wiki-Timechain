@@ -205,10 +205,12 @@
      how much text each field is, not a measurement. The title line is not a control: it
      is always lit, which is the rule made visible. */
   .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
-    border:1px solid var(--border);border-radius:7px;padding:7px 14px}
+    background:var(--band);border-radius:10px;padding:8px 14px}  /* soft pill — a tint,
+    not a drawn frame; the pyramid silhouette does the containing */
   .fglyph .fs{display:block;border:0;cursor:pointer;font-family:inherit;font-size:11px;
     font-weight:500;line-height:1;padding:5px 0;text-align:center;border-radius:4px;
-    background:var(--band);color:var(--dim);transition:background .12s,color .12s}
+    background:var(--border);color:var(--dim);transition:background .12s,color .12s}
+    /* one step past --band so an unlit bar still reads against the pill behind it */
   .fglyph .fs.t{cursor:default;width:76px}
   .fglyph .fs.s{width:110px}
   .fglyph .fs.c{width:144px}
@@ -699,15 +701,15 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
+        <button id="copylink" class="linkbtn" type="button"
+          title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <a id="addlink" class="linkbtn" href="add.html"
+          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t on" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
           <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
         </div>
-        <button id="copylink" class="linkbtn" type="button"
-          title="Copy a shareable link to the selected view">⧉ Copy link</button>
-        <a id="addlink" class="linkbtn" href="add.html"
-          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
       </div>
     </div>
   </header>
