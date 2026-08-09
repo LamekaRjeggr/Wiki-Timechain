@@ -341,24 +341,23 @@
     border:1px dashed var(--gutline);border-radius:4px;font-family:var(--mono);font-size:9.5px;
     letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:400}
   /* depth mark: the card's pyramid, pinned to the card's top-right — level with the
-     date/author tab but outside it. Three fixed-width lines —
-     title, summary, record — lit when that field is SHOWING, dim when carried but hidden,
-     blank (space kept) when the card doesn't have it: a lead is a shape, not a special
-     case, and the glyph sits in the same place on every card. The mark IS the control —
+     date/author tab but outside it. Three fixed-width lines — title, summary, record —
+     same slot on every card; the states are below. The mark IS the control —
      tap cycles this one card past the floor, which is the only way anyone discovers the
      swipe. Same glyph as the floor control, smaller. */
   .mtl .dmk{position:absolute;top:8px;right:12px;
     display:inline-flex;flex-direction:column;gap:2.5px;align-items:center;
     background:transparent;border:0;padding:4px;cursor:pointer;line-height:0}
-  .mtl .dpb{display:block;height:2.5px;border-radius:1.25px;background:var(--faint)}
+  /* a traffic light: three sockets on every card, three states a glance apart —
+     lit (amber, showing), solid grey (carried but off), hollow (the card has no such
+     field — the socket is drawn empty, so the absence itself is legible) */
+  .mtl .dpb{display:block;height:4px;border-radius:2px;background:var(--dim);box-sizing:border-box}
   .mtl .dpb.t{width:8px}.mtl .dpb.s{width:14px}.mtl .dpb.b{width:20px}
-  .mtl .dpb.no{visibility:hidden}   /* rung the card doesn't have — keeps the glyph's
-                                       geometry stable, so the mark never jumps between cards */
-  .mtl .dpb.on{background:var(--text)}    /* lit has to clear the dim rung by more than a shade */
-  .mtl .dmk:hover .dpb{background:var(--dim)}
-  .mtl .dmk:hover .dpb.on{background:var(--text)}
-  .mtl .dmk.open .dpb{background:var(--rail-dim)}       /* cycled off the floor = rail, same as .ds.on */
-  .mtl .dmk.open .dpb.on{background:var(--rail)}
+  .mtl .dpb.on{background:var(--rail)}    /* lit = the same amber as the floor control */
+  .mtl .dpb.no{background:transparent;border:1px solid var(--faint)}
+  .mtl .dmk:hover .dpb{background:var(--text)}
+  .mtl .dmk:hover .dpb.on{background:var(--rail)}
+  .mtl .dmk:hover .dpb.no{background:transparent;border-color:var(--gutline)}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
   /* gaps: proportional spacer, or a collapsed marker for long silences */
