@@ -1174,8 +1174,7 @@ function headTitle(ev, d){
 }
 
 function depthMark(ev, d){
-  const c = carries(ev);
-  if (!c.sum && !c.body) return "";
+  const c = carries(ev);   // a title-only card still wears the glyph: one amber, two hollow
   // the card's ladder of states: title, then whatever its fields allow. The cycle walks it.
   const v = visOf(ev, d), cur = showStr({ s: v.sum, c: v.body });
   const lad = ["t"]; if (c.sum) lad.push("s"); if (c.body) lad.push(c.sum ? "sc" : "c");
