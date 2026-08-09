@@ -104,7 +104,7 @@ Where: Council chambers, City Hall; virtual by registration with the planning of
   When a card about one place is heard somewhere else these are different facts and must
   not share a label.
 - **State the timezone every time.** A permanent record is read from anywhere.
-- **Don't narrate the schedule in the prose too.** Once the block exists, the lead
+- **Don't narrate the schedule in the prose too.** Once the block exists, the opening
   sentence says what the meeting *is* and who decides; the block says when and where.
   Saying the date twice is the most common way these cards get bloated.
 
@@ -129,43 +129,23 @@ been announced; the estimate is not sourced.`), and the `Source:` line records w
 checked and when. An anticipated card is superseded by a real one, not deleted — nothing
 here is ever deleted.
 
-## Writing a lead
+## A card with no body
 
-*Lead* is this corpus's word, not the spec's. The spec gives three text fields, none
-required, none parsed — presence or absence is the only signal a client reads. A
-**lead** is what this corpus calls one of those shapes: a `summary` and no `content`,
-an event believed to have happened for which no citable record has yet been found. The
-absent body *is* the declaration, and it travels through any client, because an absence
-cannot be dropped. What no spec can define is the wording, which is where leads go
-wrong.
+The spec gives three text fields, none required, none parsed — presence or absence is
+the only signal a client reads. A card may carry a `summary` and no `content`: an event
+believed to have happened for which no citable record has been found. Nothing marks it
+as a state; the absent body is the whole declaration, and it travels through any client,
+because an absence cannot be dropped.
 
-**The marker word goes in the title, as a short prefix and an em dash.** The title is
-the field every client shows first and truncates least — not the summary, which a
-foreign client may not render at all.
+**A summary may be wrong; it may not be invented.** A guess about *what happened* can
+stand. A guess about *why* is a story.
 
-```
-title    Lead — the foundry changed hands
-summary  Said to have happened between July 20 and July 30, 2026.
-```
-
-Which word is the publisher's call, and other one-word prefixes will earn their place as
-other shapes do. **What does not vary is the test:** the word must describe *this card*
-— what it does and does not carry — and never the world. `Lead` says the card has no
-body and no source, so it stays true until the card changes. `Unverified` describes the
-world instead, and goes quietly false the moment someone else verifies the thing.
-
-The title still has to *identify* the card. A prefix alone is not a title: a collection
-of them is indistinguishable in any list view. Marker, then the claim.
-
-**A summary may be wrong; it may not be invented.** A guess about *what happened* is a
-lead. A guess about *why* is a story.
-
-**The date range goes in the summary, in words,** and `event_date` sits on the first
-day of the range — the same placement rule approximate dates use. `APPROXIMATE DATE:`
-lives in the body, and a lead has no body. When the lead climbs, the range moves into the body as a proper
+**The date range goes in the summary, in words,** and `event_date` sits on the first day
+of the range — the same placement rule approximate dates use. `APPROXIMATE DATE:` lives
+in the body. When a source turns up, the range moves into the body as a proper
 `APPROXIMATE DATE:` line — or the source pins a day and the hedge goes away.
 
-**A lead that proves false climbs too.** The body records what was claimed and what
+**A claim that proves false gets a body too.** It records what was claimed and what
 disproved it, cited to the disproof. That is a body with a source: a record. Nothing is
 deleted, nothing is reused, and the false claim keeps its place on the timeline.
 
@@ -238,8 +218,8 @@ Style calls that are settled. The wire-format decisions are frozen in the spec i
   edit.**
 - Anticipated events: a `Status: anticipated` line, unsourced estimates labelled as such
   in place; superseded by a real card, never deleted.
-- Leads: the title opens with a short word and an em dash, `Lead — ` here. **The prefix
-  must describe the card, never the world — that test is frozen, the word is not.**
+- Sourceless claims: a `summary`, no `content`, no marker word anywhere. The absence is
+  the statement; date range in the summary, in words.
 - Topics: freeform lowercase `t`, deliberately unspecced. No registry, no vocabulary.
 - Diffs: removals in their own block; verify by reconstruction, never by eye; a rewrite
   gets prose, not marks.

@@ -346,12 +346,6 @@
   /* summary mode: these are the publisher's words about the event, not the record's, so
      they get a rule down the side — indent + line, never a hue, and never unmarked */
   .mtl .cbody.sum{border-left:2px solid var(--gutline);padding-left:11px}
-  /* a lead: a summary with no record under it. Dashed where a folded record is solid — the
-     rule has to say "nothing beneath yet", not "folded away". Shape and lightness, no hue. */
-  .mtl .cbody.lead{border-left-style:dashed;color:var(--dim)}
-  .mtl .leadtag{display:inline-block;margin-right:7px;padding:1px 6px;vertical-align:2px;
-    border:1px dashed var(--gutline);border-radius:4px;font-family:var(--mono);font-size:9.5px;
-    letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:400}
   /* depth mark: the card's pyramid, pinned to the card's top-right — level with the
      date/author tab but outside it. Three fixed-width lines — title, summary, record —
      same slot on every card; the states are below. The mark IS the control —
@@ -1148,40 +1142,28 @@ function diffBar(ev, d){
 
 // What a card carries past its title, read off its SHAPE — never off a status tag. A tag is
 // dropped in silence by a client that never heard of this convention; an absent body can't be.
-// So a summary with no record is a lead, here and everywhere, with nothing to keep in sync.
 function carries(ev){ return { sum: !!tag(ev,"summary"), body: !!(ev.content || "").trim() }; }
-const LEAD_RE = /^\s*Lead\s*[—–-]\s*/;
 
-// what this card actually shows: the floor, unless the card was cycled past it. A lead's
-// summary stands in for the record — with the record line lit and nothing under it, the
-// summary is all there is, so the floor can't blank a lead into a bare line.
+// what this card actually shows: the floor, unless the card was cycled past it. No field
+// stands in for another — a lit line means that line is showing, and a card that carries
+// only a title shows only its title.
 function visOf(ev, d, base){
   const c = carries(ev), v = parseShow(base || openCards.get(d) || showStr(floor));
-  return { sum: c.sum && (v.s || (v.c && !c.body)), body: c.body && v.c };
+  return { sum: c.sum && v.s, body: c.body && v.c };
 }
 function beyond(ev, d){ const v = visOf(ev, d); return v.sum || v.body; }
 
 // A card's text: each lit line renders, summary above record. They are two voices — the
 // publisher's reading over the cited record — not two zoom levels of one text.
 function cardBody(ev, d){
-  const c = carries(ev), v = visOf(ev, d);
+  const v = visOf(ev, d);
   let h = "";
-  if (v.sum) h += c.body
-    ? `<div class="cbody sum" title="the publisher's own summary — the sources are in the record">${esc(tag(ev,"summary"))}</div>`
-    : `<div class="cbody sum lead" title="a lead — the publisher's reading, with no record under it yet">${esc(tag(ev,"summary"))}</div>`;
+  if (v.sum) h += `<div class="cbody sum" title="the publisher's own summary — the sources are in the record">${esc(tag(ev,"summary"))}</div>`;
   if (v.body) h += diffBar(ev, d) + `<div class="cbody">${renderContent(ev.content || "", plainCards.has(d))}</div>`;
   return h;
 }
 
-// the heading: the `Lead — ` prefix comes off the text and stands as its own mark, so it stops
-// eating the width of a title that already truncates. Only when the shape agrees — a card with
-// a body keeps whatever its author wrote, we don't rewrite a title on a guess.
-function headTitle(ev, d){
-  const raw = shortTitle(tag(ev,"title") || d), c = carries(ev);
-  return c.sum && !c.body
-    ? `<span class="leadtag">lead</span>` + esc(raw.replace(LEAD_RE, ""))
-    : esc(raw);
-}
+function headTitle(ev, d){ return esc(shortTitle(tag(ev,"title") || d)); }
 
 function depthMark(ev, d){
   const c = carries(ev);   // a title-only card still wears the glyph: one amber, two hollow
