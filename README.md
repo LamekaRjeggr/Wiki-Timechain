@@ -62,22 +62,6 @@ a separate one. If you truly want a private corpus, change `MARKER` in both HTML
 files; to sandbox against your own relay, point `RELAYS` at it — in both files, or
 the writer's collision guard checks a corpus the viewer never shows you.
 
-## Contributing a card
-
-Use **[add.html](add.html)** — the writer, live at
-[/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html). It builds the
-tags for you, previews the card as the viewer will draw it, and signs with a browser
-extension, a remote signer (`bunker://`), or a secret key held for that tab only. It
-never mints a key: a card is a record, so it wants a real one. Get keys at
-[nstart.me](https://nstart.me).
-
-Publishing by hand works too — the event shape is in [NIP-DRAFT.md](NIP-DRAFT.md),
-the writing rules in [CONVENTION.md](CONVENTION.md).
-
-**A wiki client won't do it.** wikifreedia and wikistr publish kind 30818, which
-this viewer does not read at all — a card published there is invisible here. Use
-anything that can sign an arbitrary kind with arbitrary tags.
-
 ## Built on
 
 nostr NIPs this rests on:
