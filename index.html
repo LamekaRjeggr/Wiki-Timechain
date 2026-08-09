@@ -55,6 +55,9 @@
     --hairline:rgba(233,234,238,.4);
     --past-glow:rgba(201,143,63,.65);
     --future-glow:rgba(40,229,255,.6);
+    /* the picker's arrow, drawn in --dim. Restated in each theme — url() is a string,
+       so var() can't reach inside it; only the stroke hex differs between the three. */
+    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%239296a0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
     --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
   }
@@ -82,6 +85,7 @@
     --band:rgba(248,243,234,.05); --hair:rgba(248,243,234,.10);
     --hairline:rgba(248,243,234,.45);
     --past-glow:rgba(238,188,132,.55); --future-glow:rgba(79,216,232,.55);
+    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23c9bca4' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
 
   /* ── LIGHT: ink on paper ──
@@ -107,6 +111,7 @@
     --band:rgba(25,27,31,.035); --hair:rgba(25,27,31,.09);
     --hairline:rgba(25,27,31,.45);
     --past-glow:rgba(138,84,16,.5); --future-glow:rgba(13,111,134,.45);
+    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%2361666f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--text);
@@ -179,7 +184,8 @@
     border-radius:8px;padding:9px 36px 9px 14px;font-size:13px;font-family:inherit;
     font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;
     background-repeat:no-repeat;background-position:right 13px center;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%239296a0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")}
+    background-image:var(--chev)}   /* a data-URI can't read a token, so each theme ships
+       its own copy of the arrow with --dim baked in — see the three :root blocks */
   .picker:hover,.picker:focus{border-color:var(--rail-dim);outline:none}
 
   /* copy-a-link-to-this-timeline button */
@@ -208,6 +214,11 @@
     button and the anchor beside it — an underline there would read as body-copy link */
   .linkbtn:hover{color:var(--text);border-color:var(--rail-dim)}
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
+  /* the one thing the convention actually wants from a reader. Filled, so it outranks the
+     quiet outline beside it; the lit floor bars are amber too, but a stacked pyramid of
+     11px labels never reads as a button. */
+  .linkbtn.go{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
+  .linkbtn.go:hover{color:var(--ink);filter:brightness(1.08)}
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
@@ -687,7 +698,7 @@
       <div class="pickrow">
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
-        <a id="addlink" class="linkbtn" href="add.html"
+        <a id="addlink" class="linkbtn go" href="add.html"
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t on" title="titles — always shown">titles</span>
