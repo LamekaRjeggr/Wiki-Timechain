@@ -202,13 +202,17 @@
      The transparent border on every line keeps all three the same height. */
   .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
   .fglyph .fs{display:block;border:1px solid transparent;cursor:pointer;font-family:inherit;
-    font-size:11px;
-    font-weight:500;line-height:1;padding:5px 0;text-align:center;border-radius:4px;
+    font-size:13px;
+    font-weight:500;line-height:1;padding:7px 0;text-align:center;border-radius:4px;
     background:var(--border);color:var(--dim);transition:background .12s,color .12s}
+  /* Taller courses and a tighter top, so the stack rises instead of sprawling — the card
+     mark's edge is about 24° off vertical and these widths land within a degree or two.
+     They can't taper as hard as the bare bars do: the words set the floor, and "records"
+     needs its 130px. */
   .fglyph .fs.t{cursor:default;width:76px;background:transparent;
     border-color:var(--rail-dim);color:var(--rail)}
-  .fglyph .fs.s{width:110px}
-  .fglyph .fs.c{width:144px}
+  .fglyph .fs.s{width:104px}
+  .fglyph .fs.c{width:130px}
   .fglyph .fs.on{background:var(--rail);color:var(--ink)}
   .fglyph button.fs:hover{color:var(--text)}
   .fglyph button.fs.on:hover{color:var(--ink)}
@@ -354,13 +358,13 @@
      tap cycles this one card past the floor, which is the only way anyone discovers the
      swipe. Same glyph as the floor control, smaller. */
   .mtl .dmk{position:absolute;top:8px;right:12px;
-    display:inline-flex;flex-direction:column;gap:2.5px;align-items:center;
+    display:inline-flex;flex-direction:column;gap:3px;align-items:center;
     background:transparent;border:0;padding:4px;cursor:pointer;line-height:0}
   /* a traffic light: three sockets on every card, three states a glance apart —
      lit (amber, showing), solid grey (carried but off), hollow (the card has no such
      field — the socket is drawn empty, so the absence itself is legible) */
-  .mtl .dpb{display:block;height:4px;border-radius:2px;background:var(--dim);box-sizing:border-box}
-  .mtl .dpb.t{width:8px}.mtl .dpb.s{width:14px}.mtl .dpb.b{width:20px}
+  .mtl .dpb{display:block;height:5px;border-radius:2px;background:var(--dim);box-sizing:border-box}
+  .mtl .dpb.t{width:10px}.mtl .dpb.s{width:17px}.mtl .dpb.b{width:24px}
   .mtl .dpb.on{background:var(--rail)}    /* lit = the same amber as the floor control */
   .mtl .dpb.no{background:transparent;border:1px solid var(--faint)}
   .mtl .dmk:hover .dpb{background:var(--text)}
