@@ -156,11 +156,9 @@
   .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
     color:var(--faint)}
 
-  /* who else has published under this collection. A LENS, not an axis: tapping a chip steps
-     the other authors' cards back, it never changes which cards are on the page — a filter
-     here would be a fourth axis and would break both "axes don't compose" and one spine, one
-     story. Hidden entirely while a collection has one author, the way an axis with no groups
-     loses its chip. */
+  /* who else has published under this collection. A LENS, not a filter: tapping a chip steps
+     the other authors' cards back, it never changes which cards are on the page — filtering
+     here would break one spine, one story. Hidden entirely while a collection has one author. */
   .roster{margin:11px auto 0;max-width:640px;display:flex;flex-wrap:wrap;
     justify-content:center;align-items:center;gap:5px}
   .rchip{background:transparent;border:1px solid var(--border);color:var(--dim);
@@ -173,19 +171,8 @@
   .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
     color:var(--faint);margin-top:2px}
 
-  /* filter picker row: axis chips over the value dropdown */
+  /* the timeline picker */
   .tabs{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
-
-  /* axis chips — selection carries on background + border + text lightness, never hue */
-  .axes{display:flex;gap:4px}
-  .axis{background:transparent;border:1px solid transparent;color:var(--dim);
-    border-radius:7px;padding:5px 11px;font-size:12px;font-family:inherit;
-    font-weight:500;cursor:pointer}
-  .axis:hover{color:var(--text)}
-  .axis.on{background:var(--panel);border-color:var(--border);color:var(--text)}
-  .axis .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
-
-  /* the selected axis's values */
   .picker{background:var(--panel);border:1px solid var(--border);color:var(--text);
     max-width:100%;                /* a long slug used to size the select past the phone's
        width and give the whole page a horizontal scrollbar */
@@ -204,13 +191,10 @@
      here the lines are wide enough to say their own names. Fixed widths, a mnemonic for
      how much text each field is, not a measurement. The title line is not a control: it
      is always lit, which is the rule made visible. */
-  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
-    background:var(--band);border-radius:10px;padding:8px 14px}  /* soft pill — a tint,
-    not a drawn frame; the pyramid silhouette does the containing */
+  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
   .fglyph .fs{display:block;border:0;cursor:pointer;font-family:inherit;font-size:11px;
     font-weight:500;line-height:1;padding:5px 0;text-align:center;border-radius:4px;
     background:var(--border);color:var(--dim);transition:background .12s,color .12s}
-    /* one step past --band so an unlit bar still reads against the pill behind it */
   .fglyph .fs.t{cursor:default;width:76px}
   .fglyph .fs.s{width:110px}
   .fglyph .fs.c{width:144px}
@@ -940,8 +924,6 @@ const openCards = new Map((_q.get("open") || "").split(",").filter(Boolean).map(
   const i = x.lastIndexOf("~");
   return i < 0 ? [x, "c"] : [x.slice(0, i), x.slice(i + 1)];
 }));
-const AXES = [["t","topics"],["l","places"],["c","timelines"]];
-let activeAxis = wantedF ? wantedF.slice(0, wantedF.indexOf(":")) : "t";
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
@@ -1573,44 +1555,15 @@ function selectF(f){
   render();
 }
 
-// The same catalog of timelines, organized three ways. Each axis is a list of
-// [heading, items] groups (heading null = flat); every item selects a collection.
-// Grouped by topic a timeline appears under each topic it carries; grouped by place
-// it appears exactly ONCE — under its most specific rung, so the ladder's parent
-// rungs don't repeat it. Derived fresh each render from the tags, nothing baked.
-function vocab(){
-  const cs = [...slugs].sort().filter(c => entriesOf("c:" + c).length);
-  const depth = (v, ns) => ns === "ISO-3166-1" ? 0
-                         : ns === "ISO-3166-2" ? 1
-                         : v.split("-").length - 1;   // kebab rungs are parent-prefixed
-  const byTopic = new Map(), byPlace = new Map();
-  const put = (m, k, c) => (m.get(k) || m.set(k, []).get(k)).push(c);
-  for (const c of cs){
-    const topics = new Set(), places = new Map();     // rung value → namespace
-    for (const ev of matching("c:" + c))
-      for (const t of ev.tags){
-        if (t[0] === "t" && t[1] !== MARKER) topics.add(t[1]);
-        if (t[0] === "l" && PLACE_NS.includes(t[2])) places.set(t[1], t[2]);
-      }
-    for (const tp of topics) put(byTopic, tp, c);
-    const deepest = [...places.keys()]
-      .sort((a,b) => depth(b, places.get(b)) - depth(a, places.get(a)))[0];
-    if (deepest) put(byPlace, deepest, c);
-  }
-  const items = list => list.map(c => ["c:" + c, slugName(c)]);
-  return {
-    t: [...byTopic.keys()].sort().map(tp => [tp, items(byTopic.get(tp))]),
-    l: [...byPlace.keys()]
-      .sort((a,b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)  // parent-prefix ⇒ ladder order
-      .map(v => [v, items(byPlace.get(v))]),
-    c: cs.length ? [[null, items(cs)]] : [],
-  };
-}
+// The picker's catalog: every timeline the relays hold, flat and alphabetical, as
+// [filter, label] pairs. Derived fresh each render from the tags, nothing baked.
+const vocab = () => [...slugs].sort()
+  .filter(c => entriesOf("c:" + c).length)
+  .map(c => ["c:" + c, slugName(c)]);
 
-// Who else has published here. A LENS, not an axis — it never changes which cards are on the
-// page. Hidden at one author, the way an axis with no groups loses its chip, so it stays
-// invisible until a second key publishes: that is the expected state on today's data, not a
-// broken build. The note is there because "originator" reads as ownership if nothing says
+// Who else has published here. A LENS, not a filter — it never changes which cards are on the
+// page. Hidden at one author, so it stays invisible until a second key publishes: that is the
+// expected state on today's data, not a broken build. The note is there because "originator" reads as ownership if nothing says
 // otherwise — what the title carries is curation, and never anyone's record.
 function renderRoster(){
   const c = activeF ? activeF.slice(2) : null;
@@ -1645,41 +1598,14 @@ function renderTabs(V){
   renderRoster();
   if (!slugs.size) return;                       // status line shows "connecting…"
 
-  const flat = a => V[a].flatMap(([,its]) => its);
-  const axes = document.createElement("div");
-  axes.className = "axes";
-  for (const [a, label] of AXES){
-    if (!V[a].length) continue;
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "axis" + (a === activeAxis ? " on" : "");
-    b.innerHTML = `${label}<span class="n">${a === "c" ? flat(a).length : V[a].length}</span>`;
-    b.addEventListener("click", () => {
-      if (a === activeAxis) return;
-      activeAxis = a; userPicked = true;
-      // reorganizing shouldn't change the spine — keep the selection if this grouping
-      // carries it, land on its first timeline only when it doesn't
-      const its = flat(a);
-      its.some(([f]) => f === activeF) ? render() : selectF(its[0][0]);
-    });
-    axes.appendChild(b);
-  }
-  tabsEl.appendChild(axes);
-
   const sel = document.createElement("select");
   sel.className = "picker";
-  let marked = false;                              // a timeline can sit under two topics
-  for (const [heading, its] of V[activeAxis]){
-    const box = heading
-      ? sel.appendChild(Object.assign(document.createElement("optgroup"), {label: heading}))
-      : sel;
-    for (const [f, text] of its){
-      const o = document.createElement("option");
-      o.value = f;
-      o.textContent = `${text}  (${entriesOf(f).length})`;
-      if (!marked && f === activeF){ o.selected = true; marked = true; }
-      box.appendChild(o);
-    }
+  for (const [f, text] of V){
+    const o = document.createElement("option");
+    o.value = f;
+    o.textContent = `${text}  (${entriesOf(f).length})`;
+    o.selected = f === activeF;
+    sel.appendChild(o);
   }
   sel.addEventListener("change", () => selectF(sel.value));
   tabsEl.appendChild(sel);
@@ -1688,14 +1614,12 @@ function renderTabs(V){
 // ═══════════════ render ═══════════════
 function render(){
   const V = vocab();
-  // an axis with no live groups shows no chip, so never sit on one
-  if (!V[activeAxis].length) activeAxis = (AXES.find(([a]) => V[a].length) || ["t"])[0];
-  // deep link wins until the visitor picks. ?c= is the shareable form; legacy ?l=/?t=
-  // land on the first timeline in that group, right chip lit — never a merged spine.
+  // deep link wins until the visitor picks. ?c= is the shareable form; ?l=/?t=
+  // land on the first timeline carrying that tag — never a merged spine.
   const want = !userPicked && wantedF
     ? [...new Set(matching(wantedF).map(collectionSlug))].sort() : [];
-  if (want.length){ activeF = "c:" + want[0]; activeAxis = axisOf(wantedF); }
-  else if (activeF === null && V[activeAxis].length) activeF = V[activeAxis][0][1][0][0];
+  if (want.length) activeF = "c:" + want[0];
+  else if (activeF === null && V.length) activeF = V[0][0];
   renderStatus();
   renderTabs(V);
 
