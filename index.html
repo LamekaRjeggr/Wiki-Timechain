@@ -721,10 +721,6 @@
         <a href="https://njump.me" target="_blank" rel="noopener noreferrer">njump.me</a>.
         This site has no accounts, no moderators, and no server: it renders whatever the
         relays hold, and the relays hold whatever people sign.</p>
-      <p>This page only writes what you tap out — a reaction, or a margin comment once
-        you've reacted, each signed by your own key. It never asks for your secret key.
-        Cards come from outside: any client that lets you set tags yourself can publish
-        the format in the dev notes below.</p>
 
       <h2 id="nostr">What nostr is</h2>
       <p>nostr is a way to publish that doesn't run through a company. There is no
@@ -752,34 +748,17 @@
 
       <h2>Add to the record</h2>
       <h3>1 · Get a nostr identity</h3>
-      <p>A keypair is the whole membership process — no signup, no email, no one to
-        approve you. Make one at
+      <p>A keypair is the whole signup: no email, no approval. Make one at
         <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>.
-        From that moment you can put things on this record and nobody — including
-        whoever runs this page — can take them off. Guard your secret key
-        (<code>nsec</code>): it can't be reset, and it <em>is</em> the identity. Use a
-        signer extension or app rather than pasting it into websites.</p>
-      <p>This page reads your key through a <b>browser signer extension</b> — nos2x, Alby,
-        or any other that speaks NIP-07. Without one you can read everything here; the
-        reaction buttons and the comment box simply aren't drawn, because there would be
-        nothing to sign with. This page never holds a key of yours and never mints one
-        for you.</p>
+        Guard the secret key (<code>nsec</code>): it can't be reset, and it <em>is</em>
+        the identity.</p>
+      <p>This page reads it through a <b>browser signer extension</b> (NIP-07). Without
+        one, this page is read-only.</p>
 
-      <h3>2 · React, then comment</h3>
-      <p>With a signer extension installed, tap <code>+</code>, <code>=</code>, or
-        <code>−</code> at the bottom of a card to sign a reaction with your key. One vote
-        per card: tapping a different glyph replaces your last. Reacting unlocks the
-        comment box on that card — a margin note, signed by you, stored on the same relays
-        that hold the card. Reactions and margin notes are the whole write side this page
-        has. Without an extension the counts still show; only the buttons are gone.</p>
-
-      <h3>3 · Write a card</h3>
-      <p>Cards are written on <a href="add.html">a separate page</a> — this one only ever
-        reads them. There you sign in with an extension, a remote signer, or (last resort)
-        a secret key held for that tab alone, and write an entry: into a timeline that
-        already exists, into a new one you name yourself, or as a revision of a card
-        someone else wrote. Nobody grants permission. A collection exists the moment a
-        card carries its name.</p>
+      <h3>2 · Add to it</h3>
+      <p>Signed with your key: a stance or a margin note on any card, and cards of your
+        own. <a href="add.html">add.html</a> is the long form — revisions of another
+        author's card, and its own sign-in options.</p>
 
       <details class="dev">
       <summary>Dev · publish a card, build a reader</summary>
@@ -832,7 +811,7 @@ content:
         membership for one timeline is <code>{"kinds":[30828],"#l":["&lt;slug&gt;"]}</code>.
         No manifest to fetch, no index to register with. Keep the newest event per
         <code>pubkey:d</code> — that pair is a card's identity, and an author republishing one
-        replaces their own. Read both label namespaces, as this page does. The full tag scheme is in
+        replaces their own. The full tag scheme is in
         <a href="https://github.com/LamekaRjeggr/Wiki-Timechain/blob/main/NIP-DRAFT.md"
            target="_blank" rel="noopener noreferrer">NIP-DRAFT.md</a>.</p>
 
