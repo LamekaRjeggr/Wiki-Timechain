@@ -9,22 +9,17 @@ build step.
 
 ## The convention
 
-A timeline entry is a single **kind-30828** addressable event
-([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) that labels
-itself as belonging here ([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)):
-the `wikitimechain` marker, a `timeline.collection` label, and an `event_date`.
-Timelines are discovered from the marker, never a hardcoded list. A collection *is*
-its slug — publish the first card carrying a new one and that timeline exists.
+One timeline entry is one **kind-30828** addressable event
+([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) carrying the
+`wikitimechain` marker, a `timeline.collection` label
+([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)), and an
+`event_date`.
 
-**30828 is our own kind**, started from
-[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)'s wiki article
-(kind 30818) — same card shape, different kind number.
+- Cards are found by the marker. No author filter, no list of timelines.
+- A collection is its slug. The first card carrying a new one creates that timeline.
+- Same `d`, same author — edit. Same `d`, different author — both render.
 
-Same `d` from the **same** author edits the card; same `d` from a **different**
-author renders beside it — a dispute, never an overwrite.
-
-The tag scheme is in [NIP-DRAFT.md](NIP-DRAFT.md). House style — how a card's prose
-is written, sourced and diffed — is in [CONVENTION.md](CONVENTION.md).
+Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
 
 ## Run it yourself
 
