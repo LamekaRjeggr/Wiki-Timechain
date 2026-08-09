@@ -91,6 +91,11 @@
     -webkit-text-size-adjust:100%}
   a{color:var(--accent)}
   code{font-family:var(--mono);font-size:.92em;color:var(--text-2)}
+  /* where a link goes, printed beside its label — the viewer's rule, so the preview matches */
+  .lhost{margin-left:4px;font-family:var(--mono);font-size:.82em;color:var(--dim);
+    white-space:nowrap}
+  .lhost::before{content:"⟨"}
+  .lhost::after{content:"⟩"}
 
   header{border-bottom:1px solid var(--border-soft);background:
     linear-gradient(180deg,var(--glow),transparent);padding:20px 18px 16px}
@@ -885,10 +890,17 @@ function fixLinkTargets(s){
 
 // ═══════════════ the djot-ish renderer — the viewer's, so the preview is honest ═══════════════
 const MARK = /\{([-+])([^]*?)\1\}/g;
+// the viewer's hostMark, so you see your own link the way a reader will (index.html for why)
+function hostMark(url, label){
+  let h;
+  try { h = new URL(url.replaceAll("&amp;","&")).hostname.replace(/^www\./, ""); } catch { return ""; }
+  if (!h || label.toLowerCase().includes(h.toLowerCase())) return "";
+  return `<span class="lhost">${esc(h)}</span>`;
+}
 function renderContent(text){
   const inline = s => s
-    .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, (_, lab, url) =>
+      `<a href="${url}" target="_blank" rel="noopener noreferrer">${lab}</a>` + hostMark(url, lab))
     .replace(/\{-([^]*?)-\}/g, "<del>$1</del>")
     .replace(/\{\+([^]*?)\+\}/g, "<ins>$1</ins>");
   return esc(text).split(/\n\s*\n/).map(block => {
