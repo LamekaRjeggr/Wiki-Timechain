@@ -15,23 +15,6 @@ tag. Pick one from the picker and it shows up. Add a new card to a new
 collection and it appears there too — no fixed list, no publish-side
 registration.
 
-## Documents that change
-
-When a timeline follows a document through versions, a card can carry the change
-rather than describe it: it tags the version it revises with a `fork` marker and
-marks the text in djot, `{-removed-}` / `{+added+}`. No new tag — both are already
-in the format, and it works in any timeline. The event shape is in
-[NIP-DRAFT.md](NIP-DRAFT.md#revisions); the authoring rules, including the one that
-matters most — don't diff more finely than a reader can follow — are in
-[CONVENTION.md](CONVENTION.md#cutting-a-diff).
-
-## Reactions and comments
-
-Cards are read-only forever. The only things this page ever writes are
-[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md) reactions and
-[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md) comments, signed
-by the visitor's own browser extension — never a key the page asks for or mints.
-
 ## The convention
 
 A timeline entry is a single **kind-30828** addressable event
