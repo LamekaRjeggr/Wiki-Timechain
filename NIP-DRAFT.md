@@ -19,7 +19,7 @@ interpreted as described in RFC 2119.
 
 Two problems recur wherever events are recorded permissionlessly.
 
-**An open discovery marker is squattable.** Any key may wear any tag. This NIP splits
+**An open discovery marker is squattable.** This NIP splits
 the roles: a marker for the relay to filter on, and a shape test the client applies to
 what comes back.
 
@@ -59,8 +59,7 @@ derive meaning from it, whatever it appears to encode.
 A card MUST carry exactly one collection label. Its value is the collection's
 identifier and SHOULD be lowercase kebab-case.
 
-Date buckets are a query shadow of `event_date`, since multi-letter tags are not
-indexed by relays. A card MUST emit a `YYYY` bucket, and MUST emit a `YYYY-MM` bucket
+Buckets exist because multi-letter tags are not indexed by relays. A card MUST emit a `YYYY` bucket, and MUST emit a `YYYY-MM` bucket
 when the month is known. **Buckets MUST encode only known precision.** Where the true
 date is coarser than a day, the placeholder components of `event_date` MUST NOT be
 emitted as buckets — a card known only to the year emits no month bucket.
@@ -193,7 +192,7 @@ A reaction ([NIP-25](25.md)) is not an adoption. Citing a source requires
 publishing a card.
 
 A client MAY render an attribution line from these tags (for example
-`via <npub> · adopted`), derived at read time. No attribution state is stored.
+`via <npub> · adopted`), derived at read time.
 
 ## Discovery
 
@@ -274,16 +273,14 @@ whose results MUST be re-checked against the gate.
 ### Marginalia is addressed by kind
 
 Reactions ([NIP-25](25.md)) and comments ([NIP-22](22.md)) address a card at
-`30828:<pubkey>:<d>`. Republishing a card's content under a different kind therefore
-gives it a new address, and every existing reaction and comment on it resolves to
-nothing — with no error surfaced to the reader.
+`30828:<pubkey>:<d>`. Republishing the same content under a different kind changes the
+address and silently orphans every existing reaction and comment.
 
 ## Publishing
 
-A publisher signs a kind `30828` with the required tags and sends it to any relay; a
-collection exists once a card carries its identifier, with no registry and no
-permission. Whether a client shows every conforming card, or ranks and filters what it
-shows, is outside this NIP.
+A publisher signs a kind `30828` with the required tags and sends it to any relay. A
+collection exists once a card carries its identifier; there is no registry. What a
+client chooses to show is outside this NIP.
 
 ## Security considerations
 
@@ -293,13 +290,12 @@ card on shape; it cannot establish authorship or good faith, and it is not inten
 **There is no author allowlist.** Any key passing the gate is admitted, which is the
 point of the scheme and also its cost: junk and forgeries pass a shape test as readily
 as records do. Clients expecting adversarial input SHOULD rank rather than gate, using
-signals outside this NIP such as the reader's own follow graph. Reaction counts MUST NOT
-be treated as authority: keys are free to mint.
+signals outside this NIP such as the reader's own follow graph. Reaction and citation counts MUST NOT be treated as
+authority: keys are free to mint.
 
-**Citation edges are self-asserted and free to mint.** Keys cost nothing: a key may
-adopt its own cards under other keys, and copying without an `adopt` tag is
-undetectable. Citation counts MUST NOT be treated as authority. A cited `e` id may
-reference a version no relay still holds; a dangling id is not an error.
+**Citation edges are self-asserted.** A key may adopt its own cards under other keys;
+copying without an `adopt` tag is undetectable. A cited `e` id
+may reference a version no relay still holds; a dangling id is not an error.
 
 **Self-asserted values MUST NOT be treated as evidence.** `created_at`, `published_at`,
 `event_date` and `event_time` are all written by the signer and none is attested.
