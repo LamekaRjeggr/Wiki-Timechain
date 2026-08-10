@@ -267,8 +267,8 @@ as records do. Clients expecting adversarial input SHOULD rank rather than gate,
 signals outside this NIP such as the reader's own follow graph. Reaction counts MUST NOT
 be treated as authority: keys are free to mint.
 
-**Self-asserted values MUST NOT be treated as evidence.** `created_at`, `published_at`
-and `event_date` are all written by the signer and none is attested.
+**Self-asserted values MUST NOT be treated as evidence.** `created_at`, `published_at`,
+`event_date` and `event_time` are all written by the signer and none is attested.
 
 ## Example
 
@@ -283,6 +283,7 @@ A region-scoped card, with no local rung and no geohash:
     ["title", "Proposition number assigned"],
     ["published_at", "1784681375"],
     ["event_date", "2026-07-01"],
+    ["event_time", "14:30"],
     ["t", "wikitimechain"],
     ["L", "timeline.collection"],
     ["l", "example-timeline", "timeline.collection"],
