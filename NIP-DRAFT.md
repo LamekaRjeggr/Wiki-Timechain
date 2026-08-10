@@ -8,8 +8,8 @@ Timeline Cards
 
 A timeline card is an addressable event placing one dated fact on a shared timeline.
 Cards carrying the same collection label form a collection; any key may publish into
-any collection, and no key may exclude another. Discovery is a self-label scheme under
-a single-letter marker, with date, jurisdiction and geohash query shadows.
+any collection, and no key may exclude another. Discovery is a marker in the indexed
+`t` tag, plus self-labels carrying date, jurisdiction and geohash query shadows.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
@@ -115,18 +115,15 @@ assert anything `content` does not support.
 
 **All three are human-readable free text.** A client MUST NOT parse any of them for
 machine-readable state, and MUST NOT require any particular wording or form. The only
-machine-readable signal these fields carry is **presence or absence**. This is
-deliberate: a client that does not implement this NIP silently drops the tags it does
-not know, so any state declared by a status tag fails to travel — but an absent field
-renders as an absence everywhere, and the shape survives.
+machine-readable signal these fields carry is **presence or absence**; see *Motivation*.
 
 What a given combination *means* — a `summary` standing alone, a bare `title` — is
 vocabulary, and vocabulary belongs to a corpus, not to this NIP. A publisher MAY build
 conventions on these shapes; a conforming client MAY surface a shape distinctly, but
 MUST derive it from presence and absence alone, never from wording. Declared states
-such as *corroborated* or *disputed* are deliberately absent from this NIP: a
-declaration does not travel, and no publisher can credibly make such a claim about
-their own card. Disagreement is expressed by a second key publishing the same `d`.
+such as *corroborated* or *disputed* are deliberately absent: no publisher can credibly
+make such a claim about their own card. Disagreement is expressed by a second key
+publishing the same `d`.
 
 A client MAY render every field a card carries, or use the gradient as tiers of
 disclosure — `title` in a list, `summary` in a preview, `content` on open. A client
@@ -240,26 +237,19 @@ whose results MUST be re-checked against the gate.
 Reactions ([NIP-25](25.md)) and comments ([NIP-22](22.md)) address a card at
 `30828:<pubkey>:<d>`. Republishing a card's content under a different kind therefore
 gives it a new address, and every existing reaction and comment on it resolves to
-nothing — with no error surfaced to the reader. Any future change of kind requires
-either a migration path for marginalia or an explicit decision to abandon it.
+nothing — with no error surfaced to the reader.
 
 ## Publishing
 
-There is no registry to join and no key to be added to. A publisher signs a kind `30828`
-with the required tags and sends it to any relay. A collection exists once a card
-carries its identifier; a second key publishing into that collection needs no
-permission, and republishing another key's `d` produces a coexisting rival version
-rather than a collision.
-
-Whether a client shows every conforming card, or ranks and filters what it shows, is
-outside this NIP. The event format is fixed here; the reading is not.
+A publisher signs a kind `30828` with the required tags and sends it to any relay; a
+collection exists once a card carries its identifier, with no registry and no
+permission. Whether a client shows every conforming card, or ranks and filters what it
+shows, is outside this NIP.
 
 ## Security considerations
 
-**The marker is squattable and this is not fixable at the tag level.** Single-letter tag
-values are open by construction. The membership gate mitigates the consequence — an
-unusable card is discarded on shape — but it cannot establish authorship or good faith,
-and it is not intended to.
+**The marker is squattable** (see *The membership gate*). The gate discards an unusable
+card on shape; it cannot establish authorship or good faith, and it is not intended to.
 
 **There is no author allowlist.** Any key passing the gate is admitted, which is the
 point of the scheme and also its cost: junk and forgeries pass a shape test as readily
