@@ -19,14 +19,14 @@ interpreted as described in RFC 2119.
 
 Two problems recur wherever events are recorded permissionlessly.
 
-The first is that an open discovery marker is squattable. Any key may wear any tag, so a
-marker cannot certify membership. This NIP separates the two roles: a marker for the
-relay to filter on, and a shape test the client applies to what comes back.
+**An open discovery marker is squattable.** Any key may wear any tag. This NIP splits
+the roles: a marker for the relay to filter on, and a shape test the client applies to
+what comes back.
 
-The second is that a client which does not implement a spec will silently drop the tags
-it does not know. Any state declared by a tag therefore fails to travel. This NIP
-declares none: the only signal that travels is the card's *shape* — a field's presence
-or absence — which no client can drop.
+**A client that does not implement a spec silently drops the tags it does not know**,
+so declared state fails to travel. This NIP declares no state a card's meaning depends
+on: the load-bearing signal is a field's **presence or absence**, which no client can
+drop, and a dropped marker (`fork`, `adopt`, `adapt`) leaves an ordinary card.
 
 ## Event kind
 
@@ -160,6 +160,41 @@ deletions and unwrapping the insertions yields the newer document exactly, and t
 converse yields the older. A publisher SHOULD verify a marked card by performing both
 reconstructions rather than by reading it.
 
+## Adoption and adaptation
+
+A card MAY cite another card as its source. Two markers, in the slot the `fork`
+marker uses:
+
+- `adopt` — the card carries the source's content verbatim. A card MUST NOT
+  carry more than one `adopt`.
+- `adapt` — the card's content is its own, built on the source. A card MAY carry
+  many.
+
+Each source is cited with three tags, all REQUIRED, carrying the same marker:
+
+```json
+["a", "30828:<pubkey>:<source-d>", "", "adopt"],
+["e", "<event id of the version carried>", "", "adopt"],
+["p", "<pubkey of the source's author>", "", "adopt"]
+```
+
+The `a` coordinate survives replacement of the source, the `e` id pins the exact
+version cited, and the `p` tag routes credit. The adopting card keeps its own
+`d`; a shared `d` under a different key remains the rival-version case, not
+adoption.
+
+**The `e` id is a commitment, not a link.** A client MUST NOT dereference it: no
+fetching the source, no version comparison, no derived "since edited" state.
+
+An adopting card is an ordinary card. It MUST pass the membership gate on its
+own tags, and it deduplicates, replaces and displays like any other.
+
+A reaction ([NIP-25](25.md)) is not an adoption. Citing a source requires
+publishing a card.
+
+A client MAY render an attribution line from these tags (for example
+`via <npub> · adopted`), derived at read time. No attribution state is stored.
+
 ## Discovery
 
 A client discovers cards with a single indexed filter (the limit is illustrative):
@@ -231,6 +266,10 @@ whose results MUST be re-checked against the gate.
   between them silently.
 - A card's displayed date MUST be `event_date`. Date buckets are query shadows and MUST
   NOT be used for display.
+- Inbound citations of a card are queried with `#a`, `#e` or `#p` filters, and the
+  results MUST be filtered to events carrying an `adopt` or `adapt` marker — a bare
+  `#p` match is an ordinary mention. Any reputation derived from these edges is
+  computed at read time; no score is stored or declared.
 
 ### Marginalia is addressed by kind
 
@@ -256,6 +295,11 @@ point of the scheme and also its cost: junk and forgeries pass a shape test as r
 as records do. Clients expecting adversarial input SHOULD rank rather than gate, using
 signals outside this NIP such as the reader's own follow graph. Reaction counts MUST NOT
 be treated as authority: keys are free to mint.
+
+**Citation edges are self-asserted and free to mint.** Keys cost nothing: a key may
+adopt its own cards under other keys, and copying without an `adopt` tag is
+undetectable. Citation counts MUST NOT be treated as authority. A cited `e` id may
+reference a version no relay still holds; a dangling id is not an error.
 
 **Self-asserted values MUST NOT be treated as evidence.** `created_at`, `published_at`,
 `event_date` and `event_time` are all written by the signer and none is attested.
