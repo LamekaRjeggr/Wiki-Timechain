@@ -9,7 +9,8 @@ Timeline Cards
 A timeline card is an addressable event placing one dated fact on a shared timeline.
 Cards carrying the same collection label form a collection; any key may publish into
 any collection, and no key may exclude another. Discovery is a marker in the indexed
-`t` tag, plus self-labels carrying date, jurisdiction and geohash query shadows.
+`t` tag, plus query shadows: self-labels for date and jurisdiction, a `g` tag for
+geohash.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
@@ -19,9 +20,9 @@ interpreted as described in RFC 2119.
 
 Two problems recur wherever events are recorded permissionlessly.
 
-**An open discovery marker is squattable.** This NIP splits
-the roles: a marker for the relay to filter on, and a shape test the client applies to
-what comes back.
+**An open discovery marker is squattable.** This NIP splits discovery from membership:
+a marker for the relay to filter on, and a shape test the client applies to what comes
+back.
 
 **A client that does not implement a spec silently drops the tags it does not know**,
 so declared state fails to travel. This NIP declares no state a card's meaning depends
