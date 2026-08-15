@@ -211,6 +211,18 @@
   .msg.ok{color:var(--rail)}
 
   .proto{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
+  /* The two halves of the remote-signer rung. Which one you need is decided by your signer
+     app, not by us: some hand you an address, some only take one. The "or" is a real fork,
+     so it gets a rule rather than sitting as another line of prose. */
+  .ncor{display:flex;align-items:center;gap:9px;margin:11px 0 9px;
+    font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .ncor::before,.ncor::after{content:"";flex:1;border-top:1px solid var(--border)}
+  .nclink{display:block;margin-top:9px;padding:9px 11px;border-radius:8px;
+    background:var(--panel-2);border:1px solid var(--border);
+    font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--accent);
+    overflow-wrap:anywhere;text-decoration:none}
+  .ncnote{margin:0!important;color:var(--dim);font-size:12.5px}
   .inh{margin:10px 0 0;padding:8px 11px;border:1px dashed var(--border);border-radius:8px;
     font-size:12.5px;color:var(--dim);line-height:2}
   .inh code{color:var(--text-2)}
@@ -278,8 +290,8 @@
 <script type="module">
   // Vendored, not fetched — nothing loads from a third-party host. Its own module, so a
   // failure to load bunker support cannot take the extension and nsec rungs down with it.
-  import { BunkerSigner, parseBunkerInput } from './nip46.js';
-  window._nip46 = { BunkerSigner, parseBunkerInput };
+  import { BunkerSigner, parseBunkerInput, createNostrConnectURI } from './nip46.js';
+  window._nip46 = { BunkerSigner, parseBunkerInput, createNostrConnectURI };
   window.dispatchEvent(new Event("nip46ready"));
 </script>
 </head>
@@ -346,6 +358,23 @@
           <div class="row" style="margin-top:9px">
             <input id="bunker-uri" placeholder="bunker://…" autocomplete="off" spellcheck="false">
             <button class="slim" id="b-bunker" style="flex:0 0 auto" disabled>connect</button>
+          </div>
+
+          <div class="ncor">or</div>
+          <p class="ncnote">Some signer apps — Primal among them — never show you an address.
+            They take one instead. This page makes the invitation and waits for your app
+            to answer.</p>
+          <button class="slim" id="b-nc" style="margin-top:9px" disabled>make a connect link</button>
+          <div id="nc-box" style="display:none">
+            <p class="ncnote">Open this on the device holding your key and it should hand
+              off to your signer app, which will ask you to approve. On another device,
+              copy it across.</p>
+            <a id="nc-link" class="nclink" href="#">nostrconnect://…</a>
+            <div class="row" style="margin-top:9px">
+              <button class="slim" id="b-nc-copy" style="flex:0 0 auto">copy link</button>
+              <button class="slim" id="b-nc-cancel" style="flex:0 0 auto">cancel</button>
+            </div>
+            <p class="msg" id="nc-msg"></p>
           </div>
         </div>
       </div>
@@ -698,6 +727,105 @@ async function connectBunker(uri, clientKey, quiet){
   } catch(e){ say(msgOf(e), "bad"); }
 }
 
+// ── nostrconnect:// — the same rung entered from the other end ───────────────────────
+// A bunker:// address is the signer introducing itself. Some signer apps never do that —
+// Primal's is one — they only ACCEPT an invitation, as a QR or a link. So this half writes
+// the invitation: an ephemeral client key, a rendezvous relay and a secret, wrapped in a
+// nostrconnect:// URI the signer opens. The signer then speaks first, on that relay, and
+// its answer is what tells us who it is.
+//
+// The part worth keeping straight: this does NOT add a second connection path. The moment
+// the signer answers we synthesize the bunker:// address it never handed us and give it to
+// connectBunker() above — same client key, so the approval just granted still stands, and
+// resume() finds an ordinary bunker session on every later visit. One rung, two doorways.
+//
+// THE WEAK SPOT, stated rather than papered over: the secret comes back NIP-44-encrypted
+// and this page cannot open it — the vendored bundle keeps that key to itself — so the
+// first answer on the rendezvous relay is taken at its word. Someone watching that relay
+// during the seconds the invitation is open could answer first and we would connect to
+// THEIR signer. That reaches nothing of yours; what it buys them is this page publishing
+// as them. The defense is already on screen: the npub shown once connected is the account
+// you are about to sign as. Read it before you publish.
+const NC_RELAYS = ["wss://relay.nsec.app", "wss://nos.lol"];
+const NC_WAIT_MS = 3 * 60 * 1000;
+let ncSocks = [], ncTimer = null;
+
+function ncStop(){
+  for (const w of ncSocks){ try { w.close(); } catch {} }
+  ncSocks = [];
+  clearTimeout(ncTimer); ncTimer = null;
+}
+function ncClose(){
+  ncStop();
+  $("nc-box").style.display = "none";
+  $("b-nc").disabled = false;
+}
+const ncMsg = (t, c) => {
+  const el = $("nc-msg");
+  el.textContent = t || "";
+  el.className = "msg" + (c ? " " + c : "");
+};
+
+function useNostrConnect(){
+  if (!window._nip46) return signMsg("the signer library has not loaded — reload the page", "bad");
+  ncStop();
+  const clientKey = crypto.getRandomValues(new Uint8Array(32));
+  const clientPub = xonlyPub(bytesToHex(clientKey));
+  const secret    = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const uri = window._nip46.createNostrConnectURI({
+    clientPubkey: clientPub,
+    relays: NC_RELAYS,
+    secret,
+    perms: ["sign_event:" + KIND, "get_public_key"],
+    // No space and no non-ASCII in the name: it is what your signer shows you in the
+    // approval prompt, and a signer that decodes the URI by hand rather than through
+    // URLSearchParams renders a space as a literal "+".
+    name: "Wiki-Timechain",
+    url: (location.origin && location.origin !== "null") ? location.origin : undefined
+  });
+  const a = $("nc-link");
+  a.textContent = uri;
+  a.href = uri;
+  $("nc-box").style.display = "";
+  $("b-nc").disabled = true;
+  signMsg("");
+  ncMsg("waiting for your signer to answer…");
+
+  let answered = false;
+  const gotAnswer = (pk, relay) => {
+    if (answered) return;
+    answered = true;
+    ncStop();
+    ncMsg("your signer answered — finishing the handshake…");
+    // No secret on the synthesized address: the approval is already granted, so the
+    // connect() connectBunker makes is the same one resume() makes on every later visit.
+    connectBunker(`bunker://${pk}?relay=${encodeURIComponent(relay)}`, clientKey)
+      .then(() => { if (signer) ncClose();
+                    else ncMsg("the signer stopped answering — make a new link", "bad"); });
+  };
+
+  for (const url of NC_RELAYS){
+    let w;
+    try { w = new WebSocket(url); } catch { continue; }
+    ncSocks.push(w);
+    const sub = "nc" + Math.random().toString(36).slice(2, 8);
+    w.onopen = () => w.send(JSON.stringify(["REQ", sub, {
+      kinds: [24133], "#p": [clientPub], since: Math.floor(Date.now() / 1000) - 10
+    }]));
+    w.onmessage = e => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m[0] === "EVENT" && m[2] && m[2].pubkey) gotAnswer(m[2].pubkey, url);
+    };
+    w.onerror = () => {};      // one relay of two failing is not worth a message
+  }
+
+  ncTimer = setTimeout(() => {
+    if (answered) return;
+    ncStop();
+    ncMsg("no answer in three minutes — that link is stale now. Make a new one.", "bad");
+  }, NC_WAIT_MS);
+}
+
 // Best effort, and silent about it: a signer that has revoked us or a phone that is off
 // should look like "signed out", not like an error you have to read on arrival.
 function resume(){
@@ -755,6 +883,7 @@ function setSigner(s){
 // snapshot taken in between still has your key. The rungs above never put it here at all.
 function clearSession(){
   sessionSk = null;
+  ncStop();                    // a half-open invitation is a live socket; don't leave it
   clearTimeout(idleT);
   if (bunkerC){ try { bunkerC.close(); } catch {} bunkerC = null; }
   signer = null;
@@ -763,6 +892,7 @@ function clearSession(){
 // is still good, so drop the UI and reconnect rather than throwing the credential away.
 function signOut(keep){
   clearSession();
+  ncClose();                   // a stale invitation left on screen reads as still waiting
   if (keep !== true) forget();
   $("signed-out").style.display = "";
   $("signed-in").style.display = "none";
@@ -801,8 +931,16 @@ $("b-nsec").addEventListener("click", useNsec);
 $("b-out").addEventListener("click", signOut);
 $("nsec-in").addEventListener("keydown", e => { if (e.key === "Enter") useNsec(); });
 $("bunker-uri").addEventListener("keydown", e => { if (e.key === "Enter") useBunker(); });
-addEventListener("nip46ready", () => { $("b-bunker").disabled = false; });
-if (window._nip46) $("b-bunker").disabled = false;
+const nip46Ready = () => { $("b-bunker").disabled = false; $("b-nc").disabled = false; };
+addEventListener("nip46ready", nip46Ready);
+if (window._nip46) nip46Ready();
+
+$("b-nc").addEventListener("click", useNostrConnect);
+$("b-nc-cancel").addEventListener("click", () => { ncClose(); ncMsg(""); });
+$("b-nc-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("nc-link").textContent); ncMsg("copied — paste it into your signer app", "ok"); }
+  catch { ncMsg("copy refused — select the link above and copy it by hand", "bad"); }
+});
 resume();
 
 // ═══════════════ reading the corpus ═══════════════
