@@ -718,6 +718,8 @@
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
+        <button id="exportbtn" class="linkbtn" type="button"
+          title="Download this timeline as a plain-text file — just what each publisher wrote">⤓ Export</button>
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
@@ -977,6 +979,29 @@ copyBtn.addEventListener("click", async () => {
     copyBtn.textContent = "Copy failed — use the address bar";
   }
   setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = COPY_LABEL; }, 1600);
+});
+
+// plain-text export of the selected timeline. Only the four fields a publisher typed —
+// title / event_date / summary / content — one block per entry, spine order, head version
+// only (a contested d exports the version the spine shows). Absent fields are absent,
+// not blank: presence is the spec's only machine signal and the file keeps it.
+const exportBtn = document.getElementById("exportbtn");
+exportBtn.addEventListener("click", () => {
+  if (!activeF) return;
+  const blocks = entriesOf(activeF).map(en => {
+    const ev = en.evs[0] || en.prop[0];
+    let s = "";
+    const t  = tag(ev,"title");      if (t)  s += `title: ${t}\n`;
+    const ed = tag(ev,"event_date"); if (ed) s += `event_date: ${ed}\n`;
+    const sm = tag(ev,"summary");    if (sm) s += `summary: ${sm}\n`;
+    const c  = (ev.content || "").trim(); if (c) s += `content:\n${c}\n`;
+    return s;
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([blocks.join("\n---\n\n")], {type:"text/plain;charset=utf-8"}));
+  a.download = valOf(activeF) + ".txt";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);   // Safari needs the URL alive past the click
 });
 
 // ── how light the page reads. Three fields, one vocabulary: every colour is a token
@@ -1598,6 +1623,7 @@ function renderRoster(){
 function renderTabs(V){
   tabsEl.innerHTML = "";
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
+  exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
   // every option in every axis is a collection, so activeF is always "c:<slug>"
   const name = activeF ? slugName(activeF.slice(2)) : "";
   nowEl.textContent = name;
