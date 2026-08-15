@@ -368,7 +368,8 @@
           <div id="nc-box" style="display:none">
             <p class="ncnote">Open this on the device holding your key and it should hand
               off to your signer app, which will ask you to approve. On another device,
-              copy it across.</p>
+              copy it across. <b>Leave this tab open, and come back to it once you have
+              approved</b> — the answer arrives here, not there.</p>
             <a id="nc-link" class="nclink" href="#">nostrconnect://…</a>
             <div class="row" style="margin-top:9px">
               <button class="slim" id="b-nc-copy" style="flex:0 0 auto">copy link</button>
@@ -746,14 +747,27 @@ async function connectBunker(uri, clientKey, quiet){
 // THEIR signer. That reaches nothing of yours; what it buys them is this page publishing
 // as them. The defense is already on screen: the npub shown once connected is the account
 // you are about to sign as. Read it before you publish.
+// THE LISTENER MUST SURVIVE LEAVING THE PAGE, and getting that wrong is what broke the
+// first cut (2026-08-14, same day). On a phone this rung is a SAME-DEVICE handoff: tapping
+// the link backgrounds Safari and opens the signer app, which fires `pagehide` — and
+// `pagehide` runs `clearSession()`, which was calling `ncStop()`. So the sockets closed at
+// the exact moment the user went to approve. **Kind 24133 is an ephemeral event (the
+// 20000–29999 band), so no relay stores it**: the signer's answer arrived at a closed
+// socket and was gone for good. The signer showed "connected" and the page never knew.
+// Hence: the invitation is STATE (`ncPend`), not a closure, and nothing in the page's
+// lifecycle cleanup may touch it. Only success, cancel, sign-out and the expiry end it.
 const NC_RELAYS = ["wss://relay.nsec.app", "wss://nos.lol"];
-const NC_WAIT_MS = 3 * 60 * 1000;
-let ncSocks = [], ncTimer = null;
+const NC_WAIT_MS = 5 * 60 * 1000;
+let ncSocks = [], ncTimer = null, ncPend = null;
 
-function ncStop(){
+function ncDrop(){                     // sockets only — the invitation itself lives on
   for (const w of ncSocks){ try { w.close(); } catch {} }
   ncSocks = [];
+}
+function ncStop(){                     // the invitation is over
+  ncDrop();
   clearTimeout(ncTimer); ncTimer = null;
+  ncPend = null;
 }
 function ncClose(){
   ncStop();
@@ -766,14 +780,46 @@ const ncMsg = (t, c) => {
   el.className = "msg" + (c ? " " + c : "");
 };
 
+// Re-openable, because iOS may cut the sockets while you are in the signer app. No `since`
+// on the filter: an ephemeral event is never replayed, so a `since` can only ever hurt —
+// it was one clock-skew away from filtering out the very answer we are waiting for.
+function ncListen(){
+  if (!ncPend) return;
+  ncDrop();
+  for (const url of NC_RELAYS){
+    let w;
+    try { w = new WebSocket(url); } catch { continue; }
+    ncSocks.push(w);
+    const sub = "nc" + Math.random().toString(36).slice(2, 8);
+    w.onopen = () => w.send(JSON.stringify(["REQ", sub, { kinds: [24133], "#p": [ncPend.pub] }]));
+    w.onmessage = e => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m[0] === "EVENT" && m[2] && m[2].pubkey) ncAnswer(m[2].pubkey, url);
+    };
+    w.onerror = () => {};              // one relay of two failing is not worth a message
+  }
+}
+
+function ncAnswer(pk, relay){
+  if (!ncPend) return;
+  const clientKey = ncPend.key;
+  ncStop();
+  ncMsg("your signer answered — finishing the handshake…");
+  // No secret on the synthesized address: the approval is already granted, so the
+  // connect() connectBunker makes is the same one resume() makes on every later visit.
+  connectBunker(`bunker://${pk}?relay=${encodeURIComponent(relay)}`, clientKey)
+    .then(() => { if (signer) ncClose();
+                  else ncMsg("the signer stopped answering — make a new link", "bad"); });
+}
+
 function useNostrConnect(){
   if (!window._nip46) return signMsg("the signer library has not loaded — reload the page", "bad");
   ncStop();
-  const clientKey = crypto.getRandomValues(new Uint8Array(32));
-  const clientPub = xonlyPub(bytesToHex(clientKey));
-  const secret    = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const key = crypto.getRandomValues(new Uint8Array(32));
+  const pub = xonlyPub(bytesToHex(key));
+  const secret = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
   const uri = window._nip46.createNostrConnectURI({
-    clientPubkey: clientPub,
+    clientPubkey: pub,
     relays: NC_RELAYS,
     secret,
     perms: ["sign_event:" + KIND, "get_public_key"],
@@ -783,6 +829,7 @@ function useNostrConnect(){
     name: "Wiki-Timechain",
     url: (location.origin && location.origin !== "null") ? location.origin : undefined
   });
+  ncPend = { key, pub, uri };
   const a = $("nc-link");
   a.textContent = uri;
   a.href = uri;
@@ -790,41 +837,25 @@ function useNostrConnect(){
   $("b-nc").disabled = true;
   signMsg("");
   ncMsg("waiting for your signer to answer…");
-
-  let answered = false;
-  const gotAnswer = (pk, relay) => {
-    if (answered) return;
-    answered = true;
-    ncStop();
-    ncMsg("your signer answered — finishing the handshake…");
-    // No secret on the synthesized address: the approval is already granted, so the
-    // connect() connectBunker makes is the same one resume() makes on every later visit.
-    connectBunker(`bunker://${pk}?relay=${encodeURIComponent(relay)}`, clientKey)
-      .then(() => { if (signer) ncClose();
-                    else ncMsg("the signer stopped answering — make a new link", "bad"); });
-  };
-
-  for (const url of NC_RELAYS){
-    let w;
-    try { w = new WebSocket(url); } catch { continue; }
-    ncSocks.push(w);
-    const sub = "nc" + Math.random().toString(36).slice(2, 8);
-    w.onopen = () => w.send(JSON.stringify(["REQ", sub, {
-      kinds: [24133], "#p": [clientPub], since: Math.floor(Date.now() / 1000) - 10
-    }]));
-    w.onmessage = e => {
-      let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m[0] === "EVENT" && m[2] && m[2].pubkey) gotAnswer(m[2].pubkey, url);
-    };
-    w.onerror = () => {};      // one relay of two failing is not worth a message
-  }
+  ncListen();
 
   ncTimer = setTimeout(() => {
-    if (answered) return;
+    if (!ncPend) return;
     ncStop();
-    ncMsg("no answer in three minutes — that link is stale now. Make a new one.", "bad");
+    ncMsg("no answer in five minutes — that link is stale now. Make a new one.", "bad");
   }, NC_WAIT_MS);
 }
+
+// Coming back from the signer app. The sockets may or may not have survived being
+// backgrounded; re-arming costs one REQ and is the difference between hearing the answer
+// and waiting forever. Both events fire on the iOS app-switch path, hence the guard.
+const ncWake = () => {
+  if (!ncPend || document.visibilityState !== "visible") return;
+  if (ncSocks.some(w => w.readyState === WebSocket.OPEN)) return;
+  ncListen();
+};
+addEventListener("visibilitychange", ncWake);
+addEventListener("pageshow", ncWake);
 
 // Best effort, and silent about it: a signer that has revoked us or a phone that is off
 // should look like "signed out", not like an error you have to read on arrival.
@@ -883,7 +914,8 @@ function setSigner(s){
 // snapshot taken in between still has your key. The rungs above never put it here at all.
 function clearSession(){
   sessionSk = null;
-  ncStop();                    // a half-open invitation is a live socket; don't leave it
+  // NOT ncStop() — this runs on `pagehide`, which is exactly when you leave for the signer
+  // app. Killing the listener there is what made the first cut of this rung never connect.
   clearTimeout(idleT);
   if (bunkerC){ try { bunkerC.close(); } catch {} bunkerC = null; }
   signer = null;
@@ -892,8 +924,9 @@ function clearSession(){
 // is still good, so drop the UI and reconnect rather than throwing the credential away.
 function signOut(keep){
   clearSession();
-  ncClose();                   // a stale invitation left on screen reads as still waiting
-  if (keep !== true) forget();
+  // A stale invitation left on screen reads as still waiting — but the bfcache path
+  // (signOut(true), on returning from the signer app) must NOT eat a live one.
+  if (keep !== true) { ncClose(); forget(); }
   $("signed-out").style.display = "";
   $("signed-in").style.display = "none";
   renderMine();
