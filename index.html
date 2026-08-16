@@ -166,13 +166,19 @@
      here would break one spine, one story. Hidden entirely while a collection has one author. */
   .roster{margin:11px auto 0;max-width:640px;display:flex;flex-wrap:wrap;
     justify-content:center;align-items:center;gap:5px}
-  .rchip{background:transparent;border:1px solid var(--border);color:var(--dim);
+  .rchip,.lchip{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:4px 9px;font-size:11.5px;font-family:var(--mono);
     cursor:pointer;line-height:1.4}
-  .rchip:hover{color:var(--text)}
-  .rchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
-  .rchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
+  .rchip:hover,.lchip:hover{color:var(--text)}
+  .rchip.on,.lchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
+  .rchip .n,.lchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
   .rchip .oc{color:var(--rail);margin-right:5px}   /* ⌂ is chrome — the app's amber, never a timeline hue */
+  /* the endorsed lens picker: one chip per key holding live acts here. ✓ is the mark of an
+     act (as ⌂ is of curation) — shape carries it, the amber is chrome */
+  .lensrow{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:center;
+    align-items:center;gap:5px;margin-top:6px}
+  .lenslab{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:2px}
+  .lchip .ck{color:var(--rail);margin-right:5px}
   .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
     color:var(--faint);margin-top:2px}
 
@@ -440,6 +446,13 @@
   .mtl .foldrow .go{color:var(--accent);margin-left:7px}
   /* the roster lens: everything not by the lit author steps back. Lightness only. */
   .mtl .lensoff{opacity:.32}
+  /* the endorsed lens: lit = the key stands behind THIS exact version (border + the ✓ note,
+     never hue alone); lapsed = they signed an earlier form — the note carries their copy,
+     because the act's bytes are the only place that text still exists after replacement */
+  .mtl .lenson{border-color:var(--rail-dim)}
+  .mtl .lnote{margin-top:9px;font-family:var(--mono);font-size:11px;color:var(--rail)}
+  .mtl .lcopy{margin-top:5px;border-left:2px solid var(--border);padding:2px 0 2px 10px;
+    color:var(--dim);font-size:13px}
 
   /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
      every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
@@ -968,6 +981,10 @@ const showFold     = new Set();          // slugs whose "proposed" fold the visi
 // the roster lens — whose cards to pick out. Transient like the two sets above and NOT in the
 // URL: it's a way of looking, not a view worth 64 hex characters of link.
 let lensPk = null;
+// the endorsed lens — read the collection as the versions ONE key's live acts stand behind.
+// Same nature as the roster lens (transient, not in the URL), and exclusive with it: two
+// dims at once would read as a broken page, not two questions.
+let actLensPk = null;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -977,8 +994,11 @@ const metaEl   = document.getElementById("collmeta");  // its entry count, right
 const addLink  = document.getElementById("addlink");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
 rosterEl.addEventListener("click", e => {
-  const b = e.target.closest("[data-pk]"); if (!b) return;
+  const lb = e.target.closest(".lchip");
+  if (lb){ actLensPk = actLensPk === lb.dataset.pk ? null : lb.dataset.pk; lensPk = null; render(); return; }
+  const b = e.target.closest(".rchip"); if (!b) return;
   lensPk = lensPk === b.dataset.pk ? null : b.dataset.pk;
+  actLensPk = null;
   render();
 });
 
@@ -1536,6 +1556,22 @@ function consentOn(ev, d){
     return et && et[1] === ev.id && a.content === ev.content;
   }).map(a => a.pubkey);
 }
+// the endorsed lens, derived: every key holding a live endorsement on a card of this
+// collection, with its count. Any such key IS a lens — no role, no permission; reading
+// one is following that key's editorial judgment, rebuilt purely from its signatures.
+function actLenses(c){
+  const n = new Map();
+  for (const ev of matching("c:" + c))
+    for (const a of endorsements(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id))
+      n.set(a.pubkey, (n.get(a.pubkey) || 0) + 1);
+  return n;
+}
+// the lens key's current act on one card — whatever version it names
+function lensActOn(ev){
+  if (!actLensPk) return null;
+  return endorsements(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
+    .find(a => a.pubkey === actLensPk) || null;
+}
 function scheduleReactionFetch(){
   if (rctTimer) return;
   rctTimer = setTimeout(() => {
@@ -1668,7 +1704,8 @@ function entriesOf(f){
   const out = [];
   for (const [d, all] of byD){
     const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
-    const prop = all.filter(ev => { const t = tierOf(ev, A); return t && t <= cut; }).sort(ord);
+    // the endorsed lens overrides the fold: a card the lens key stands behind is on the page
+    const prop = all.filter(ev => { const t = tierOf(ev, A); return t && (t <= cut || !!lensActOn(ev)); }).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
     out.push({ d, evs, prop, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
@@ -1712,17 +1749,30 @@ const vocab = () => [...slugs].sort()
 function renderRoster(){
   const c = activeF ? activeF.slice(2) : null;
   const A = c ? authorityOf(c) : null;
-  if (!A || A.rank.length < 2){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; lensPk = null; return; }
-  if (lensPk && !A.n.has(lensPk)) lensPk = null;          // switched to a timeline they aren't in
+  const L = c ? actLenses(c) : new Map();
+  if (actLensPk && !L.has(actLensPk)) actLensPk = null;   // no live acts here — lens drops
+  const many = !!(A && A.rank.length >= 2);
+  if (!many) lensPk = null;
+  else if (lensPk && !A.n.has(lensPk)) lensPk = null;     // switched to a timeline they aren't in
+  if (!many && !L.size){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; return; }
   rosterEl.style.display = "";
-  rosterEl.innerHTML = A.rank.map(pk =>
+  rosterEl.innerHTML = (many ? A.rank.map(pk =>
       `<button class="rchip${pk === lensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
       ` title="${A.origins.has(pk) ? "curates this collection" : "contributor"} — tap to pick out their cards">` +
       (A.origins.has(pk) ? `<span class="oc">⌂</span>` : "") +
       `${authorLabel(pk)}<span class="n">${A.n.get(pk)}</span></button>`
     ).join("") +
     `<div class="rnote">${A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
-    ` · every author keeps their own cards</div>`;
+    ` · every author keeps their own cards</div>` : "") +
+    // the endorsed lens row: only keys with live acts here appear, count = cards backed
+    (L.size ? `<div class="lensrow"><span class="lenslab">endorsed lens</span>` +
+      [...L.keys()].sort((a,b) => (L.get(b) - L.get(a)) || (a < b ? -1 : 1)).map(pk =>
+        `<button class="lchip${pk === actLensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
+        ` title="show the collection as the versions this key endorsed">` +
+        `<span class="ck">✓</span>${authorLabel(pk)}<span class="n">${L.get(pk)}</span></button>`
+      ).join("") +
+      (actLensPk ? `<span class="rnote">what ${authorLabel(actLensPk)} stands behind — everything else steps back</span>` : "") +
+      `</div>` : "");
 }
 
 function renderTabs(V){
@@ -1956,6 +2006,8 @@ function renderTimeline(entries){
       `<span class="cmp-n${left > 40 ? " hid" : ""}${left ? "" : " at"}">${left}</span>` +
       tallyHtml(cmtSent.get(coord), cmtErr.get(coord)) + `</div></div>`;
   };
+  // the act's clock is its SIGNATURE time — never the card's event_date; "signed" says so
+  const signedAt = a => new Date(a.created_at * 1000).toISOString().slice(0,16).replace("T"," ");
   // the acts row: who stands behind this card version, per the draft NIP's replica
   // check. Words carry the verdict (verified / earlier version / mismatch), never hue
   // alone. The endorse button signs directly with NIP-07, or hands off to add.html —
@@ -1969,8 +2021,6 @@ function renderTimeline(entries){
         return a.content === ev.content ? "✓" : "✕ mismatch";
       return "◦ earlier version";
     };
-    // the act's clock is its SIGNATURE time — never the card's event_date; "signed" says so
-    const signedAt = a => new Date(a.created_at * 1000).toISOString().slice(0,16).replace("T"," ");
     // my current act for this coord decides the button: this exact version = lit and done;
     // an earlier/other version = "endorse this version" (the click supersedes); none = "endorse"
     const mine = myPk && es.find(a => a.pubkey === myPk);
@@ -2030,13 +2080,34 @@ function renderTimeline(entries){
   // the roster lens steps every other author's card back — lightness, so it survives all three
   // fields and reads for a colourblind eye. It dims; it never removes.
   const lens = ev => (lensPk && ev.pubkey !== lensPk) ? " lensoff" : "";
+  // the endorsed lens, per card: lit border = the key stands behind THIS exact version;
+  // lapsed = they signed an earlier form; unendorsed steps back like the roster lens
+  const isCurrent = (a, ev) => {
+    const et = a.tags.find(t => t[0] === "e" && !t[3]);
+    return !!(et && et[1] === ev.id && a.content === ev.content);
+  };
+  const alens = ev => {
+    const a = lensActOn(ev);
+    if (!a) return actLensPk ? " lensoff" : "";
+    return isCurrent(a, ev) ? " lenson" : "";
+  };
+  // words under the card carry the lens verdict; on lapse the act's byte copy is shown —
+  // after a replacement, that copy is the only place the endorsed text still exists
+  const lensNote = ev => {
+    const a = lensActOn(ev);
+    if (!a) return "";
+    if (isCurrent(a, ev))
+      return `<div class="lnote">✓ ${authorLabel(actLensPk)} stands behind this version · signed ${signedAt(a)}</div>`;
+    return `<div class="lnote">◉ ${authorLabel(actLensPk)} signed an earlier version · ${signedAt(a)} — their copy:</div>` +
+      `<div class="lcopy">${renderContent(clip(a.content || ""))}</div>`;
+  };
   // a proposed card is the SAME card — same tab, same body, same stance row. What differs is
   // where it sits (inset, dashed) and that it says so.
   const propCard = (ev, d) =>
-    `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
+    `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
-    creditRow(ev) + cardBody(ev, d) +
+    creditRow(ev) + cardBody(ev, d) + lensNote(ev) +
     (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
 
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
@@ -2087,22 +2158,22 @@ function renderTimeline(entries){
         `<div class="contest"><div class="cbrace"></div>` +
         `<div class="cbadge">${esc(e.date)} · ◆ contested · ${e.evs.length} versions</div>` +
         e.evs.map((ev, vi) =>
-          `<div class="vcard${lens(ev)}"><div class="byline">` +
+          `<div class="vcard${lens(ev)}${alens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + cardBody(ev, e.d) +
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + cardBody(ev, e.d) + lensNote(ev) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
     } else {
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
+        `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev) + cardBody(ev, e.d) +
+        creditRow(ev) + cardBody(ev, e.d) + lensNote(ev) +
         (beyond(ev, e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
         propHtml + `</div>`;
     }
