@@ -20,6 +20,7 @@ One timeline entry is one **kind-30828** addressable event
 - Same `d`, same author — edit. Same `d`, different author — both render.
 
 Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
+Endorsements (kind **8828**, draft): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
 
 ## Run it yourself
 
@@ -62,7 +63,7 @@ code license.
 Code — `index.html`, `add.html`, `nip46.js`, `tools/` — is
 [MIT](LICENSE).
 
-Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-EDITS.md` — is
+Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-EDITS.md` — is
 [CC0 1.0 Universal](LICENSE-SPEC), matching the
 [nips repo](https://github.com/nostr-protocol/nips), so the text can be absorbed
 there without an attribution clause riding along. Card content in `cards/` is CC0
