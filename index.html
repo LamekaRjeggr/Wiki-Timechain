@@ -308,6 +308,9 @@
     .mtl .ctab .td{font-size:14px}
   }
   .mtl .card h4{margin:0;font-size:17.5px;line-height:1.3;font-weight:600;color:var(--text)}
+  /* credit sits under the title and above the record, so it shows on a collapsed card too */
+  .mtl .via{margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .mtl .via .mk{color:var(--faint)}
   .mtl .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:var(--text-3)}
   /* ── diff marks. Scoped to nothing: comments render through the same pass. ──
      A whole-line mark becomes a gutter row (rule + −/+); marks inside a sentence
@@ -1224,6 +1227,11 @@ function dateOf(ev){
   const ts = isNaN(pa) ? (ev.created_at||0) : pa;
   return new Date(ts*1000).toISOString().slice(0,10);
 }
+// event_time is optional and never invented: no tag means "day only", not midnight, so a
+// timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
+const timeOf = ev => tag(ev,"event_time") || "";
+const stamp  = ev => dateOf(ev) + (timeOf(ev) ? " " + timeOf(ev) : "");
+const byWhen = (a,b) => (a.frac - b.frac) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
 function yearFrac(dateStr){
   const p = String(dateStr).split("-").map(Number);
   return (p[0]||1970) + ((p[1]?p[1]-1:0)/12) + ((p[2]?p[2]-1:0)/365);
@@ -1266,6 +1274,28 @@ function authorLabel(pk){
 }
 function authorLink(pk){
   return `<a href="https://njump.me/${npub(pk)}" target="_blank" rel="noopener noreferrer">${authorLabel(pk)}</a>`;
+}
+
+// Citation credit, read straight off the card. The pubkey comes out of the `a` coordinate,
+// not the `p` tag: `p` is a SHOULD and its absence must not invalidate the citation, and the
+// stray cards already on the relay carry it unmarked. The `e` id is never dereferenced —
+// nothing here fetches the source, compares versions, or derives a "since edited" state.
+// One line per cited key; a card may carry many forks, at most one adopt.
+function creditsOf(ev){
+  const out = new Map();
+  for (const t of ev.tags){
+    if (t[0] !== "a" || (t[3] !== "fork" && t[3] !== "adopt")) continue;
+    const pk = String(t[1] || "").split(":")[1] || "";
+    if (/^[0-9a-f]{64}$/.test(pk) && pk !== ev.pubkey && !out.has(pk)) out.set(pk, t[3]);
+  }
+  return [...out];
+}
+// The marker names itself — "fork" and "adopt" are the spec's two words, so the line says
+// what the tag says and invents no third vocabulary for it.
+function creditRow(ev){
+  const cr = creditsOf(ev);
+  return cr.length ? `<div class="via">` + cr.map(([pk, mk]) =>
+    `via ${authorLink(pk)}<span class="mk"> · ${mk}</span>`).join(" ") + `</div>` : "";
 }
 
 // ═══════════════ ingest ═══════════════
@@ -1566,10 +1596,10 @@ function entriesOf(f){
     const prop = all.filter(ev => { const t = tierOf(ev, A); return t && t <= cut; }).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
-    out.push({ d, evs, prop, date: dateOf(head), frac: yearFrac(dateOf(head)),
+    out.push({ d, evs, prop, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
                title: tag(head,"title") || d, contested: evs.length > 1 });
   }
-  return out.sort((a,b) => a.frac - b.frac);
+  return out.sort(byWhen);
 }
 
 // ═══════════════ render: status + tabs ═══════════════
@@ -1666,7 +1696,7 @@ function render(){
   const entries = activeF ? entriesOf(activeF) : [];
   // the draft is a spine entry like any other — but NOT while its date is being picked:
   // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
-  if (draft && !pickStage){ entries.push(draftEntry()); entries.sort((a,b) => a.frac - b.frac); }
+  if (draft && !pickStage){ entries.push(draftEntry()); entries.sort(byWhen); }
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
@@ -1879,10 +1909,10 @@ function renderTimeline(entries){
   // a proposed card is the SAME card — same tab, same body, same stance row. What differs is
   // where it sits (inset, dashed) and that it says so.
   const propCard = (ev, d) =>
-    `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
+    `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
-    cardBody(ev, d) +
+    creditRow(ev) + cardBody(ev, d) +
     (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
 
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
@@ -1936,19 +1966,19 @@ function renderTimeline(entries){
           `<div class="vcard${lens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + cardBody(ev, e.d) +
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + cardBody(ev, e.d) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
     } else {
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(dateOf(ev))}</span>` +
+        `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        cardBody(ev, e.d) +
+        creditRow(ev) + cardBody(ev, e.d) +
         (beyond(ev, e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
         propHtml + `</div>`;
     }
@@ -2845,7 +2875,7 @@ function draftPlaced(){
 function draftEntry(){
   const date = draftDate() || draft.seedYr;
   return { d: "__draft__", draft: true, evs: [], prop: [],
-           date, frac: yearFrac(date), title: draft.title, contested: false };
+           date, time: "", frac: yearFrac(date), title: draft.title, contested: false };
 }
 
 // the date tab shows the claim committed so far. It never has to speak mid-spin: the card

@@ -1543,6 +1543,9 @@ if (qrev){
   $("f-fork-d").value  = qrev.d;
   $("f-fork-pk").value = qrev.p;
   $("f-fork-e").value  = qrev.e;
+  // A fork takes its parent's address, so the revision stacks under the card it revises
+  // instead of drifting off as a new one. Marked touched: retitling must not re-slug it.
+  $("f-d").value = qrev.d; $("f-d").dataset.touched = "1";
   reviseMode();
   refresh();
 }
