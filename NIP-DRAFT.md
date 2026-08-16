@@ -27,7 +27,12 @@ back.
 **A client that does not implement a spec silently drops the tags it does not know**,
 so declared state fails to travel. This NIP declares no state a card's meaning depends
 on: the load-bearing signal is a field's **presence or absence**, which no client can
-drop, and a dropped marker (`fork`, `adopt`, `adapt`) leaves an ordinary card.
+drop, and a dropped marker (`fork`, `adopt`) leaves an ordinary card.
+
+**One case degrades worse, and this NIP does not claim otherwise.** Drop the marker on
+a fork that took its parent's `d` (see *The address a fork takes*) and an unexplained
+rival remains at a shared address. That is the cost of having a correction mechanism at
+all; it is bounded by the marks, which travel in `content` where no client can drop them.
 
 ## Event kind
 
@@ -136,41 +141,77 @@ involved, because the recorded event never changed. A publisher MUST NOT reuse a
 for an unrelated card: reactions and comments address `30828:<pubkey>:<d>` and would
 silently reattach.
 
-## Revisions
+## Forks
 
-A card MAY carry a revision of a document that another card records. Such a card MUST
-tag its parent with a `fork` marker in both forms:
+A card MAY be built from a version that another card records — a revision, an
+extract, or a new text drawing on it. Such a card MUST tag its parent with a `fork`
+marker in both forms:
 
 ```json
 ["a", "30828:<pubkey>:<parent-d>", "", "fork"],
-["e", "<event id of the version revised>", "", "fork"]
+["e", "<event id of the version built from>", "", "fork"]
 ```
 
 The third element is the relay-hint slot and MUST be present, empty if unknown; the
 marker is the fourth element. Both tags are REQUIRED: the `a` coordinate survives an
 edit of the parent, while the `e` id pins the exact version this card was built
-against.
+against. A `p` tag carrying the same marker SHOULD accompany them to route credit;
+a client MUST NOT treat its absence as invalidating the fork. A card MAY carry many
+`fork` markers.
 
-The change itself is expressed with djot's insert and delete syntax, `{-removed-}` and
-`{+added+}`. A client MUST NOT render a card as a diff unless it carries both a `fork`
-marker and marks in `content`; either alone is an ordinary card.
+**A fork asserts only that it derives from that exact version.** It claims no
+replacement: the parent stands, the fork stands, and whether the fork is a revision,
+a rival framing, or a departure is derived by each reader from the content and from
+acts — never declared by the marker.
+
+### The address a fork takes
+
+A fork under a **different** key MAY carry the same `d` as its parent, and SHOULD when
+it answers that card rather than adding to the record. The two then share the address
+under different keys: the rival-version case of *Text fields*, which a client stacks as
+one entry — with the lineage named, since the `e` id pins which version is being
+answered. A fork taking a new `d` instead is an additional card, and a client shows it
+beside the parent, not stacked with it. Both are legal; the choice is which of those two
+a publisher means. A card doing both takes the parent's `d`: answering is the stronger
+claim, and what it adds rides along.
+
+**This is the only way to correct another key's card.** A rival version with no `fork`
+marker leaves a reader no way to tell which version it answers, and a `fork` under a new
+`d` puts a second card on the record for one event. Neither the parent nor the fork
+yields: nothing is retracted, and the parent's key remains the only one that can replace
+it.
+
+Because it can, a fork taking its parent's `d` **SHOULD** carry the marks described
+below. The parent may be replaced at any time — that is what holding the address means —
+and a marked fork survives it: both documents are recoverable from the fork's own bytes,
+so what it answers is carried rather than linked. An unmarked fork stacked on a replaced
+parent can only name a version no longer on display.
+
+**The `e` id is a commitment in a fork exactly as in an adoption.** A client MUST NOT
+dereference it, MUST NOT compare the fork against the parent's current version, and MUST
+NOT derive a "parent has changed" state. What a fork can show of its parent, it carries.
+
+A fork MUST NOT take the parent's `d` under the **parent's own** key. Same key, same `d`
+is replacement per [NIP-01](01.md) — the owner's affordance, and the one act that
+destroys a version.
+
+A fork MAY express its changes with djot's insert and delete syntax, `{-removed-}` and
+`{+added+}`; the marks are voluntary. A client MUST NOT render a card as a diff unless
+it carries both a `fork` marker and marks in `content`; either alone is an ordinary card.
 
 A marked card asserts two documents, and both MUST be recoverable from it: stripping the
 deletions and unwrapping the insertions yields the newer document exactly, and the
 converse yields the older. A publisher SHOULD verify a marked card by performing both
 reconstructions rather than by reading it.
 
-## Adoption and adaptation
+## Adoption
 
-A card MAY cite another card as its source. Two markers, in the slot the `fork`
-marker uses:
+A card MAY carry another card's content verbatim, with the `adopt` marker in the
+slot the `fork` marker uses. A card MUST NOT carry more than one `adopt`. (A card
+whose content is its own, built on a source, is a fork — see Forks; `adopt` and
+`fork` are the only two citation markers.)
 
-- `adopt` — the card carries the source's content verbatim. A card MUST NOT
-  carry more than one `adopt`.
-- `adapt` — the card's content is its own, built on the source. A card MAY carry
-  many.
-
-Each source is cited with three tags, all REQUIRED, carrying the same marker:
+The source is cited with three tags, all REQUIRED, carrying the same marker:
 
 ```json
 ["a", "30828:<pubkey>:<source-d>", "", "adopt"],
@@ -179,9 +220,9 @@ Each source is cited with three tags, all REQUIRED, carrying the same marker:
 ```
 
 The `a` coordinate survives replacement of the source, the `e` id pins the exact
-version cited, and the `p` tag routes credit. The adopting card keeps its own
-`d`; a shared `d` under a different key remains the rival-version case, not
-adoption.
+version cited, and the `p` tag routes credit. The adopting card MUST keep its own
+`d`: carrying a source verbatim answers nothing, so it never takes the source's
+address. A fork may — see *The address a fork takes*.
 
 **The `e` id is a commitment, not a link.** A client MUST NOT dereference it: no
 fetching the source, no version comparison, no derived "since edited" state.
@@ -263,11 +304,18 @@ whose results MUST be re-checked against the gate.
   is a key of pubkey and `d`.
 - Cards from **different** pubkeys sharing a `d` MUST NOT be collapsed. They are rival
   versions of one entry and a client SHOULD present them as such rather than choosing
-  between them silently.
+  between them silently. When such a card carries a `fork` marker, a client SHOULD show
+  what it answers **from the fork's own marks**, not by naming the `e` id — an id is not
+  an answer a reader can read, and it MUST NOT be dereferenced. An unmarked fork has
+  nothing to show, and a client SHOULD say only that the card is a fork.
+- **Citation edges are traversed by `e`, never by `a`.** An `e` id is a hash and cannot
+  close a loop; an `a` coordinate is a name and can — two keys may fork each other at a
+  shared `d`. A client walking lineage MUST use `e` ids, and MUST treat `a` as a
+  discovery index only.
 - A card's displayed date MUST be `event_date`. Date buckets are query shadows and MUST
   NOT be used for display.
 - Inbound citations of a card are queried with `#a`, `#e` or `#p` filters, and the
-  results MUST be filtered to events carrying an `adopt` or `adapt` marker — a bare
+  results MUST be filtered to events carrying an `adopt` or `fork` marker — a bare
   `#p` match is an ordinary mention. Any reputation derived from these edges is
   computed at read time; no score is stored or declared.
 
