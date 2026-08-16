@@ -393,6 +393,12 @@
     </div>
   </section>
 
+  <section id="sec-act" style="display:none">
+    <h2><i>2</i>the endorsement</h2>
+    <p class="note" id="act-chip"></p>
+    <pre class="json" id="act-text" style="display:none"></pre>
+  </section>
+
   <section id="sec-card">
     <h2><i>2</i>the card</h2>
     <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
@@ -515,6 +521,7 @@ const RELAYS = [
   "wss://nostr.wine"
 ];
 const KIND   = 30828;
+const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 endorse handoff
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
 // The spec's namespaces.
 const NS_COLL = "timeline.collection";
@@ -1026,6 +1033,7 @@ function connect(url){
   ws.onmessage = m => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EVENT" && data[1] === "acts" && data[2]) priorActs.push(data[2]);
     if (data[0] === "EOSE"){ eosed++; if (eosed >= 2) markSettled(); }
     if (data[0] === "OK"){
       const t = tallies.get(data[1]);
@@ -1395,6 +1403,14 @@ function collisionCheck(d){
 
 // ═══════════════ preview + gating ═══════════════
 function refresh(){
+  // act mode: there is no card form — the only gate is a signer. The card machinery
+  // below would read empty fields and cry about them.
+  if (qact){
+    $("b-pub").disabled = !signer;
+    if (!signer) pubMsg("sign in first");
+    else if (!actSent) pubMsg("");
+    return;
+  }
   let tmpl = null, err = null;
   try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
 
@@ -1496,6 +1512,7 @@ function renderPubTally(){
 }
 
 async function publish(){
+  if (qact) return publishAct();
   if (!signer) return;
   let signed;
   $("b-pub").disabled = true;
@@ -1528,6 +1545,28 @@ $("b-pub").addEventListener("click", publish);
 // timeline already chosen.
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
+
+// ?act=1: an endorsement carried from the viewer (no NIP-07 there) — kind 8828, the act
+// of standing behind ONE exact version. Consume-once like wtc:draft. The exact version
+// travels in the record — id and byte-exact content — so a replacement racing the hop
+// cannot swap what gets endorsed. The coord is checked against the writer-side rule
+// (draft acts NIP): parse <kind>:<64-hex>:<d> and refuse a p that mismatches it.
+const priorActs = [];            // acts already on the coord — mine feeds the supersede pointer
+let actSent = false;
+const qact = (() => {
+  if (new URLSearchParams(location.search).get("act") !== "1") return null;
+  let rec = null;
+  try {
+    rec = JSON.parse(localStorage.getItem("wtc:act") || "null");
+    localStorage.removeItem("wtc:act");
+  } catch {}
+  const okCoord = rec && /^\d+:[0-9a-f]{64}:./.test(rec.coord || "");
+  return rec && rec.v === 1 && Date.now() - rec.at < 24*3600*1000 && okCoord &&
+         /^[0-9a-f]{64}$/.test(rec.e || "") && rec.coord.split(":")[1] === rec.p &&
+         typeof rec.content === "string"
+    ? rec : null;
+})();
+if (qact) actMode();
 
 // ?d/&e/&p: a card arrives addressed — the "revise" link beside any card's pyramid in the
 // viewer. Which door it opens is decided late: the fork fields fill NOW, so a visitor can
@@ -1567,6 +1606,89 @@ function reviseMode(){
     'as a diff against what it said. <a href="CONVENTION.md">How to cut one</a> · ' +
     '<a href="NIP-DRAFT.md">the spec</a>.';
   $("card-note").textContent = "The card you are revising, loaded as it stands. Mark up what changed.";
+}
+
+// ── act mode: the endorse handoff's one screen — sign in, see what you're signing, sign ──
+function actMode(){
+  $("mine-row").style.display = "none";
+  $("sec-card").style.display = "none";
+  $("sec-fork").style.display = "none";
+  $("fork-wake").style.display = "none";
+  $("sec-preview").style.display = "none";
+  $("sec-act").style.display = "";
+  document.querySelector("header h1").textContent = "Endorse a card";
+  document.querySelector("header .sub").innerHTML =
+    'A kind-8828 act: your signature over the exact text of the version you chose — ' +
+    'a byte copy that stands as a record even if the card is later replaced.';
+  $("act-chip").innerHTML =
+    `endorsing <strong>${esc(qact.title || "")}</strong> by ` +
+    `<code>${esc(npub(qact.p).slice(0, 14))}…</code> — the exact version you saw on the ` +
+    `timeline. <a id="act-show" href="#">show the text you are signing</a>`;
+  $("act-show").addEventListener("click", e => {
+    e.preventDefault();
+    $("act-text").style.display = "";
+    $("act-text").textContent = qact.content;
+  });
+  $("b-pub").textContent = "sign & endorse";
+  askActs(); setTimeout(askActs, 3000);   // sockets still connecting get the second ask
+  // same signpost move as handoffMode: you're here because the viewer had no extension,
+  // so hand "start here" to the rung that can sign for someone whose key lives elsewhere
+  let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
+  if (!window.nostr && !saved){
+    document.querySelector(".ladder").classList.add("plain");
+    const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
+    ext.classList.remove("picked");
+    bunk.classList.add("picked");
+    bunk.prepend(ext.querySelector(".kick"));
+  }
+}
+// prior endorsements of this coord — the newest of MINE gets the supersede pointer
+function askActs(){
+  if (!qact) return;
+  const msg = JSON.stringify(["REQ", "acts", { kinds: [ACT_KIND], "#a": [qact.coord] }]);
+  sockets.forEach(ws => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} });
+}
+async function publishAct(){
+  if (!signer || !qact) return;
+  $("b-pub").disabled = true;
+  pubMsg("signing…");
+  let signed;
+  try {
+    const tags = [["a", qact.coord], ["e", qact.e], ["p", qact.p]];
+    // dead = acts a SAME-KEY act of mine already revoked or superseded (the reader-side
+    // rule, applied here so the pointer never lands on a corpse)
+    const dead = new Set();
+    for (const a of priorActs){
+      if (a.pubkey !== signer.pubkey) continue;
+      for (const t of a.tags)
+        if (t[0] === "e" && (t[3] === "revoke" || t[3] === "supersede")) dead.add(t[1]);
+    }
+    const mine = priorActs
+      .filter(a => a.kind === ACT_KIND && a.pubkey === signer.pubkey && !dead.has(a.id) &&
+                   a.tags.some(t => t[0] === "a" && t[1] === qact.coord))
+      .sort((x, y) => y.created_at - x.created_at)[0];
+    if (mine) tags.push(["e", mine.id, "", "supersede"]);
+    // strictly newer than the superseded act, so newest-per-key derivation can't tie
+    signed = await signer.sign({
+      kind: ACT_KIND,
+      created_at: Math.max(Math.floor(Date.now() / 1000), (mine ? mine.created_at : 0) + 1),
+      content: qact.content,
+      tags
+    });
+    if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
+  } catch(e){
+    pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
+  }
+  const open = sockets.filter(ws => ws.readyState === WebSocket.OPEN);
+  if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
+  actSent = true;
+  tallies.set(signed.id, { ok: 0, no: 0, why: "" });
+  const out = JSON.stringify(["EVENT", signed]);
+  open.forEach(ws => { try { ws.send(out); } catch {} });
+  priorActs.push(signed);                 // an immediate re-endorse supersedes THIS one
+  $("pub-json").style.display = "";
+  $("pub-json").textContent = JSON.stringify(signed, null, 2);
+  pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);
 }
 // Named while it can be — the target may still be in flight from the relays, so this runs
 // once with nothing and again the moment the card lands.

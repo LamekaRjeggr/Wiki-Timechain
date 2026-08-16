@@ -467,6 +467,22 @@
   .mtl .card .mrct{margin-top:9px;padding:0}
   .mtl .vcard .mrct{margin-top:9px;padding:8px 0 0;border-top:1px solid var(--border-soft)}
   .mtl .rg{color:var(--rail);margin-right:8px}
+  /* the acts row (kind 8828): word-marked verdicts, dim mono like the byline */
+  .mtl .macts{gap:12px}
+  .mtl .ract{color:var(--dim)}
+  .mtl .rmark{color:var(--rail)}
+  /* signed-time on an act: publish clock, NOT event_date; word "signed" carries it */
+  .mtl .rsigned{color:var(--faint)}
+  /* card-tab endorsement badge: amber + ✓ shape (two channels, colorblind-safe) */
+  .mtl .abadge{color:var(--rail);margin-left:8px;white-space:nowrap}
+  /* the endorse button: tapbtn look, own class so the tap handler never claims it */
+  .mtl .abtn{font-family:var(--mono);font-size:11px;line-height:1;cursor:pointer;height:20px;
+    border-radius:6px;background:var(--panel-2);border:1px solid var(--border);
+    color:var(--dim);padding:0 8px;transition:color .12s,border-color .12s}
+  .mtl .abtn:hover:enabled{color:var(--rail);border-color:var(--rail-dim)}
+  .mtl .abtn:disabled{cursor:default}
+  .mtl .abtn.mine{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:700}
+  .mtl .aerr{color:var(--dim);font-style:italic}
   .mtl .mcmt-t .sep{color:var(--faint);margin-right:6px}
   .mtl .mcmt-rct{margin-left:8px;font-size:10.5px}
 
@@ -889,6 +905,7 @@ const RELAYS = [
 const KIND = 30828;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
+const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, endorse/revoke
 const MAXCMT = 420;             // a comment is a margin note, not an essay — one number to move
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
 const MARGIN = 2;               // deadband on the plurality lead — inside it a collection is co-held, not flipped
@@ -904,6 +921,9 @@ const cmtSubs  = new Set();     // coords whose comments we've asked for — gro
 const reactions = new Map();    // target (card coord | comment id) → Map(pubkey → newest kind-7)
 const rctA     = new Set();     // card coords whose reactions we've asked for (#a) — grow-only
 const rctE     = new Set();     // comment ids whose reactions we've asked for (#e) — grow-only
+const acts     = new Map();     // act id → kind-8828 event; derived at render, nothing replaces
+const actE     = new Set();     // act ids whose revokes we've asked for (#e) — grow-only
+const actErr   = new Map();     // card coord → endorse-failure note, cleared on retry
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
 // The spine always shows ONE timeline (a collection) — never a merge. The chips don't
@@ -1464,7 +1484,57 @@ function rctFilters(){
   const f = [];
   if (rctA.size) f.push({ kinds:[REACTION_KIND], "#a":[...rctA] });
   if (rctE.size) f.push({ kinds:[REACTION_KIND], "#e":[...rctE] });
+  // acts ride the same sub. #a fetches endorsements collection-wide (rctA is already the
+  // collection's coords); #e over KNOWN act ids fetches revokes, which carry no `a` at all —
+  // an act arriving grows actE, so the sub re-asks and its revokes follow.
+  if (rctA.size) f.push({ kinds:[ACT_KIND], "#a":[...rctA] });
+  if (actE.size) f.push({ kinds:[ACT_KIND], "#e":[...actE] });
   return f;
+}
+
+// ═══ Timeline Acts (kind 8828, draft NIP) ═══
+// Regular events: every act is kept, nothing replaces; tallies are reader-derived views.
+function ingestAct(ev){
+  if (!ev || ev.kind !== ACT_KIND || acts.has(ev.id)) return;
+  acts.set(ev.id, ev);
+  if (!actE.has(ev.id)){ actE.add(ev.id); scheduleReactionFetch(); }   // pull its revokes
+  scheduleRender();
+}
+// Effective endorsements for one card address: per key, the newest endorsement no
+// same-key act has revoked or superseded. The same-key rule is enforced HERE, reader-side
+// — a revoke/supersede pointing at another key's act is simply ignored. An act whose
+// revoke target we don't hold yet stays effective (orphan tolerance: over-counting,
+// never corruption).
+// The `e` id is the truth and the `a` coordinate an index hint (draft NIP, Validation 4):
+// when the act's bare-e names the version we hold at this coord, it belongs here even if
+// its `a` is malformed — a hand-typed coordinate must not silently hide a real endorsement.
+function endorsements(coord, heldId){
+  const dead = new Set();
+  for (const a of acts.values())
+    for (const t of a.tags)
+      if (t[0] === "e" && (t[3] === "revoke" || t[3] === "supersede")){
+        const tgt = acts.get(t[1]);
+        if (tgt && tgt.pubkey === a.pubkey) dead.add(t[1]);
+      }
+  const byPk = new Map();
+  for (const a of acts.values()){
+    if (dead.has(a.id)) continue;
+    const byA = a.tags.some(t => t[0] === "a" && t[1] === coord);
+    const byE = heldId && a.tags.some(t => t[0] === "e" && !t[3] && t[1] === heldId);
+    if (!byA && !byE) continue;
+    const prev = byPk.get(a.pubkey);
+    if (!prev || a.created_at > prev.created_at) byPk.set(a.pubkey, a);
+  }
+  return [...byPk.values()].sort((x,y) => x.created_at - y.created_at);
+}
+// Live consent per the draft NIP: an endorsement counts only while the coordinate still
+// resolves to the exact version its `e` names, byte-equal. Returns the consenting pubkeys.
+function consentOn(ev, d){
+  const coord = KIND + ":" + ev.pubkey + ":" + d;
+  return endorsements(coord, ev.id).filter(a => {
+    const et = a.tags.find(t => t[0] === "e" && !t[3]);
+    return et && et[1] === ev.id && a.content === ev.content;
+  }).map(a => a.pubkey);
 }
 function scheduleReactionFetch(){
   if (rctTimer) return;
@@ -1543,10 +1613,15 @@ function authorityOf(c){
       const coord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
       if (adopted.has(coord)) continue;
       const byPk = reactions.get(coord);
-      if (!byPk) continue;
+      // Two signals carry an adoption, read side by side during the acts transition:
+      // the curator's kind-7 `+`, and a curator's LIVE endorsement (kind 8828) of the
+      // version now held at the coord — consent that lapses if the card is replaced,
+      // which is the stronger claim and the one the acts NIP will leave standing.
+      const consent = new Set(consentOn(ev, tag(ev,"d")));
+      if (!byPk && !consent.size) continue;
       for (const pk of [...curators]){
-        const r = byPk.get(pk);
-        if (!r || glyphOf(r) !== "+") continue;
+        const r = byPk && byPk.get(pk);
+        if (!(r && glyphOf(r) === "+") && !consent.has(pk)) continue;
         adopted.add(coord); curators.add(ev.pubkey); break;
       }
     }
@@ -1766,6 +1841,12 @@ function bindTaps(){                                      // gap expanders + com
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b.dataset.g, b); return; }
+    const ab = e.target.closest(".abtn");                 // endorse (kind 8828)
+    if (ab && !ab.disabled){
+      hasSigner ? endorseCard(ab.dataset.pk, ab.dataset.d, ab)
+                : handoffAct(ab.dataset.pk, ab.dataset.d);
+      return;
+    }
     const dm = e.target.closest(".dmk");
     if (dm){ stepOpen(dm, true); return; }
     const dv = e.target.closest(".ds");
@@ -1875,12 +1956,55 @@ function renderTimeline(entries){
       `<span class="cmp-n${left > 40 ? " hid" : ""}${left ? "" : " at"}">${left}</span>` +
       tallyHtml(cmtSent.get(coord), cmtErr.get(coord)) + `</div></div>`;
   };
+  // the acts row: who stands behind this card version, per the draft NIP's replica
+  // check. Words carry the verdict (verified / earlier version / mismatch), never hue
+  // alone. The endorse button signs directly with NIP-07, or hands off to add.html —
+  // where the bunker/nsec ladder lives — when there is no extension (handoffAct).
+  const actRow = (ev, d) => {
+    const coord = KIND + ":" + ev.pubkey + ":" + d;
+    const es = endorsements(coord, ev.id);
+    const mark = a => {
+      const et = a.tags.find(t => t[0] === "e" && !t[3]);
+      if (et && et[1] === ev.id)
+        return a.content === ev.content ? "✓" : "✕ mismatch";
+      return "◦ earlier version";
+    };
+    // the act's clock is its SIGNATURE time — never the card's event_date; "signed" says so
+    const signedAt = a => new Date(a.created_at * 1000).toISOString().slice(0,16).replace("T"," ");
+    // my current act for this coord decides the button: this exact version = lit and done;
+    // an earlier/other version = "endorse this version" (the click supersedes); none = "endorse"
+    const mine = myPk && es.find(a => a.pubkey === myPk);
+    const met = mine && mine.tags.find(t => t[0] === "e" && !t[3]);
+    const mineHere = !!(met && met[1] === ev.id && mine.content === ev.content);
+    // a signer shows the button; so does a saved add.html session (bunker) or a cached
+    // pubkey — someone with an identity but no extension gets the handoff (➔ = you leave).
+    // A plain reader gets none: the page stays read-only for them, same rule as compose.
+    const canAct = hasSigner || myPk || savedSignin();
+    const btn = !canAct ? "" : mineHere
+      ? `<button class="abtn mine" type="button" disabled>✓ endorsed</button>`
+      : `<button class="abtn" type="button" data-pk="${esc(ev.pubkey)}" data-d="${esc(d)}">` +
+        `${mine ? "endorse this version" : "endorse"}${hasSigner ? "" : " ➔"}</button>`;
+    const err = actErr.get(coord);
+    if (!es.length && !btn) return "";
+    return `<div class="mrct macts">` +
+      (es.length ? `<span class="rg">endorsed</span>` : "") +
+      es.map(a => `<span class="ract"><span class="rmark">${mark(a)}</span> ${authorLink(a.pubkey)}` +
+        ` <span class="rsigned">· signed ${signedAt(a)}</span></span>`).join("") +
+      btn + (err ? `<span class="aerr">${esc(err)}</span>` : "") +
+      `</div>`;
+  };
+  // glance cue on the card tab: ✓ + count of keys standing behind THIS exact version
+  const actBadge = (ev, d) => {
+    const n = consentOn(ev, d).length;
+    return n ? `<span class="abadge" title="keys endorsing this exact version">✓ ${n} endorsed</span>` : "";
+  };
   // the card's stance row — rendered INSIDE the card box, at its bottom
   const rctRow = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
-    if (!hasSigner && !charge(coord).length) return "";   // no buttons and no tally = no row
+    const arow = actRow(ev, d);
+    if (!hasSigner && !charge(coord).length) return arow;  // no buttons and no tally = no stance row
     return `<div class="mrct">` + pill(coord, ev.id, ev.pubkey, String(KIND), "") +
-      tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>`;
+      tallyHtml(tapped.get(coord), tapErr.get(coord)) + `</div>` + arow;
   };
   const marginBlock = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
@@ -1910,7 +2034,7 @@ function renderTimeline(entries){
   // where it sits (inset, dashed) and that it says so.
   const propCard = (ev, d) =>
     `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
-    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span></div>${depthMark(ev, d)}` +
+    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
     creditRow(ev) + cardBody(ev, d) +
     (beyond(ev, d) ? rctRow(ev, d) + `</div>` + marginBlock(ev, d) : `</div>`);
@@ -1965,7 +2089,7 @@ function renderTimeline(entries){
         e.evs.map((ev, vi) =>
           `<div class="vcard${lens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}</div>${depthMark(ev, e.d)}` +
+          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
           `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + cardBody(ev, e.d) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
@@ -1974,7 +2098,7 @@ function renderTimeline(entries){
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
         `<div class="card${lens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
-        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>` +
+        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
@@ -3011,6 +3135,54 @@ function handoffDraft(){
   location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
 }
 
+// ── the endorse act (kind 8828): stand behind THIS exact version of a card.
+//    content is a byte-exact replica of it — the signature is over the text itself —
+//    and a prior current endorsement of the same coord gets a supersede pointer, so
+//    switching versions is one click and history keeps both ──
+async function endorseCard(pk, d, btn){
+  const ev = events.get(pk + ":" + d);
+  if (!ev) return;
+  const coord = KIND + ":" + pk + ":" + d;
+  if (btn) btn.disabled = true;
+  actErr.delete(coord);
+  try {
+    const s = await getSigner();
+    const tags = [["a", coord], ["e", ev.id], ["p", ev.pubkey]];
+    const prior = endorsements(coord, ev.id).find(a => a.pubkey === s.pubkey);
+    if (prior) tags.push(["e", prior.id, "", "supersede"]);
+    // strictly newer than the superseded act, so newest-per-key derivation can't tie
+    const act = await s.sign({
+      kind: ACT_KIND,
+      created_at: Math.max(Math.floor(Date.now() / 1000), (prior ? prior.created_at : 0) + 1),
+      content: ev.content,
+      tags
+    });
+    rememberPk(act.pubkey);
+    ingestAct(act);                                        // reward first: the row updates now
+    publish(act);
+  } catch {
+    actErr.set(coord, "signer declined — try again");
+    scheduleRender();
+  }
+}
+
+// no extension: the act crosses to add.html, whose bunker/nsec ladder takes over. The
+// EXACT version travels — id and byte-exact content — so a replacement racing the hop
+// cannot swap what gets endorsed. Consume-once on the other side, like wtc:draft.
+function handoffAct(pk, d){
+  const ev = events.get(pk + ":" + d);
+  if (!ev) return;
+  const rec = { v: 1, at: Date.now(), coord: KIND + ":" + pk + ":" + d,
+                e: ev.id, p: ev.pubkey, content: ev.content,
+                title: tag(ev,"title") || d };
+  try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}
+  location.href = "add.html?act=1";
+}
+// a saved add.html session means this visitor has an identity a handoff can sign with
+function savedSignin(){
+  try { return !!localStorage.getItem("wtc:signin"); } catch { return false; }
+}
+
 // test hook — headless harness only, no runtime consumer
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,
@@ -3124,7 +3296,7 @@ function connect(url){
       if (data[1] === "wtc")    admit(data[2], ingest);
       if (data[1] === "prof")   admit(data[2], ingestProfile);
       if (data[1] === "cmt")    admit(data[2], ingestComment);
-      if (data[1] === "rct")    admit(data[2], ingestReaction);
+      if (data[1] === "rct")    admit(data[2], data[2] && data[2].kind === ACT_KIND ? ingestAct : ingestReaction);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
       const t = tallies.get(data[1]);
