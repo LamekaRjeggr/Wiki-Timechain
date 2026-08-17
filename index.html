@@ -14,7 +14,8 @@
   script-src 'self' 'unsafe-inline';
   style-src 'unsafe-inline';
   connect-src wss://relay.damus.io wss://nos.lol wss://relay.primal.net
-              wss://relay.mostr.pub wss://relay.nostr.band wss://nostr.wine;
+              wss://relay.mostr.pub wss://relay.nostr.band wss://offchain.pub
+              wss://nostr.mom;
   img-src 'self' data:;
   base-uri 'none';
   form-action 'none'">
@@ -911,7 +912,8 @@ const RELAYS = [
   "wss://relay.primal.net",
   "wss://relay.mostr.pub",
   "wss://relay.nostr.band",
-  "wss://nostr.wine"
+  "wss://offchain.pub",
+  "wss://nostr.mom"
 ];
 // Our own kind, read and written (NIPs #2426). Rode NIP-54's 30818 until 2026-07-29; the dual
 // read that carried the move is retired, so a leftover 30818 on a relay is not a card.
@@ -2919,16 +2921,22 @@ function rememberPk(pk){
 
 // ═══════════════ authoring core — ported from add.html, so a draft composed here builds
 // the SAME event the writer would. Trimmed on purpose: no fork tags and no extra-tags box
-// (add.html stays the revision tool); d is always wikiSlug(title), frozen at publish. ═══════
+// (add.html stays the revision tool); d is minted under the collection, frozen at publish. ══
 const NS_COLL = "timeline.collection";
 const NS_DATE = "timeline.date";
-// NIP-54 subject normalization: two authors writing the same subject land on the same d.
 function wikiSlug(s){
   return String(s).toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^\p{L}\p{N}-]+/gu, "")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+// The address is MINTED, not derived from the title (CONVENTION.md) — a title is a claim and
+// can be corrected, d is frozen forever. Minted ONCE per draft and held on the draft object:
+// re-minting on every keystroke would move the address under the collision check.
+function mintSuffix(){
+  return [...crypto.getRandomValues(new Uint8Array(3))]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
 }
 // djot link targets can't contain whitespace — a space or line-wrap inside [label](url) is
 // always a copy/paste artifact (chat clients and terminals soft-wrap long URLs).
@@ -2965,9 +2973,9 @@ function buildDraftTemplate(draft){
   const c       = wikiSlug(draft.coll || "");
   let  content  = fixLinkTargets(draft.content || "");
 
-  const d = wikiSlug(title);
-  if (!d) throw new Error("a title is required — it is the card's address");
   if (!c) throw new Error("a collection is required — every card joins a timeline");
+  const d = `${c}-${draft.dsuf || mintSuffix()}`;
+  if (!title) throw new Error("a title is required — it is what the card says happened");
 
   const dm = String(draft.date || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
   if (!dm) throw new Error("pick a date on the drum — a year is enough");
@@ -3011,10 +3019,12 @@ function buildDraftTemplate(draft){
 
 // Same pubkey:d REPLACES, unrecoverably — your own collision is refused, never merged. A
 // DIFFERENT author holding that d coexists as a rival version: said out loud and allowed.
+// Since addresses are minted at random, your own collision should be unreachable: keep this
+// as the assertion that says so, not as a thing a writer is expected to hit.
 function draftCollision(d, pk){
   if (pk && events.has(pk + ":" + d)){
     const hit = events.get(pk + ":" + d);
-    return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Edit it in the writer, or give this one its own title.` };
+    return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Discard this draft and start another; the new one mints a different address.` };
   }
   const rival = [...events.values()].find(e => tag(e,"d") === d && e.pubkey !== pk);
   if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which shows as contested. That is allowed; just make sure you meant it.` };
@@ -3041,7 +3051,7 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", y:null, m:null, day:null,
+  draft = { title:"", summary:"", content:"", y:null, m:null, day:null, dsuf: mintSuffix(),
             stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
   pickEnter("year");            // before render, so the spine renders the ghost, not a card
   render();
@@ -3113,14 +3123,16 @@ function draftRefresh(){
     n.classList.toggle("hid", left > near);
     n.classList.toggle("at", left < 0);
   }
-  const d = wikiSlug(draft.title);
+  const d = `${wikiSlug(activeF.slice(2))}-${draft.dsuf}`;
   const col = d && myPk ? draftCollision(d, myPk) : null;
   const line = card.querySelector(".dcol");
   line.textContent = col ? col.text : "";
   line.classList.toggle("hid", !col);
   line.classList.toggle("block", !!(col && col.block));
   const b = card.querySelector(".dpub");
-  b.disabled = !(draftDate() && d && !(col && col.block));
+  // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
+  // checked outright or an untitled card would sail through.
+  b.disabled = !(draftDate() && draft.title.trim() && d && !(col && col.block));
 }
 
 areaEl.addEventListener("input", e => {

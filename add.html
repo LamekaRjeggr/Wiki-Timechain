@@ -419,17 +419,19 @@
     </div>
     <div class="inh" id="inherit" style="display:none"></div>
 
-    <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
-    <input id="f-title" placeholder="Mirepoix" autocomplete="off">
-
+    <!-- The address hangs off the COLLECTION, not the title — the ↳ has to point at what it
+         is actually made from, or the form teaches the wrong thing. -->
     <div class="derives">
       <span class="arm" aria-hidden="true">↳</span>
       <div class="dbody">
         <label for="f-d">its address <span class="h" id="d-src"></span></label>
-        <input id="f-d" placeholder="mirepoix" autocomplete="off">
+        <input id="f-d" placeholder="pick a collection above" autocomplete="off">
         <p class="msg" id="d-msg"></p>
       </div>
     </div>
+
+    <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
+    <input id="f-title" placeholder="Mirepoix" autocomplete="off">
 
     <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
@@ -518,7 +520,8 @@ const RELAYS = [
   "wss://relay.primal.net",
   "wss://relay.mostr.pub",
   "wss://relay.nostr.band",
-  "wss://nostr.wine"
+  "wss://offchain.pub",
+  "wss://nostr.mom"
 ];
 const KIND   = 30828;
 const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 endorse handoff
@@ -1065,7 +1068,6 @@ renderRelays();
 RELAYS.forEach(connect);
 
 // ═══════════════ authoring helpers (ported from the Forge writer) ═══════════════
-// NIP-54 subject normalization: two authors writing the same subject land on the same d.
 function wikiSlug(s){
   return String(s).toLowerCase()
     .replace(/\s+/g, "-")
@@ -1073,6 +1075,15 @@ function wikiSlug(s){
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+// The address is MINTED, not derived from the title (CONVENTION.md). A title is a claim and
+// can be corrected; d is frozen forever, so a title-derived address outlives the claim it
+// named. Random beats a serial here: a counter would have to ask the relays what exists,
+// which makes minting stateful, racy between two tabs, and wrong when a relay is behind.
+function mintSuffix(){
+  return [...crypto.getRandomValues(new Uint8Array(3))]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+}
+let dSuffix = mintSuffix();      // one per card; the collection prefix follows the field
 // djot link targets can't contain whitespace — a space or line-wrap inside [label](url) is
 // always a copy/paste artifact (chat clients and terminals soft-wrap long URLs).
 function fixLinkTargets(s){
@@ -1140,21 +1151,21 @@ function dMsg(text, cls){
   el.textContent = text || "";
   el.className = "msg" + (cls ? " " + cls : "");
 }
-// It says what it is: made from the title while it follows, yours once you edit it.
+// It says what it is: minted under the collection while it follows, yours once you edit it.
+// Also OWNS the value — refresh() calls this, so the prefix tracks the collection field.
 function paintD(){
-  const own = !!$("f-d").dataset.touched;
-  $("f-d").classList.toggle("own", own);
+  const dEl = $("f-d"), own = !!dEl.dataset.touched;
+  if (!own){
+    const c = wikiSlug(val("f-coll"));
+    dEl.value = c ? `${c}-${dSuffix}` : "";     // no collection yet, nothing to mint under
+  }
+  dEl.classList.toggle("own", own);
   $("d-src").textContent = own
-    ? "— yours now, no longer following the title. Frozen once published: republishing the same address replaces that card."
-    : "— made from the title automatically. Edit it only if you want a different one.";
+    ? "— yours now, no longer minted. Frozen once published: republishing the same address replaces that card."
+    : "— minted under the collection, not made from the title. A wrong title can be corrected; the address never changes.";
 }
 
-// d follows the title until you touch it — then it is yours, because it is the address.
-$("f-title").addEventListener("input", () => {
-  const dEl = $("f-d");
-  if (!dEl.dataset.touched) dEl.value = wikiSlug($("f-title").value);
-  refresh();
-});
+$("f-title").addEventListener("input", refresh);
 $("f-d").addEventListener("input", () => { $("f-d").dataset.touched = "1"; refresh(); });
 ["f-coll","f-date","f-summary","f-content","f-extra",
  "f-fork-d","f-fork-e","f-fork-pk"].forEach(id => $(id).addEventListener("input", refresh));
@@ -1234,6 +1245,7 @@ function resetForm(){
   ["f-title","f-d","f-summary","f-content","f-extra",
    "f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
   delete $("f-d").dataset.touched;
+  dSuffix = mintSuffix();          // a new card is a new address, never the last one's
   $("f-fork").value = "";
   loadedD = null; loadedPubAt = "";
   cardMsg("");
@@ -1285,10 +1297,13 @@ function buildTemplate(){
   const extraRaw = val("f-extra");
   let content    = fixLinkTargets($("f-content").value || "");
 
-  const d = wikiSlug(dRaw || title);
   const c = wikiSlug(category);
-  if (!d) throw new Error("a title (or a d slug) is required — it is the card's address");
+  const d = wikiSlug(dRaw);
+  // Collection first: d is minted under it, so an empty collection reads as an empty address
+  // and "pick a collection" is the honest complaint, not "the address is missing".
   if (!c) throw new Error("a collection is required — every card joins a timeline");
+  if (!d) throw new Error("the address is empty — it is minted under the collection, or type your own");
+  if (!title) throw new Error("a title is required — it is what the card says happened");
 
   // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD. The TAG is always a full date, because
   // the membership gate needs a concrete point on the spine; a coarse input is placed on
@@ -1433,7 +1448,9 @@ function refresh(){
   }
 
   // An untouched form has nothing wrong with it yet — say what's missing, don't cry error.
-  const pristine = !val("f-title") && !val("f-d") && !$("f-content").value.trim();
+  // d is deliberately NOT in this test: it mints itself, and a ?c= deep link fills it before
+  // you have typed a thing. A form you have not touched must still read as untouched.
+  const pristine = !val("f-title") && !val("f-summary") && !$("f-content").value.trim();
   $("pv-host").innerHTML = tmpl ? previewHtml(tmpl)
     : `<p class="msg${pristine ? "" : " bad"}">${esc(pristine ? "fill in the card above and it appears here" : err || "")}</p>`;
   $("pv-json").textContent = tmpl ? JSON.stringify(tmpl, null, 2) : "";
@@ -1447,12 +1464,11 @@ function refresh(){
   else if (!why && !$("pub-msg").classList.contains("ok")) pubMsg("");
 }
 
-// The three fields the gate needs, orange while empty. Title and d glow as a pair — the
-// builder takes either one. Never red, and the label already says "Required" in words.
+// The fields the gate needs, orange while empty. Never red, and the label already says
+// "Required" in words. d is not among them — it mints itself once a collection is picked,
+// so an empty d is the collection's fault and the collection is already glowing.
 function needGlow(){
-  const needName = !val("f-title") && !val("f-d");
-  $("f-title").classList.toggle("need", needName);
-  $("f-d").classList.toggle("need", needName);
+  $("f-title").classList.toggle("need", !val("f-title"));
   $("f-coll").classList.toggle("need", !wikiSlug(val("f-coll")));
   $("f-date").classList.toggle("need", !val("f-date"));
 }
@@ -1764,8 +1780,9 @@ if (new URLSearchParams(location.search).get("draft") === "1"){
       $("f-date").value    = rec.date || "";
       $("f-summary").value = rec.summary || "";
       $("f-content").value = rec.content || "";
-      // fire the follower, not just the value — d is made from the title
-      $("f-title").dispatchEvent(new Event("input", { bubbles: true }));
+      // The viewer minted its own address for this draft and did not carry it — the handoff
+      // is a NEW card, so mint here. refresh() paints it under the collection just set.
+      refresh();
       handoffMode();
     }
   } catch {}

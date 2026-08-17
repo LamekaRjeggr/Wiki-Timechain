@@ -18,7 +18,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 const RELAYS = ["wss://relay.damus.io","wss://nos.lol","wss://relay.primal.net",
-                "wss://relay.mostr.pub","wss://relay.nostr.band","wss://nostr.wine"];
+                "wss://relay.mostr.pub","wss://relay.nostr.band","wss://offchain.pub",
+                "wss://nostr.mom"];
 // KIND = what we EMIT (our own kind, per NIPs #2426). READ_KINDS = what we FETCH and VERIFY:
 // 30818 stays so `fetch` still finds the pre-migration originals to rebuild from — the LIVE
 // event is the source of truth, never cards/ (see MIGRATION-30828.md). Drop 30818 once every

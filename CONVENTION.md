@@ -223,9 +223,25 @@ Style calls that are settled. The wire-format decisions are frozen in the spec i
 - Topics: freeform lowercase `t`, deliberately unspecced. No registry, no vocabulary.
 - Diffs: removals in their own block; verify by reconstruction, never by eye; a rewrite
   gets prose, not marks.
-- `d`: here, the title slugified at authoring time, then frozen — the title may drift
-  on a republish, the address may not. The spec keeps `d` opaque, so no client ever
-  reads the slug back, and any scheme works so long as `d` stays unique per key —
-  `pubkey:d` is the dedup key, and a shared value collapses those cards into one.
+- `d`: here, `<collection-slug>-<6 random hex>`, minted at authoring time and then frozen.
+  It is **not made from the title** (SUPERSEDES the title-slug rule, 2026-08-16). A title
+  is a claim and a claim can turn out wrong; `d` is frozen forever, so a title-derived
+  address outlives the claim that named it. Minted addresses carry nothing to be wrong
+  about. The collection prefix is the only legible part and it is the only part worth
+  having: it says which timeline a `d` belongs to in a raw relay dump.
+  A **counter** was considered and rejected. Serials have to ask the relays what already
+  exists, which makes minting stateful — wrong when a relay is behind, racy between two
+  tabs, and needing a read-back after publish. Random needs none of that, works offline,
+  and buys the same thing: nothing sorts by `d`, and card counts come from the collection
+  label query.
+  Two consequences to know. **Retitling never moves the address** — this was already true
+  and is now true by construction rather than by remembering to freeze it. And two authors
+  writing the same event no longer land on the same `d` by accident; NIP-54's subject
+  normalization is gone. Nothing is lost, because a **contest copies the target's `d`
+  deliberately** — that is the designed path and it is unaffected.
+  The spec keeps `d` opaque, so no client ever reads it back, and any scheme works so long
+  as `d` stays unique per key — `pubkey:d` is the dedup key, and a shared value collapses
+  those cards into one. Existing title-slugged and date-prefixed `d`'s are **frozen
+  addresses**: this governs new cards only, and the two shapes cannot collide.
 - Nothing is ever deleted. A superseded card is superseded in place or answered by a new
   one.
