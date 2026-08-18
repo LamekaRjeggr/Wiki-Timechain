@@ -1643,7 +1643,10 @@ function actMode(){
   $("act-show").addEventListener("click", e => {
     e.preventDefault();
     $("act-text").style.display = "";
-    $("act-text").textContent = qact.content;
+    // every byte copy the act will carry — title/summary tags plus the content
+    $("act-text").textContent =
+      [qact.t && "title: " + qact.t, qact.s && "summary: " + qact.s, qact.content]
+        .filter(Boolean).join("\n\n");
   });
   $("b-pub").textContent = "sign & endorse";
   askActs(); setTimeout(askActs, 3000);   // sockets still connecting get the second ask
@@ -1671,6 +1674,11 @@ async function publishAct(){
   let signed;
   try {
     const tags = [["a", qact.coord], ["e", qact.e], ["p", qact.p]];
+    // field scope (draft NIP): copy each field the card carried, the way it carried it —
+    // presence = scope. t/s ride the handoff; an old record without them still signs a
+    // valid content-scope act.
+    if (qact.t) tags.push(["title", qact.t]);
+    if (qact.s) tags.push(["summary", qact.s]);
     // dead = acts a SAME-KEY act of mine already revoked or superseded (the reader-side
     // rule, applied here so the pointer never lands on a corpse)
     const dead = new Set();

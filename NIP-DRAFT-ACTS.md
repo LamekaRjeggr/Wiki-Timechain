@@ -16,7 +16,8 @@ Exactly two. The operation is the presence of tags, not a declared field.
 
 ### Endorse
 
-An endorsement of one exact version of one card. REQUIRED tags:
+An endorsement of one exact version of one card, scoped to one or more of the card's
+three fields: `title`, `summary`, `content`. REQUIRED tags:
 
 ```
 ["a", "30828:<pubkey>:<d>"]        the document
@@ -24,8 +25,26 @@ An endorsement of one exact version of one card. REQUIRED tags:
 ["p", "<author pubkey>"]            credit routing
 ```
 
-`content` MUST be a byte-exact copy of the endorsed version's `content`. The act is
-both a signature over that text and an independent replicated copy of it.
+**Scope is presence.** The act carries a byte-exact copy of each field it endorses, the
+way the card carries it:
+
+```
+["title", "<copy of the endorsed version's title>"]      title in scope
+["summary", "<copy of the endorsed version's summary>"]   summary in scope
+content = copy of the endorsed version's content          content in scope, else ""
+```
+
+- A copy present = that field is endorsed. Empty or absent = out of scope. A card's
+  absent field has nothing to endorse, so empty is never ambiguous. An act carrying no
+  copy at all endorses nothing.
+- Copies are byte-exact — no normalization, no trimming. The copy is both the yardstick
+  consent is measured against and the permanent record of what was signed.
+- **Fields are independent.** Endorsing one implies nothing about another; any
+  permutation is a position. Where consensus stops on a card is itself a reading.
+- What the fields *mean* is the client's business. This NIP defines three slots that
+  mirror the card's own fields, nothing more.
+- An act carrying a content copy and no field tags (the pre-scope form) reads as
+  content-scope.
 
 An endorsement MAY carry one supersede pointer:
 
@@ -70,14 +89,15 @@ A client MUST apply all of the following; an act failing any is ignored for deri
 
 1. **Same-key.** A `revoke` or `supersede` target MUST be signed by the same pubkey as
    the act carrying it. Relays cannot enforce this; clients MUST.
-2. **Replica check.** When the endorsed `e` event is retrievable, compare `content`
-   byte-for-byte (no normalization; tags excluded). Three states:
-   - **verified** — target retrieved, contents equal.
+2. **Replica check, per field.** When the endorsed `e` event is retrievable, compare
+   each copy the act carries against that version's same field, byte-for-byte. Three
+   states:
+   - **verified** — target retrieved, every carried copy equals its field.
    - **unverified** — target unavailable or replaced under its `d`. The act still counts
-     as a **record** — its copy is the surviving text — but not as **consent**; the two
-     are separated under *Derivation*. Clients SHOULD flag it.
-   - **invalid** — target retrieved, contents differ. The act MUST NOT count as an
-     endorsement of anything.
+     as a **record** — its copies are the surviving text — but not as **consent**; the
+     two are separated under *Derivation*. Clients SHOULD flag it.
+   - **invalid** — target retrieved, any carried copy differs from its field. The act
+     lied about what it read and MUST NOT count as an endorsement of anything.
 3. **Orphan tolerance.** A pointer to an event the client has not seen is not an error.
    Hold the edge; resolve it if the target arrives.
 4. **The `e` id is the truth; the `a` coordinate is an index hint.** When the client
@@ -101,20 +121,35 @@ All state is computed by the reader; none is declared.
 
 **Current position** of a pubkey = its endorse acts, minus those it revoked, minus those
 it superseded, minus invalid. Ties on `created_at` break by lowest event id (as NIP-01).
-A key MAY hold several current endorsements at once; exclusivity ("one vote") is a rule
-of a particular tally, never of this kind.
+A key MAY hold current endorsements on several cards at once; exclusivity ("one vote")
+is a rule of a particular tally, never of this kind. At one coordinate, the newest
+non-revoked act is the position (*Position is total*, below).
 
-**Consent** is what an endorsement grants a *particular version*, and it is not the same
-question as whether the act happened. An endorsement grants consent for exactly as long as
-the event now current at its `a` coordinate is the event its `e` names. The moment the
-owner replaces that card, the coordinate resolves to bytes nobody said yes to, and consent
-lapses — with no act, no withdrawal and no cooperation from the endorser, who may be long
-gone. Endorsing the new version restores it; nothing else does.
+**Consent is granted per field, and bytes decide it.** A copy grants consent for its
+field exactly while it byte-equals that field on the event now current at the `a`
+coordinate. A field the owner rewrites sheds only its own consent — with no act, no
+withdrawal and no cooperation from the endorser, who may be long gone. A field the owner
+reverts to previously endorsed bytes restores that consent: same bytes, same claim.
 
-This is deliberately unforgiving, because the alternative is worse: an endorsement that
-survived replacement would let an owner collect agreement on one text and then serve
-another under it. **Test the coordinate, not the retrievability of the old event.** A
-client that still holds a superseded version MUST NOT read consent from it.
+**The `e` id never gates consent.** It is the permanent answer to what version this key
+actually read; liveness has one authority, the bytes. Test the copies against the
+coordinate, never the retrievability of the old event — a client that still holds a
+superseded version MUST NOT read consent from it.
+
+The unendorsed remainder is deliberately unforgiving: consent that survived a field's
+rewrite would let an owner collect agreement on one text and serve another under it. The
+open edge is the inverse — a field endorsed narrowly stands while the fields below it
+move. Clients SHOULD render scope loudly ("title only · content changed since") rather
+than soften lapse.
+
+**Position is total.** One key's current act at a coordinate is its whole position there;
+a new act's scope replaces the prior act's entirely. Positions never accumulate across
+acts.
+
+**Only the content copy moves documents.** Any derivation that gives a card a place — an
+author yielding a contested slot, taking a revision, a reader's own-acts spine — REQUIRES
+content in scope and live. Title and summary endorsement is voice: it counts, renders and
+tallies, and never carries custody. Nobody hands a slot to text they did not sign.
 
 Two uses follow, and a client MUST NOT conflate them:
 
@@ -139,6 +174,7 @@ For a client that implements nothing here, every marker MUST fail harmless:
 
 | dropped | an ignorant client sees | worst effect |
 |---|---|---|
+| field scope | pre-scope replica check: content differs → invalid | a scoped act is dropped, never miscounted |
 | `supersede` | ordinary endorsement | a switcher is double-counted |
 | `revoke` marker | ordinary `e` reference | a withdrawal is missed |
 | whole kind | nothing (unknown kind) | acts invisible, cards intact |

@@ -1549,14 +1549,31 @@ function endorsements(coord, heldId){
   }
   return [...byPk.values()].sort((x,y) => x.created_at - y.created_at);
 }
-// Live consent per the draft NIP: an endorsement counts only while the coordinate still
-// resolves to the exact version its `e` names, byte-equal. Returns the consenting pubkeys.
+// FIELD SCOPE (draft NIP, Endorse). An act byte-copies each field it endorses the way the
+// card carries it: title/summary as tags, content in the act's content. Presence of a copy
+// = in scope; empty or absent = out of scope (a card's absent field has nothing to endorse,
+// so empty is never ambiguous). A legacy act — content copy, no field tags — reads as
+// content-scope. Consent is PER FIELD and bytes decide it: a copy grants consent exactly
+// while it byte-equals that field on the card now at the coordinate. The `e` id records
+// what was read and never gates; reversion restores ("same bytes, same claim").
+const AFIELDS = ["title", "summary", "content"];
+const fieldOf = (ev, f) => f === "content" ? (ev.content || "") : (tag(ev, f) || "");
+function scopeOf(a){
+  const s = {};
+  for (const f of AFIELDS){
+    const v = f === "content" ? a.content : tag(a, f);
+    if (v) s[f] = v;
+  }
+  return s;
+}
+// Only the content copy moves documents (draft NIP, Derivation): adoption, the lens's fold
+// override — anything that gives a card a place — requires content in scope and LIVE.
+// Title/summary endorsement is voice: it counts and renders, never carries custody.
+const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
+// Live consent with custody weight: keys whose content copy is live on this card.
 function consentOn(ev, d){
   const coord = KIND + ":" + ev.pubkey + ":" + d;
-  return endorsements(coord, ev.id).filter(a => {
-    const et = a.tags.find(t => t[0] === "e" && !t[3]);
-    return et && et[1] === ev.id && a.content === ev.content;
-  }).map(a => a.pubkey);
+  return endorsements(coord, ev.id).filter(a => actMoves(a, ev)).map(a => a.pubkey);
 }
 // the endorsed lens, derived: every key holding a live endorsement on a card of this
 // collection, with its count. Any such key IS a lens — no role, no permission; reading
@@ -1706,8 +1723,10 @@ function entriesOf(f){
   const out = [];
   for (const [d, all] of byD){
     const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
-    // the endorsed lens overrides the fold: a card the lens key stands behind is on the page
-    const prop = all.filter(ev => { const t = tierOf(ev, A); return t && (t <= cut || !!lensActOn(ev)); }).sort(ord);
+    // the endorsed lens overrides the fold — but only a CONTENT-live act moves a card onto
+    // the page (draft NIP: only the content copy moves documents; title/summary is voice)
+    const prop = all.filter(ev => { const t = tierOf(ev, A); if (!t) return false;
+      const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); }).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
     out.push({ d, evs, prop, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
@@ -2017,17 +2036,24 @@ function renderTimeline(entries){
   const actRow = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
     const es = endorsements(coord, ev.id);
+    // per-field verdict against the card ON SCREEN — bytes, not the e pin. A field that
+    // still matches is live even if the act pinned an earlier version; the pin is named
+    // separately so what was actually read stays visible. Words carry it, never hue alone.
     const mark = a => {
+      const sc = scopeOf(a);
+      const fs = AFIELDS.filter(f => sc[f] != null);
+      if (!fs.length) return "✕ empty act";
+      const words = fs.map(f => sc[f] === fieldOf(ev, f) ? `${f} ✓` : `${f} lapsed`);
       const et = a.tags.find(t => t[0] === "e" && !t[3]);
-      if (et && et[1] === ev.id)
-        return a.content === ev.content ? "✓" : "✕ mismatch";
-      return "◦ earlier version";
+      return words.join(" · ") + (et && et[1] === ev.id ? "" : " · pinned earlier");
     };
-    // my current act for this coord decides the button: this exact version = lit and done;
-    // an earlier/other version = "endorse this version" (the click supersedes); none = "endorse"
+    // my current act decides the button: every field I signed still live on this exact
+    // version = lit and done; anything less = "endorse this version" (the click supersedes)
     const mine = myPk && es.find(a => a.pubkey === myPk);
     const met = mine && mine.tags.find(t => t[0] === "e" && !t[3]);
-    const mineHere = !!(met && met[1] === ev.id && mine.content === ev.content);
+    const msc = mine ? scopeOf(mine) : {};
+    const mineHere = !!(met && met[1] === ev.id &&
+      Object.keys(msc).length && Object.keys(msc).every(f => msc[f] === fieldOf(ev, f)));
     // a signer shows the button; so does a saved add.html session (bunker) or a cached
     // pubkey — someone with an identity but no extension gets the handoff (➔ = you leave).
     // A plain reader gets none: the page stays read-only for them, same rule as compose.
@@ -2045,10 +2071,15 @@ function renderTimeline(entries){
       btn + (err ? `<span class="aerr">${esc(err)}</span>` : "") +
       `</div>`;
   };
-  // glance cue on the card tab: ✓ + count of keys standing behind THIS exact version
+  // glance cue on the card tab: ✓ + count of keys with at least one field-copy live here;
+  // the acts row carries the per-field split
   const actBadge = (ev, d) => {
-    const n = consentOn(ev, d).length;
-    return n ? `<span class="abadge" title="keys endorsing this exact version">✓ ${n} endorsed</span>` : "";
+    const coord = KIND + ":" + ev.pubkey + ":" + d;
+    const n = endorsements(coord, ev.id).filter(a => {
+      const sc = scopeOf(a);
+      return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
+    }).length;
+    return n ? `<span class="abadge" title="keys with at least one field-copy live on this card">✓ ${n} endorsed</span>` : "";
   };
   // the card's stance row — rendered INSIDE the card box, at its bottom
   const rctRow = (ev, d) => {
@@ -2082,26 +2113,37 @@ function renderTimeline(entries){
   // the roster lens steps every other author's card back — lightness, so it survives all three
   // fields and reads for a colourblind eye. It dims; it never removes.
   const lens = ev => (lensPk && ev.pubkey !== lensPk) ? " lensoff" : "";
-  // the endorsed lens, per card: lit border = the key stands behind THIS exact version;
-  // lapsed = they signed an earlier form; unendorsed steps back like the roster lens
+  // the endorsed lens, per card: lit border = every field the key's act copied is still
+  // live on this card, bytes deciding; part lapsed = the note carries the per-field split;
+  // unendorsed steps back like the roster lens
   const isCurrent = (a, ev) => {
-    const et = a.tags.find(t => t[0] === "e" && !t[3]);
-    return !!(et && et[1] === ev.id && a.content === ev.content);
+    const sc = scopeOf(a);
+    const fs = Object.keys(sc);
+    return !!fs.length && fs.every(f => sc[f] === fieldOf(ev, f));
   };
   const alens = ev => {
     const a = lensActOn(ev);
     if (!a) return actLensPk ? " lensoff" : "";
     return isCurrent(a, ev) ? " lenson" : "";
   };
-  // words under the card carry the lens verdict; on lapse the act's byte copy is shown —
-  // after a replacement, that copy is the only place the endorsed text still exists
+  // words under the card carry the lens verdict, scope said out loud ("title only" is a
+  // different claim from "this card"); each lapsed field's byte copy is shown — after a
+  // replacement, that copy is the only place the endorsed text still exists
   const lensNote = ev => {
     const a = lensActOn(ev);
     if (!a) return "";
+    const sc = scopeOf(a);
+    const fs = AFIELDS.filter(f => sc[f] != null);
+    if (!fs.length) return "";
+    const scopeWords = fs.length === 3 ? "" : ` · ${fs.join(" + ")} only`;
     if (isCurrent(a, ev))
-      return `<div class="lnote">✓ ${authorLabel(actLensPk)} stands behind this version · signed ${signedAt(a)}</div>`;
-    return `<div class="lnote">◉ ${authorLabel(actLensPk)} signed an earlier version · ${signedAt(a)} — their copy:</div>` +
-      `<div class="lcopy">${renderContent(clip(a.content || ""))}</div>`;
+      return `<div class="lnote">✓ ${authorLabel(actLensPk)} stands behind this version${scopeWords} · signed ${signedAt(a)}</div>`;
+    const live = fs.filter(f => sc[f] === fieldOf(ev, f));
+    const gone = fs.filter(f => sc[f] !== fieldOf(ev, f));
+    return `<div class="lnote">◉ ${authorLabel(actLensPk)} · ` +
+      (live.length ? `${live.join(" + ")} ✓ · ` : "") +
+      `${gone.join(" + ")} changed since · signed ${signedAt(a)} — their copy:</div>` +
+      gone.map(f => `<div class="lcopy">${renderContent(clip(sc[f]))}</div>`).join("");
   };
   // a proposed card is the SAME card — same tab, same body, same stance row. What differs is
   // where it sits (inset, dashed) and that it says so.
@@ -3231,6 +3273,10 @@ async function endorseCard(pk, d, btn){
   try {
     const s = await getSigner();
     const tags = [["a", coord], ["e", ev.id], ["p", ev.pubkey]];
+    // field scope: copy each field the card carries, the way it carries it — presence =
+    // scope. The button endorses the whole card; narrower scopes are the lab's chips still.
+    for (const f of ["title", "summary"])
+      if (tag(ev, f)) tags.push([f, tag(ev, f)]);
     const prior = endorsements(coord, ev.id).find(a => a.pubkey === s.pubkey);
     if (prior) tags.push(["e", prior.id, "", "supersede"]);
     // strictly newer than the superseded act, so newest-per-key derivation can't tie
@@ -3255,8 +3301,11 @@ async function endorseCard(pk, d, btn){
 function handoffAct(pk, d){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
+  // t/s = byte copies of the card's title/summary for the act's field tags (scope is
+  // presence); `title` is display only and falls back to d, so it can't serve as the copy
   const rec = { v: 1, at: Date.now(), coord: KIND + ":" + pk + ":" + d,
                 e: ev.id, p: ev.pubkey, content: ev.content,
+                t: tag(ev,"title") || "", s: tag(ev,"summary") || "",
                 title: tag(ev,"title") || d };
   try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}
   location.href = "add.html?act=1";
