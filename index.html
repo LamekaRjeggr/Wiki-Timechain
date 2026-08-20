@@ -1198,6 +1198,21 @@ function forkOf(ev){
   const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
   return a ? (a[1].split(":")[2] || "") : "";
 }
+// A fork's clean text: deletions dropped, insertions kept — the newer document it asserts.
+const cleanOf = s => (s || "").replace(/\{-[^]*?-\}/g, "").replace(/\{\+([^]*?)\+\}/g, "$1");
+// Taken, derived, never declared: a fork is TAKEN when its parent's current card reads,
+// byte for byte, as the fork's clean text (NIP-DRAFT "Taking a revision"). The words
+// agreeing is the whole test — no act, no tag, no announcement. Returns the parent's
+// pubkey so the caller knows whose card carries the credit. A taken fork renders
+// nowhere; the parent's credit line is the reader's route back to it. Note this compares
+// two cards on display — the fork's `e` id stays undereferenced.
+function takenOf(ev, d){
+  const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+  const ppk = a ? (a[1] || "").split(":")[1] : "";
+  if (!ppk || ppk === ev.pubkey) return null;
+  const cur = events.get(ppk + ":" + d);
+  return (cur && cur.content === cleanOf(ev.content)) ? ppk : null;
+}
 function diffBar(ev, d){
   if (!hasMarks(ev)) return "";
   const off = plainCards.has(d), f = forkOf(ev);
@@ -1721,7 +1736,11 @@ function entriesOf(f){
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
   const out = [];
-  for (const [d, all] of byD){
+  for (const [d, all0] of byD){
+    // taken forks leave the pool before any shelving — assimilated: their words are the
+    // parent's words now, and the parent card carries the credit instead.
+    const taken = all0.filter(ev => takenOf(ev, d));
+    const all   = all0.filter(ev => !taken.includes(ev));
     const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
     // the endorsed lens overrides the fold — but only a CONTENT-live act moves a card onto
     // the page (draft NIP: only the content copy moves documents; title/summary is voice)
@@ -1729,7 +1748,7 @@ function entriesOf(f){
       const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); }).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
-    out.push({ d, evs, prop, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
+    out.push({ d, evs, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
                title: tag(head,"title") || d, contested: evs.length > 1 });
   }
   return out.sort(byWhen);
@@ -2147,6 +2166,11 @@ function renderTimeline(entries){
   };
   // a proposed card is the SAME card — same tab, same body, same stance row. What differs is
   // where it sits (inset, dashed) and that it says so.
+  // the inbound credit: this card's text absorbed a fork. Named from the fork's own key
+  // (the editor); the line is the reader's only route to the fork — it renders nowhere
+  // else. The credit is the point of the rule (NIP-DRAFT "Taking a revision").
+  const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
+    .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
   const propCard = (ev, d) =>
     `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
@@ -2205,7 +2229,7 @@ function renderTimeline(entries){
           `<div class="vcard${lens(ev)}${alens(ev)}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + cardBody(ev, e.d) + lensNote(ev) +
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + lensNote(ev) +
           (beyond(ev, e.d) ? rctRow(ev, e.d) + marginBlock(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
@@ -2217,7 +2241,7 @@ function renderTimeline(entries){
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev) + cardBody(ev, e.d) + lensNote(ev) +
+        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + lensNote(ev) +
         (beyond(ev, e.d) ? rctRow(ev, e.d) + `</div>` + marginBlock(ev, e.d) : `</div>`) +
         propHtml + `</div>`;
     }

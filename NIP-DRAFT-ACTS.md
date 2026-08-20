@@ -56,21 +56,21 @@ meaning: this endorsement replaces that one in the signer's current position.
 
 #### Taking a revision
 
-When the endorsed card is a fork of the endorser's own card — someone correcting their
-record — the endorsement is how the correction is taken, and no card move is needed
-beyond the obvious one. The owner replaces their own card with the corrected text in
-clean words, an ordinary replacement under their own `d`, and endorses the fork's exact
-version. Credit routes on the act's `p` tag.
+**Taking a revision requires no act.** A fork is taken when the owner's card comes to
+read as the fork's newer document, byte for byte; the words agreeing is the whole
+evidence, and credit routes on the fork's own `p` tag. The rule belongs to forks and is
+specified there, in the cards NIP under *Taking a revision*.
 
-Nothing new appears on the timeline. **The argument is archived in the act, not pasted
-into the record:** the act's byte copy preserves the fork's diff marks, and the card
-carries the result without them. A reader derives that the suggestion was taken from
-those two facts together — the owner endorsed that version, and the owner's card now
-reads as that version's newer document.
+An endorsement of a fork remains available and is ordinary voice — the endorser backs
+that version. It is not what takes the revision, and a client MUST NOT require one before
+treating a matching fork as taken. Waiting on a ceremony leaves the absorbed fork on the
+page saying what the card it corrected already says.
 
-Do not instead carry the fork's content verbatim into the card. It is byte-exact and so
-drags the marks along, and marks on a card with no `fork` marker render as nothing at
-all: the correction becomes unreadable at the very moment it is accepted.
+The owner replaces their own card with the corrected text in clean words, an ordinary
+replacement under their own `d`. Do not instead carry the fork's content verbatim. It is
+byte-exact and so drags the diff marks along, and marks on a card with no `fork` marker
+render as nothing at all: the correction becomes unreadable at the very moment it is
+accepted.
 
 ### Revoke
 

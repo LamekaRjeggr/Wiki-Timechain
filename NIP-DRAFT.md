@@ -178,8 +178,9 @@ claim, and what it adds rides along.
 **This is the only way to correct another key's card.** A rival version with no `fork`
 marker leaves a reader no way to tell which version it answers, and a `fork` under a new
 `d` puts a second card on the record for one event. Neither the parent nor the fork
-yields: nothing is retracted, and the parent's key remains the only one that can replace
-it.
+yields on publication: nothing is retracted, and the parent's key remains the only one
+that can replace it. A fork stops standing only when the parent's own words come to match
+it — see *Taking a revision*.
 
 Because it can, a fork taking its parent's `d` **SHOULD** carry the marks described
 below. The parent may be replaced at any time — that is what holding the address means —
@@ -188,8 +189,13 @@ so what it answers is carried rather than linked. An unmarked fork stacked on a 
 parent can only name a version no longer on display.
 
 **The `e` id is a commitment in a fork exactly as in an adoption.** A client MUST NOT
-dereference it, MUST NOT compare the fork against the parent's current version, and MUST
-NOT derive a "parent has changed" state. What a fork can show of its parent, it carries.
+dereference it and MUST NOT derive a "parent has changed" state from it. What a fork can
+show of its parent, it carries.
+
+One comparison is permitted and no other: a fork sharing its parent's `d` MAY have its
+newer document compared, byte for byte, against the parent's current version — see
+*Taking a revision*. That comparison reads the fork's own bytes against a card already on
+display, and dereferences nothing.
 
 A fork MUST NOT take the parent's `d` under the **parent's own** key. Same key, same `d`
 is replacement per [NIP-01](01.md) — the owner's affordance, and the one act that
@@ -203,6 +209,34 @@ A marked card asserts two documents, and both MUST be recoverable from it: strip
 deletions and unwrapping the insertions yields the newer document exactly, and the
 converse yields the older. A publisher SHOULD verify a marked card by performing both
 reconstructions rather than by reading it.
+
+### Taking a revision
+
+A fork's **newer document** is its reconstruction if it carries marks, and its `content`
+as published if it does not.
+
+A fork is **taken** when the parent's current `content` is byte for byte that newer
+document. Nothing else is required. The words agreeing is the whole evidence, and it is
+evidence anyone can check from the two events alone — no act, no tag, no announcement.
+The owner takes a revision the obvious way: by replacing their own card with the
+corrected text in clean words, an ordinary replacement under their own `d`.
+
+A taken fork MUST NOT hold a slot of its own in the entry. It is the redundant one — its
+words are now the parent's words — and it is what gets out of the reader's way. Where it
+goes instead is the client's choice: behind the parent, or nowhere but a mark on the
+parent saying this card has been revised. Either way the parent MUST credit the fork's
+author, named from the fork's `p` tag or its pubkey.
+
+Out of the way is not deleted. The fork stands as its own event, addressable and
+reachable, and the credit is the reader's route to it. **The credit is the point of the
+rule.** A fork left in the reading line after its text has been taken is noise, saying
+what the card it corrected already says; getting it out of the way without naming who
+wrote it is worse, because it hides who caught the error.
+
+Byte for byte means byte for byte: no normalization, no trimming. A parent that took the
+substance but rewrote a word has not taken that fork, and the fork stands. The comparison
+is over `content` only — a fork's other fields are its own card's words, and they go with
+it when it collapses.
 
 ## Adoption
 
@@ -304,7 +338,9 @@ whose results MUST be re-checked against the gate.
   is a key of pubkey and `d`.
 - Cards from **different** pubkeys sharing a `d` MUST NOT be collapsed. They are rival
   versions of one entry and a client SHOULD present them as such rather than choosing
-  between them silently. When such a card carries a `fork` marker, a client SHOULD show
+  between them silently. The one exception is a **taken** fork — one whose newer document
+  is byte for byte the parent's current `content` — which MUST NOT be shown as a rival and
+  whose author MUST be credited on the parent's card (see *Taking a revision*). When such a card carries a `fork` marker, a client SHOULD show
   what it answers **from the fork's own marks**, not by naming the `e` id — an id is not
   an answer a reader can read, and it MUST NOT be dereferenced. An unmarked fork has
   nothing to show, and a client SHOULD say only that the card is a fork.
