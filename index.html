@@ -2086,7 +2086,7 @@ function renderTimeline(entries){
     // a signer shows the button; so does a saved add.html session (bunker) or a cached
     // pubkey — someone with an identity but no extension gets the handoff (➔ = you leave).
     // A plain reader gets none: the page stays read-only for them, same rule as compose.
-    const canAct = hasSigner || myPk || savedSignin();
+    const canAct = hasSigner || myPk;
     const btn = !canAct ? "" : mineHere
       ? `<button class="abtn mine" type="button" disabled>✓ accepted</button>`
       : `<button class="abtn" type="button" data-pk="${esc(ev.pubkey)}" data-d="${esc(d)}">` +
@@ -2790,10 +2790,12 @@ let hasSigner = signerReady();
 if (!hasSigner) [400, 1500].forEach(ms => setTimeout(() => {
   if (!hasSigner && signerReady()){ hasSigner = true; scheduleRender(); }
 }, ms));
-// the extension's pubkey, remembered across loads so .mine and the compose gate are right
-// on arrival — asking for it up front would fire a permission prompt at a reader
+// my pubkey, remembered across loads so .mine and the compose gate are right on arrival —
+// asking for it up front would fire a permission prompt at a reader. Two writers, one
+// truth: wtc:pk (a NIP-07 sign here) or the pk add.html stamps on wtc:signin (bunker too)
 const PK_KEY = "wtc:pk";
-myPk = localStorage.getItem(PK_KEY) || null;
+try { myPk = localStorage.getItem(PK_KEY) ||
+             (JSON.parse(localStorage.getItem("wtc:signin") || "0") || {}).pk || null; } catch {}
 
 // honest tally text for one published event id — rendered by marginBlock
 function tallyHtml(id, err){
@@ -3377,11 +3379,6 @@ function handoffAct(pk, d, w){
   try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}
   location.href = "add.html?act=1";
 }
-// a saved add.html session means this visitor has an identity a handoff can sign with
-function savedSignin(){
-  try { return !!localStorage.getItem("wtc:signin"); } catch { return false; }
-}
-
 // test hook — headless harness only, no runtime consumer
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,

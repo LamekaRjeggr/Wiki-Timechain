@@ -703,7 +703,7 @@ async function useNip07(quiet){
   if (!quiet) signMsg("waiting for the extension…");
   try {
     const pk = await window.nostr.getPublicKey();
-    remember({ via:"extension" });
+    remember({ via:"extension", pk });
     setSigner({ via:"extension", pubkey: pk, sign: t => window.nostr.signEvent(t) });
   } catch(e){ if (!quiet) signMsg(msgOf(e), "bad"); }
 }
@@ -733,7 +733,7 @@ async function connectBunker(uri, clientKey, quiet){
     $("bunker-uri").value = "";
     // Reusing the same client key is what makes this silent next time — a fresh one would
     // re-prompt your signer for approval on every page load.
-    remember({ via:"bunker", uri, ck: bytesToHex(clientKey) });
+    remember({ via:"bunker", uri, ck: bytesToHex(clientKey), pk });
     setSigner({ via:"bunker", pubkey: pk, sign: t => b.signEvent(t) });
   } catch(e){ say(msgOf(e), "bad"); }
 }
