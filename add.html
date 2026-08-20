@@ -394,7 +394,7 @@
   </section>
 
   <section id="sec-act" style="display:none">
-    <h2><i>2</i>the endorsement</h2>
+    <h2><i>2</i>the acceptance</h2>
     <p class="note" id="act-chip"></p>
     <pre class="json" id="act-text" style="display:none"></pre>
   </section>
@@ -524,7 +524,7 @@ const RELAYS = [
   "wss://nostr.mom"
 ];
 const KIND   = 30828;
-const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 endorse handoff
+const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 accept handoff
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
 // The spec's namespaces.
 const NS_COLL = "timeline.collection";
@@ -1562,10 +1562,10 @@ $("b-pub").addEventListener("click", publish);
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
 
-// ?act=1: an endorsement carried from the viewer (no NIP-07 there) — kind 8828, the act
+// ?act=1: an acceptance carried from the viewer (no NIP-07 there) — kind 8828, the act
 // of standing behind ONE exact version. Consume-once like wtc:draft. The exact version
 // travels in the record — id and byte-exact content — so a replacement racing the hop
-// cannot swap what gets endorsed. The coord is checked against the writer-side rule
+// cannot swap what gets accepted. The coord is checked against the writer-side rule
 // (draft acts NIP): parse <kind>:<64-hex>:<d> and refuse a p that mismatches it.
 const priorActs = [];            // acts already on the coord — mine feeds the supersede pointer
 let actSent = false;
@@ -1624,7 +1624,7 @@ function reviseMode(){
   $("card-note").textContent = "The card you are revising, loaded as it stands. Mark up what changed.";
 }
 
-// ── act mode: the endorse handoff's one screen — sign in, see what you're signing, sign ──
+// ── act mode: the accept handoff's one screen — sign in, see what you're signing, sign ──
 function actMode(){
   $("mine-row").style.display = "none";
   $("sec-card").style.display = "none";
@@ -1632,7 +1632,7 @@ function actMode(){
   $("fork-wake").style.display = "none";
   $("sec-preview").style.display = "none";
   $("sec-act").style.display = "";
-  document.querySelector("header h1").textContent = "Endorse a card";
+  document.querySelector("header h1").textContent = "Accept a card";
   document.querySelector("header .sub").innerHTML =
     'A kind-8828 act: your signature over the exact text of the version you chose — ' +
     'a byte copy that stands as a record even if the card is later replaced.';
@@ -1648,7 +1648,7 @@ function actMode(){
       [qact.t && "title: " + qact.t, qact.s && "summary: " + qact.s, qact.content]
         .filter(Boolean).join("\n\n");
   });
-  $("b-pub").textContent = "sign & endorse";
+  $("b-pub").textContent = "sign & accept";
   askActs(); setTimeout(askActs, 3000);   // sockets still connecting get the second ask
   // same signpost move as handoffMode: you're here because the viewer had no extension,
   // so hand "start here" to the rung that can sign for someone whose key lives elsewhere
@@ -1661,7 +1661,7 @@ function actMode(){
     bunk.prepend(ext.querySelector(".kick"));
   }
 }
-// prior endorsements of this coord — the newest of MINE gets the supersede pointer
+// prior acceptances of this coord — the newest of MINE gets the supersede pointer
 function askActs(){
   if (!qact) return;
   const msg = JSON.stringify(["REQ", "acts", { kinds: [ACT_KIND], "#a": [qact.coord] }]);
@@ -1709,7 +1709,7 @@ async function publishAct(){
   tallies.set(signed.id, { ok: 0, no: 0, why: "" });
   const out = JSON.stringify(["EVENT", signed]);
   open.forEach(ws => { try { ws.send(out); } catch {} });
-  priorActs.push(signed);                 // an immediate re-endorse supersedes THIS one
+  priorActs.push(signed);                 // an immediate re-accept supersedes THIS one
   $("pub-json").style.display = "";
   $("pub-json").textContent = JSON.stringify(signed, null, 2);
   pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);

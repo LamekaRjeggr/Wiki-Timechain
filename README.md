@@ -20,7 +20,7 @@ One timeline entry is one **kind-30828** addressable event
 - Same `d`, same author — edit. Same `d`, different author — both render.
 
 Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
-Endorsements (kind **8828**, draft): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
+Acceptances (kind **8828**, draft): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
 
 ## Run it yourself
 

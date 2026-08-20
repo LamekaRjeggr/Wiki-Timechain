@@ -174,7 +174,7 @@
   .rchip.on,.lchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
   .rchip .n,.lchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
   .rchip .oc{color:var(--rail);margin-right:5px}   /* ⌂ is chrome — the app's amber, never a timeline hue */
-  /* the endorsed lens picker: one chip per key holding live acts here. ✓ is the mark of an
+  /* the accepted lens picker: one chip per key holding live acts here. ✓ is the mark of an
      act (as ⌂ is of curation) — shape carries it, the amber is chrome */
   .lensrow{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:center;
     align-items:center;gap:5px;margin-top:6px}
@@ -447,7 +447,7 @@
   .mtl .foldrow .go{color:var(--accent);margin-left:7px}
   /* the roster lens: everything not by the lit author steps back. Lightness only. */
   .mtl .lensoff{opacity:.32}
-  /* the endorsed lens: lit = the key stands behind THIS exact version (border + the ✓ note,
+  /* the accepted lens: lit = the key stands behind THIS exact version (border + the ✓ note,
      never hue alone); lapsed = they signed an earlier form — the note carries their copy,
      because the act's bytes are the only place that text still exists after replacement */
   .mtl .lenson{border-color:var(--rail-dim)}
@@ -487,9 +487,9 @@
   .mtl .rmark{color:var(--rail)}
   /* signed-time on an act: publish clock, NOT event_date; word "signed" carries it */
   .mtl .rsigned{color:var(--faint)}
-  /* card-tab endorsement badge: amber + ✓ shape (two channels, colorblind-safe) */
+  /* card-tab acceptance badge: amber + ✓ shape (two channels, colorblind-safe) */
   .mtl .abadge{color:var(--rail);margin-left:8px;white-space:nowrap}
-  /* the endorse button: tapbtn look, own class so the tap handler never claims it */
+  /* the accept button: tapbtn look, own class so the tap handler never claims it */
   .mtl .abtn{font-family:var(--mono);font-size:11px;line-height:1;cursor:pointer;height:20px;
     border-radius:6px;background:var(--panel-2);border:1px solid var(--border);
     color:var(--dim);padding:0 8px;transition:color .12s,border-color .12s}
@@ -920,7 +920,7 @@ const RELAYS = [
 const KIND = 30828;
 const COMMENT_KIND = 1111;      // NIP-22 comments — marginalia scoped to one card version
 const REACTION_KIND = 7;        // NIP-25 reactions — charge on cards + comments; the tap writes them
-const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, endorse/revoke
+const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, accept/revoke
 const MAXCMT = 420;             // a comment is a margin note, not an essay — one number to move
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
 const MARGIN = 2;               // deadband on the plurality lead — inside it a collection is co-held, not flipped
@@ -938,7 +938,7 @@ const rctA     = new Set();     // card coords whose reactions we've asked for (
 const rctE     = new Set();     // comment ids whose reactions we've asked for (#e) — grow-only
 const acts     = new Map();     // act id → kind-8828 event; derived at render, nothing replaces
 const actE     = new Set();     // act ids whose revokes we've asked for (#e) — grow-only
-const actErr   = new Map();     // card coord → endorse-failure note, cleared on retry
+const actErr   = new Map();     // card coord → accept-failure note, cleared on retry
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
 // The spine always shows ONE timeline (a collection) — never a merge. The chips don't
@@ -983,7 +983,7 @@ const showFold     = new Set();          // slugs whose "proposed" fold the visi
 // the roster lens — whose cards to pick out. Transient like the two sets above and NOT in the
 // URL: it's a way of looking, not a view worth 64 hex characters of link.
 let lensPk = null;
-// the endorsed lens — read the collection as the versions ONE key's live acts stand behind.
+// the accepted lens — read the collection as the versions ONE key's live acts stand behind.
 // Same nature as the roster lens (transient, not in the URL), and exclusive with it: two
 // dims at once would read as a broken page, not two questions.
 let actLensPk = null;
@@ -1521,7 +1521,7 @@ function rctFilters(){
   const f = [];
   if (rctA.size) f.push({ kinds:[REACTION_KIND], "#a":[...rctA] });
   if (rctE.size) f.push({ kinds:[REACTION_KIND], "#e":[...rctE] });
-  // acts ride the same sub. #a fetches endorsements collection-wide (rctA is already the
+  // acts ride the same sub. #a fetches acceptances collection-wide (rctA is already the
   // collection's coords); #e over KNOWN act ids fetches revokes, which carry no `a` at all —
   // an act arriving grows actE, so the sub re-asks and its revokes follow.
   if (rctA.size) f.push({ kinds:[ACT_KIND], "#a":[...rctA] });
@@ -1537,15 +1537,15 @@ function ingestAct(ev){
   if (!actE.has(ev.id)){ actE.add(ev.id); scheduleReactionFetch(); }   // pull its revokes
   scheduleRender();
 }
-// Effective endorsements for one card address: per key, the newest endorsement no
+// Effective acceptances for one card address: per key, the newest acceptance no
 // same-key act has revoked or superseded. The same-key rule is enforced HERE, reader-side
 // — a revoke/supersede pointing at another key's act is simply ignored. An act whose
 // revoke target we don't hold yet stays effective (orphan tolerance: over-counting,
 // never corruption).
 // The `e` id is the truth and the `a` coordinate an index hint (draft NIP, Validation 4):
 // when the act's bare-e names the version we hold at this coord, it belongs here even if
-// its `a` is malformed — a hand-typed coordinate must not silently hide a real endorsement.
-function endorsements(coord, heldId){
+// its `a` is malformed — a hand-typed coordinate must not silently hide a real acceptance.
+function acceptances(coord, heldId){
   const dead = new Set();
   for (const a of acts.values())
     for (const t of a.tags)
@@ -1564,9 +1564,9 @@ function endorsements(coord, heldId){
   }
   return [...byPk.values()].sort((x,y) => x.created_at - y.created_at);
 }
-// FIELD SCOPE (draft NIP, Endorse). An act byte-copies each field it endorses the way the
+// FIELD SCOPE (draft NIP, Accept). An act byte-copies each field it accepts the way the
 // card carries it: title/summary as tags, content in the act's content. Presence of a copy
-// = in scope; empty or absent = out of scope (a card's absent field has nothing to endorse,
+// = in scope; empty or absent = out of scope (a card's absent field has nothing to accept,
 // so empty is never ambiguous). A legacy act — content copy, no field tags — reads as
 // content-scope. Consent is PER FIELD and bytes decide it: a copy grants consent exactly
 // while it byte-equals that field on the card now at the coordinate. The `e` id records
@@ -1583,27 +1583,27 @@ function scopeOf(a){
 }
 // Only the content copy moves documents (draft NIP, Derivation): adoption, the lens's fold
 // override — anything that gives a card a place — requires content in scope and LIVE.
-// Title/summary endorsement is voice: it counts and renders, never carries custody.
+// Title/summary acceptance is voice: it counts and renders, never carries custody.
 const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
 // Live consent with custody weight: keys whose content copy is live on this card.
 function consentOn(ev, d){
   const coord = KIND + ":" + ev.pubkey + ":" + d;
-  return endorsements(coord, ev.id).filter(a => actMoves(a, ev)).map(a => a.pubkey);
+  return acceptances(coord, ev.id).filter(a => actMoves(a, ev)).map(a => a.pubkey);
 }
-// the endorsed lens, derived: every key holding a live endorsement on a card of this
+// the accepted lens, derived: every key holding a live acceptance on a card of this
 // collection, with its count. Any such key IS a lens — no role, no permission; reading
 // one is following that key's editorial judgment, rebuilt purely from its signatures.
 function actLenses(c){
   const n = new Map();
   for (const ev of matching("c:" + c))
-    for (const a of endorsements(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id))
+    for (const a of acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id))
       n.set(a.pubkey, (n.get(a.pubkey) || 0) + 1);
   return n;
 }
 // the lens key's current act on one card — whatever version it names
 function lensActOn(ev){
   if (!actLensPk) return null;
-  return endorsements(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
+  return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
     .find(a => a.pubkey === actLensPk) || null;
 }
 function scheduleReactionFetch(){
@@ -1684,7 +1684,7 @@ function authorityOf(c){
       if (adopted.has(coord)) continue;
       const byPk = reactions.get(coord);
       // Two signals carry an adoption, read side by side during the acts transition:
-      // the curator's kind-7 `+`, and a curator's LIVE endorsement (kind 8828) of the
+      // the curator's kind-7 `+`, and a curator's LIVE acceptance (kind 8828) of the
       // version now held at the coord — consent that lapses if the card is replaced,
       // which is the stronger claim and the one the acts NIP will leave standing.
       const consent = new Set(consentOn(ev, tag(ev,"d")));
@@ -1709,12 +1709,20 @@ function authorityOf(c){
 }
 // three shelves. 0 = on the spine (a curator's own card, or one they adopted — adoption makes
 // a card indistinguishable from a founding one, which is what accepting means). 1 = proposed,
-// from an author who already stands here, so they've earned a hearing but not a slot.
+// from an author who already stands here AND at least one key's acceptance has a field-copy
+// live on this exact version — standing earns a hearing, acceptance is what puts it in the
+// line. A card no one accepts is off the page, however many cards its author holds.
 // 2 = behind the fold. Never deleted, only resisted.
+function anyAcceptance(ev){
+  return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).some(a => {
+    const sc = scopeOf(a);
+    return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
+  });
+}
 function tierOf(ev, A){
   if (!A || A.origins.has(ev.pubkey)) return 0;
   if (A.adopted.has(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))) return 0;
-  return A.stand.has(ev.pubkey) ? 1 : 2;
+  return A.stand.has(ev.pubkey) && anyAcceptance(ev) ? 1 : 2;
 }
 // what the fold is holding back — the count IS the information
 function foldOf(c){
@@ -1742,7 +1750,7 @@ function entriesOf(f){
     const taken = all0.filter(ev => takenOf(ev, d));
     const all   = all0.filter(ev => !taken.includes(ev));
     const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
-    // the endorsed lens overrides the fold — but only a CONTENT-live act moves a card onto
+    // the accepted lens overrides the fold — but only a CONTENT-live act moves a card onto
     // the page (draft NIP: only the content copy moves documents; title/summary is voice)
     const prop = all.filter(ev => { const t = tierOf(ev, A); if (!t) return false;
       const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); }).sort(ord);
@@ -1804,11 +1812,11 @@ function renderRoster(){
     ).join("") +
     `<div class="rnote">${A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
     ` · every author keeps their own cards</div>` : "") +
-    // the endorsed lens row: only keys with live acts here appear, count = cards backed
-    (L.size ? `<div class="lensrow"><span class="lenslab">endorsed lens</span>` +
+    // the accepted lens row: only keys with live acts here appear, count = cards backed
+    (L.size ? `<div class="lensrow"><span class="lenslab">accepted lens</span>` +
       [...L.keys()].sort((a,b) => (L.get(b) - L.get(a)) || (a < b ? -1 : 1)).map(pk =>
         `<button class="lchip${pk === actLensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
-        ` title="show the collection as the versions this key endorsed">` +
+        ` title="show the collection as the versions this key accepted">` +
         `<span class="ck">✓</span>${authorLabel(pk)}<span class="n">${L.get(pk)}</span></button>`
       ).join("") +
       (actLensPk ? `<span class="rnote">what ${authorLabel(actLensPk)} stands behind — everything else steps back</span>` : "") +
@@ -1931,9 +1939,9 @@ function bindTaps(){                                      // gap expanders + com
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b.dataset.g, b); return; }
-    const ab = e.target.closest(".abtn");                 // endorse (kind 8828)
+    const ab = e.target.closest(".abtn");                 // accept (kind 8828)
     if (ab && !ab.disabled){
-      hasSigner ? endorseCard(ab.dataset.pk, ab.dataset.d, ab)
+      hasSigner ? acceptCard(ab.dataset.pk, ab.dataset.d, ab)
                 : handoffAct(ab.dataset.pk, ab.dataset.d);
       return;
     }
@@ -2050,11 +2058,11 @@ function renderTimeline(entries){
   const signedAt = a => new Date(a.created_at * 1000).toISOString().slice(0,16).replace("T"," ");
   // the acts row: who stands behind this card version, per the draft NIP's replica
   // check. Words carry the verdict (verified / earlier version / mismatch), never hue
-  // alone. The endorse button signs directly with NIP-07, or hands off to add.html —
+  // alone. The accept button signs directly with NIP-07, or hands off to add.html —
   // where the bunker/nsec ladder lives — when there is no extension (handoffAct).
   const actRow = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
-    const es = endorsements(coord, ev.id);
+    const es = acceptances(coord, ev.id);
     // per-field verdict against the card ON SCREEN — bytes, not the e pin. A field that
     // still matches is live even if the act pinned an earlier version; the pin is named
     // separately so what was actually read stays visible. Words carry it, never hue alone.
@@ -2067,7 +2075,7 @@ function renderTimeline(entries){
       return words.join(" · ") + (et && et[1] === ev.id ? "" : " · pinned earlier");
     };
     // my current act decides the button: every field I signed still live on this exact
-    // version = lit and done; anything less = "endorse this version" (the click supersedes)
+    // version = lit and done; anything less = "accept this version" (the click supersedes)
     const mine = myPk && es.find(a => a.pubkey === myPk);
     const met = mine && mine.tags.find(t => t[0] === "e" && !t[3]);
     const msc = mine ? scopeOf(mine) : {};
@@ -2078,13 +2086,13 @@ function renderTimeline(entries){
     // A plain reader gets none: the page stays read-only for them, same rule as compose.
     const canAct = hasSigner || myPk || savedSignin();
     const btn = !canAct ? "" : mineHere
-      ? `<button class="abtn mine" type="button" disabled>✓ endorsed</button>`
+      ? `<button class="abtn mine" type="button" disabled>✓ accepted</button>`
       : `<button class="abtn" type="button" data-pk="${esc(ev.pubkey)}" data-d="${esc(d)}">` +
-        `${mine ? "endorse this version" : "endorse"}${hasSigner ? "" : " ➔"}</button>`;
+        `${mine ? "accept this version" : "accept"}${hasSigner ? "" : " ➔"}</button>`;
     const err = actErr.get(coord);
     if (!es.length && !btn) return "";
     return `<div class="mrct macts">` +
-      (es.length ? `<span class="rg">endorsed</span>` : "") +
+      (es.length ? `<span class="rg">accepted</span>` : "") +
       es.map(a => `<span class="ract"><span class="rmark">${mark(a)}</span> ${authorLink(a.pubkey)}` +
         ` <span class="rsigned">· signed ${signedAt(a)}</span></span>`).join("") +
       btn + (err ? `<span class="aerr">${esc(err)}</span>` : "") +
@@ -2094,11 +2102,11 @@ function renderTimeline(entries){
   // the acts row carries the per-field split
   const actBadge = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
-    const n = endorsements(coord, ev.id).filter(a => {
+    const n = acceptances(coord, ev.id).filter(a => {
       const sc = scopeOf(a);
       return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
     }).length;
-    return n ? `<span class="abadge" title="keys with at least one field-copy live on this card">✓ ${n} endorsed</span>` : "";
+    return n ? `<span class="abadge" title="keys with at least one field-copy live on this card">✓ ${n} accepted</span>` : "";
   };
   // the card's stance row — rendered INSIDE the card box, at its bottom
   const rctRow = (ev, d) => {
@@ -2132,9 +2140,9 @@ function renderTimeline(entries){
   // the roster lens steps every other author's card back — lightness, so it survives all three
   // fields and reads for a colourblind eye. It dims; it never removes.
   const lens = ev => (lensPk && ev.pubkey !== lensPk) ? " lensoff" : "";
-  // the endorsed lens, per card: lit border = every field the key's act copied is still
+  // the accepted lens, per card: lit border = every field the key's act copied is still
   // live on this card, bytes deciding; part lapsed = the note carries the per-field split;
-  // unendorsed steps back like the roster lens
+  // unaccepted steps back like the roster lens
   const isCurrent = (a, ev) => {
     const sc = scopeOf(a);
     const fs = Object.keys(sc);
@@ -2147,7 +2155,7 @@ function renderTimeline(entries){
   };
   // words under the card carry the lens verdict, scope said out loud ("title only" is a
   // different claim from "this card"); each lapsed field's byte copy is shown — after a
-  // replacement, that copy is the only place the endorsed text still exists
+  // replacement, that copy is the only place the accepted text still exists
   const lensNote = ev => {
     const a = lensActOn(ev);
     if (!a) return "";
@@ -3284,11 +3292,11 @@ function handoffDraft(){
   location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
 }
 
-// ── the endorse act (kind 8828): stand behind THIS exact version of a card.
+// ── the accept act (kind 8828): stand behind THIS exact version of a card.
 //    content is a byte-exact replica of it — the signature is over the text itself —
-//    and a prior current endorsement of the same coord gets a supersede pointer, so
+//    and a prior current acceptance of the same coord gets a supersede pointer, so
 //    switching versions is one click and history keeps both ──
-async function endorseCard(pk, d, btn){
+async function acceptCard(pk, d, btn){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
   const coord = KIND + ":" + pk + ":" + d;
@@ -3298,10 +3306,10 @@ async function endorseCard(pk, d, btn){
     const s = await getSigner();
     const tags = [["a", coord], ["e", ev.id], ["p", ev.pubkey]];
     // field scope: copy each field the card carries, the way it carries it — presence =
-    // scope. The button endorses the whole card; narrower scopes are the lab's chips still.
+    // scope. The button accepts the whole card; narrower scopes are the lab's chips still.
     for (const f of ["title", "summary"])
       if (tag(ev, f)) tags.push([f, tag(ev, f)]);
-    const prior = endorsements(coord, ev.id).find(a => a.pubkey === s.pubkey);
+    const prior = acceptances(coord, ev.id).find(a => a.pubkey === s.pubkey);
     if (prior) tags.push(["e", prior.id, "", "supersede"]);
     // strictly newer than the superseded act, so newest-per-key derivation can't tie
     const act = await s.sign({
@@ -3321,7 +3329,7 @@ async function endorseCard(pk, d, btn){
 
 // no extension: the act crosses to add.html, whose bunker/nsec ladder takes over. The
 // EXACT version travels — id and byte-exact content — so a replacement racing the hop
-// cannot swap what gets endorsed. Consume-once on the other side, like wtc:draft.
+// cannot swap what gets accepted. Consume-once on the other side, like wtc:draft.
 function handoffAct(pk, d){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
