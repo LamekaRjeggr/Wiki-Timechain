@@ -1939,10 +1939,12 @@ function bindTaps(){                                      // gap expanders + com
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
     const b = e.target.closest(".tapbtn");
     if (b && !b.disabled){ tapTarget(b.dataset.t, b.dataset.e, b.dataset.p, b.dataset.k, b.dataset.g, b); return; }
-    const ab = e.target.closest(".abtn");                 // accept (kind 8828)
+    const ab = e.target.closest(".abtn");                 // accept / withdraw (kind 8828)
     if (ab && !ab.disabled){
-      hasSigner ? acceptCard(ab.dataset.pk, ab.dataset.d, ab)
-                : handoffAct(ab.dataset.pk, ab.dataset.d);
+      const wpk = ab.dataset.wpk;
+      if (wpk) hasSigner ? withdrawCard(wpk, ab.dataset.d, ab) : handoffAct(wpk, ab.dataset.d, true);
+      else     hasSigner ? acceptCard(ab.dataset.pk, ab.dataset.d, ab)
+                         : handoffAct(ab.dataset.pk, ab.dataset.d);
       return;
     }
     const dm = e.target.closest(".dmk");
@@ -2089,13 +2091,17 @@ function renderTimeline(entries){
       ? `<button class="abtn mine" type="button" disabled>✓ accepted</button>`
       : `<button class="abtn" type="button" data-pk="${esc(ev.pubkey)}" data-d="${esc(d)}">` +
         `${mine ? "accept this version" : "accept"}${hasSigner ? "" : " ➔"}</button>`;
+    // the inverse: revoke my current act (draft NIP, Revoke) — backing nothing in its place
+    const wbtn = !canAct || !mine ? "" :
+      `<button class="abtn" type="button" data-wpk="${esc(ev.pubkey)}" data-d="${esc(d)}">` +
+      `withdraw${hasSigner ? "" : " ➔"}</button>`;
     const err = actErr.get(coord);
     if (!es.length && !btn) return "";
     return `<div class="mrct macts">` +
       (es.length ? `<span class="rg">accepted</span>` : "") +
       es.map(a => `<span class="ract"><span class="rmark">${mark(a)}</span> ${authorLink(a.pubkey)}` +
         ` <span class="rsigned">· signed ${signedAt(a)}</span></span>`).join("") +
-      btn + (err ? `<span class="aerr">${esc(err)}</span>` : "") +
+      btn + wbtn + (err ? `<span class="aerr">${esc(err)}</span>` : "") +
       `</div>`;
   };
   // glance cue on the card tab: ✓ + count of keys with at least one field-copy live here;
@@ -3327,16 +3333,45 @@ async function acceptCard(pk, d, btn){
   }
 }
 
+// ── withdraw (draft NIP, Revoke): revoke my current act on this coord, backing nothing
+//    in its place. The revoked act stays visible history — only the tally forgets it ──
+async function withdrawCard(pk, d, btn){
+  const ev = events.get(pk + ":" + d);
+  if (!ev) return;
+  const coord = KIND + ":" + pk + ":" + d;
+  if (btn) btn.disabled = true;
+  actErr.delete(coord);
+  try {
+    const s = await getSigner();
+    const mine = acceptances(coord, ev.id).find(a => a.pubkey === s.pubkey);
+    if (!mine) return;                                     // nothing of mine to withdraw
+    const act = await s.sign({
+      kind: ACT_KIND,
+      created_at: Math.max(Math.floor(Date.now() / 1000), mine.created_at + 1),
+      content: "",
+      tags: [["e", mine.id, "", "revoke"]]
+    });
+    rememberPk(act.pubkey);
+    ingestAct(act);
+    publish(act);
+  } catch {
+    actErr.set(coord, "signer declined — try again");
+    scheduleRender();
+  }
+}
+
 // no extension: the act crosses to add.html, whose bunker/nsec ladder takes over. The
 // EXACT version travels — id and byte-exact content — so a replacement racing the hop
 // cannot swap what gets accepted. Consume-once on the other side, like wtc:draft.
-function handoffAct(pk, d){
+// `w` = withdraw: add.html finds YOUR current act on the coord itself (it can't know
+// your key until you sign in there) and signs the revoke instead.
+function handoffAct(pk, d, w){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
   // t/s = byte copies of the card's title/summary for the act's field tags (scope is
   // presence); `title` is display only and falls back to d, so it can't serve as the copy
   const rec = { v: 1, at: Date.now(), coord: KIND + ":" + pk + ":" + d,
-                e: ev.id, p: ev.pubkey, content: ev.content,
+                e: ev.id, p: ev.pubkey, content: ev.content, w: w ? 1 : 0,
                 t: tag(ev,"title") || "", s: tag(ev,"summary") || "",
                 title: tag(ev,"title") || d };
   try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}

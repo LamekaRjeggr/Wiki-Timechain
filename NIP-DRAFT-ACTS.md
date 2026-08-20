@@ -39,7 +39,7 @@ content = copy of the accepted version's content          content in scope, else
   copy at all accepts nothing.
 - Copies are byte-exact — no normalization, no trimming. The copy is both the yardstick
   consent is measured against and the permanent record of what was signed.
-- **Fields are independent.** Endorsing one implies nothing about another; any
+- **Fields are independent.** Accepting one implies nothing about another; any
   permutation is a position. Where consensus stops on a card is itself a reading.
 - What the fields *mean* is the client's business. This NIP defines three slots that
   mirror the card's own fields, nothing more.

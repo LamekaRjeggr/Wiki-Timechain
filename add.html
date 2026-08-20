@@ -1632,15 +1632,18 @@ function actMode(){
   $("fork-wake").style.display = "none";
   $("sec-preview").style.display = "none";
   $("sec-act").style.display = "";
-  document.querySelector("header h1").textContent = "Accept a card";
-  document.querySelector("header .sub").innerHTML =
-    'A kind-8828 act: your signature over the exact text of the version you chose — ' +
-    'a byte copy that stands as a record even if the card is later replaced.';
+  document.querySelector("header h1").textContent = qact.w ? "Withdraw an acceptance" : "Accept a card";
+  document.querySelector("header .sub").innerHTML = qact.w
+    ? 'A kind-8828 revoke: withdraws your current acceptance, backing nothing in its ' +
+      'place. The revoked act stays visible history — only the tally forgets it.'
+    : 'A kind-8828 act: your signature over the exact text of the version you chose — ' +
+      'a byte copy that stands as a record even if the card is later replaced.';
   $("act-chip").innerHTML =
-    `endorsing <strong>${esc(qact.title || "")}</strong> by ` +
-    `<code>${esc(npub(qact.p).slice(0, 14))}…</code> — the exact version you saw on the ` +
-    `timeline. <a id="act-show" href="#">show the text you are signing</a>`;
-  $("act-show").addEventListener("click", e => {
+    `${qact.w ? "withdrawing your acceptance of" : "accepting"} <strong>${esc(qact.title || "")}</strong> by ` +
+    `<code>${esc(npub(qact.p).slice(0, 14))}…</code>` +
+    (qact.w ? "" :
+      ` — the exact version you saw on the timeline. <a id="act-show" href="#">show the text you are signing</a>`);
+  if (!qact.w) $("act-show").addEventListener("click", e => {
     e.preventDefault();
     $("act-text").style.display = "";
     // every byte copy the act will carry — title/summary tags plus the content
@@ -1648,7 +1651,7 @@ function actMode(){
       [qact.t && "title: " + qact.t, qact.s && "summary: " + qact.s, qact.content]
         .filter(Boolean).join("\n\n");
   });
-  $("b-pub").textContent = "sign & accept";
+  $("b-pub").textContent = qact.w ? "sign & withdraw" : "sign & accept";
   askActs(); setTimeout(askActs, 3000);   // sockets still connecting get the second ask
   // same signpost move as handoffMode: you're here because the viewer had no extension,
   // so hand "start here" to the rung that can sign for someone whose key lives elsewhere
@@ -1664,7 +1667,13 @@ function actMode(){
 // prior acceptances of this coord — the newest of MINE gets the supersede pointer
 function askActs(){
   if (!qact) return;
-  const msg = JSON.stringify(["REQ", "acts", { kinds: [ACT_KIND], "#a": [qact.coord] }]);
+  // #a fetches the acceptances; a standalone revoke carries NO `a`, so the second filter
+  // asks by the act ids already held — without it a revoked act looks current here and a
+  // withdraw would revoke a corpse (the viewer's actE set, in one-shot form)
+  const f = [{ kinds: [ACT_KIND], "#a": [qact.coord] }];
+  const ids = priorActs.map(a => a.id);
+  if (ids.length) f.push({ kinds: [ACT_KIND], "#e": ids });
+  const msg = JSON.stringify(["REQ", "acts", ...f]);
   sockets.forEach(ws => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} });
 }
 async function publishAct(){
@@ -1673,12 +1682,6 @@ async function publishAct(){
   pubMsg("signing…");
   let signed;
   try {
-    const tags = [["a", qact.coord], ["e", qact.e], ["p", qact.p]];
-    // field scope (draft NIP): copy each field the card carried, the way it carried it —
-    // presence = scope. t/s ride the handoff; an old record without them still signs a
-    // valid content-scope act.
-    if (qact.t) tags.push(["title", qact.t]);
-    if (qact.s) tags.push(["summary", qact.s]);
     // dead = acts a SAME-KEY act of mine already revoked or superseded (the reader-side
     // rule, applied here so the pointer never lands on a corpse)
     const dead = new Set();
@@ -1691,12 +1694,27 @@ async function publishAct(){
       .filter(a => a.kind === ACT_KIND && a.pubkey === signer.pubkey && !dead.has(a.id) &&
                    a.tags.some(t => t[0] === "a" && t[1] === qact.coord))
       .sort((x, y) => y.created_at - x.created_at)[0];
-    if (mine) tags.push(["e", mine.id, "", "supersede"]);
-    // strictly newer than the superseded act, so newest-per-key derivation can't tie
+    let tags, content;
+    if (qact.w){
+      // withdraw: revoke the current act, nothing in its place (draft NIP, Revoke)
+      if (!mine) throw new Error("no current acceptance of yours on this card — nothing to withdraw");
+      tags = [["e", mine.id, "", "revoke"]];
+      content = "";
+    } else {
+      tags = [["a", qact.coord], ["e", qact.e], ["p", qact.p]];
+      // field scope (draft NIP): copy each field the card carried, the way it carried it —
+      // presence = scope. t/s ride the handoff; an old record without them still signs a
+      // valid content-scope act.
+      if (qact.t) tags.push(["title", qact.t]);
+      if (qact.s) tags.push(["summary", qact.s]);
+      if (mine) tags.push(["e", mine.id, "", "supersede"]);
+      content = qact.content;
+    }
+    // strictly newer than the superseded/revoked act, so newest-per-key derivation can't tie
     signed = await signer.sign({
       kind: ACT_KIND,
       created_at: Math.max(Math.floor(Date.now() / 1000), (mine ? mine.created_at : 0) + 1),
-      content: qact.content,
+      content,
       tags
     });
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
