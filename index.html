@@ -602,6 +602,12 @@
   .draftcard .ded:focus{background:var(--rail-tint-2)}
   .draftcard .ded:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none;font-weight:400}
   .draftcard .cbody.ded{display:block}    /* editable bodies always render, whatever the depth floor */
+  /* the time slot in the tab: a UTC HH:MM typed after the committed day. min-width keeps the
+     empty placeholder tappable; warn is orange, never red/green, and the publish throw is
+     the words. */
+  .draftcard .dtim{font-family:var(--mono);font-size:11px;color:var(--dim);
+    min-width:34px;display:inline-block;margin-left:6px}
+  .draftcard .dtim.bad{color:var(--warn)}
   .draftcard .dline{display:block;font-size:12px;color:var(--warn);margin:4px 0}
   .draftcard .dline.block{color:var(--rail)}
   .draftcard .dline.hid{display:none}
@@ -2841,6 +2847,9 @@ function buildDraftTemplate(draft){
   const dchk = new Date(fullDate + "T00:00:00Z");
   if (isNaN(dchk) || dchk.toISOString().slice(0, 10) !== fullDate)
     throw new Error(`${draft.date} is not a real date`);
+  const wt = (draft.time || "").trim();
+  if (wt && !TIME_RE.test(wt))
+    throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour UTC`);
 
   // A coarse date is placed on day 01 and the precision recorded where the convention puts
   // it, in the content — unless the content already declares a date, which is never stomped.
@@ -2861,6 +2870,9 @@ function buildDraftTemplate(draft){
   if (title) tags.push(["title", title]);
   tags.push(["published_at", String(now)]);
   tags.push(["event_date", fullDate]);
+  // prec, not wdIn: a content line declaring a coarser date wins, and a time on a
+  // placeholder day would be a lie
+  if (wt && prec === "day") tags.push(["event_time", wt]);
   tags.push(["t", MARKER]);
   tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
   tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
@@ -2900,6 +2912,8 @@ const CAP_T = 50, CAP_S = 500;   // soft caps: the counter appears, typing is ne
 
 const draftDate = () => draft && draft.y
   ? draft.y + (draft.m ? "-" + draft.m + (draft.day ? "-" + draft.day : "") : "") : null;
+// the spec's whole time grammar: HH:MM or HH:MM:SS, 24-hour UTC — seconds only if typed
+const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
 
 function startDraft(){
   if (draft || !activeF) return;
@@ -2907,7 +2921,7 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", y:null, m:null, day:null, dsuf: mintSuffix(),
+  draft = { title:"", summary:"", content:"", time:"", y:null, m:null, day:null, dsuf: mintSuffix(),
             stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
   pickEnter("year");            // before render, so the spine renders the ghost, not a card
   render();
@@ -2936,7 +2950,8 @@ function draftPlaced(){
 function draftEntry(){
   const date = draftDate() || draft.seedYr;
   return { d: "__draft__", draft: true, evs: [], prop: [],
-           date, time: "", frac: yearFrac(date), title: draft.title, contested: false };
+           date, time: TIME_RE.test(draft.time) ? draft.time : "",
+           frac: yearFrac(date), title: draft.title, contested: false };
 }
 
 // the date tab shows the claim committed so far. It never has to speak mid-spin: the card
@@ -2955,6 +2970,9 @@ function draftNodeHtml(e, future){
     `<span class="dot${future ? " future" : ""}"></span>` +
     `<div class="card draftcard">` +
     `<div class="ctab"><span class="td dtab" role="button" title="pick the date on the drum">${esc(draftTabText())}</span>` +
+    // time rides the date, typed after it — the slot exists only once a full day is committed
+    (draft.day ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
+      ` spellcheck="false" title="UTC time, if known — HH:MM">${esc(draft.time)}</span>` : "") +
     `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
     `<button class="dx" type="button" title="discard this draft (Esc)">✕</button></div>` +
     ed("ded-t", "h4", "Title — the event, one line", draft.title) +
@@ -2985,6 +3003,9 @@ function draftRefresh(){
   line.textContent = col ? col.text : "";
   line.classList.toggle("hid", !col);
   line.classList.toggle("block", !!(col && col.block));
+  // a typed time is warned in place, never blocked while typing — the publish throw explains
+  const w = card.querySelector(".dtim");
+  if (w) w.classList.toggle("bad", !!draft.time && !TIME_RE.test(draft.time));
   const b = card.querySelector(".dpub");
   // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
   // checked outright or an untitled card would sail through.
@@ -2996,6 +3017,7 @@ areaEl.addEventListener("input", e => {
   if (!ed || !draft) return;
   const v = ed.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
   if      (ed.classList.contains("ded-t")) draft.title   = v.replace(/\n/g, " ");
+  else if (ed.classList.contains("ded-w")) draft.time    = v.replace(/\s/g, "");
   else if (ed.classList.contains("ded-s")) draft.summary = v;
   else                                     draft.content = v;
   draftRefresh();
@@ -3006,6 +3028,11 @@ areaEl.addEventListener("keydown", e => {
     e.preventDefault();
     const s = areaEl.querySelector(".ded-s");
     if (s) s.focus();
+  }
+  // the time slot is one token — Enter just leaves it
+  if (e.key === "Enter" && e.target.closest && e.target.closest(".ded-w")){
+    e.preventDefault();
+    e.target.blur();
   }
 });
 areaEl.addEventListener("focusin", e => {
@@ -3069,7 +3096,7 @@ async function publishDraft(btn){
 // APPROXIMATE DATE line; baking them here would write the line twice.
 function handoffDraft(){
   const rec = { v: 1, at: Date.now(), coll: activeF.slice(2), date: draftDate(),
-                title: draft.title, summary: draft.summary, content: draft.content };
+                time: draft.time, title: draft.title, summary: draft.summary, content: draft.content };
   try { localStorage.setItem("wtc:draft", JSON.stringify(rec)); } catch {}
   location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
 }

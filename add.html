@@ -433,7 +433,7 @@
     <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
     <input id="f-title" placeholder="Mirepoix" autocomplete="off">
 
-    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
+    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14 — and a UTC time after a full date, if known: 2003-07-14 14:30.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
 
     <label for="f-summary">summary <span class="h">— optional, your plain-words gloss; the viewer can show this instead of the record</span></label>
@@ -997,6 +997,8 @@ let eosed = 0, settled = false;
 const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
 const dOf     = ev => tagOf(ev, "d");
 const dateOf  = ev => tagOf(ev, "event_date");
+// the field's one grammar: "date" or "date time" — how a card's when reads back into it
+const whenOf  = ev => dateOf(ev) + (tagOf(ev, "event_time") ? " " + tagOf(ev, "event_time") : "");
 const collOf  = ev => {
   const l = ev.tags.find(t => t[0] === "l" && t[2] === NS_COLL);
   return l ? l[1] : "";
@@ -1216,7 +1218,7 @@ function loadMine(){
   $("f-coll-select").value = "";
   $("f-summary").value = tagOf(ev,"summary");
   loadedPubAt          = tagOf(ev,"published_at");
-  $("f-date").value    = dateOf(ev);
+  $("f-date").value    = whenOf(ev);
   $("f-content").value = ev.content;
   const fa = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
   const fe = ev.tags.find(t => t[0] === "e" && t[3] === "fork");
@@ -1230,7 +1232,7 @@ function loadMine(){
   // timeline.* labels, so a topic t or a location ladder rung must ride the box or vanish.
   // The fork's own p tag is dropped with the fork tags — the builder re-emits it, and a
   // survivor here would ride along in extra tags and be published twice.
-  const owned = new Set(["d","title","summary","published_at","event_date","t","L","l"]);
+  const owned = new Set(["d","title","summary","published_at","event_date","event_time","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
     .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && t[3] !== "fork" && !(t[0] === "p" && t[1] === forkPk))
@@ -1307,12 +1309,16 @@ function buildTemplate(){
   if (!d) throw new Error("the address is empty — it is minted under the collection, or type your own");
   if (!title) throw new Error("a title is required — it is what the card says happened");
 
-  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD. The TAG is always a full date, because
+  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD — and one rung deeper, a UTC time
+  // after a full date ("2026-08-06 14:30"). The TAG is always a full date, because
   // the membership gate needs a concrete point on the spine; a coarse input is placed on
   // day 01 and the precision is recorded where the convention puts it, in the content.
-  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
-  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14)");
-  const [, wy, wmIn, wdIn] = dm;
+  // Time attaches only to a known day: the grammar has no slot for it on a coarse date.
+  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2})(?: (\d{2}:\d{2}(?::\d{2})?))?)?)?$/);
+  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD, with an optional UTC time after a full date (e.g. 2003-07-14 14:30)");
+  const [, wy, wmIn, wdIn, wt] = dm;
+  if (wt && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(wt))
+    throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour UTC`);
   const wm = wmIn || "01";
   const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
   const dchk = new Date(fullDate + "T00:00:00Z");
@@ -1340,6 +1346,9 @@ function buildTemplate(){
   if (title) tags.push(["title", title]);
   tags.push(["published_at", loadedPubAt || String(now)]);
   tags.push(["event_date", fullDate]);
+  // Seconds only if typed — precision-only, like the buckets. prec, not wdIn: a content
+  // line declaring a coarser date wins, and a time on a placeholder day would be a lie.
+  if (wt && prec === "day") tags.push(["event_time", wt]);
   // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
   // no month bucket, because the placeholder month is not a fact about the world.
   tags.push(["t", MARKER]);
@@ -1774,7 +1783,7 @@ function tryPrefill(){
   if (val("f-title") || $("f-content").value.trim()) return;
   $("f-title").value   = tagOf(ev,"title").replace(/^\d{4}\s*·\s*/, "");
   $("f-coll").value    = collOf(ev);
-  $("f-date").value    = dateOf(ev);
+  $("f-date").value    = whenOf(ev);
   $("f-summary").value = tagOf(ev,"summary");
   $("f-content").value = ev.content;
   // d is left to derive from the title: this is a new card under YOUR key, and pubkey:d is
@@ -1816,7 +1825,7 @@ if (new URLSearchParams(location.search).get("draft") === "1"){
     if (rec && rec.v === 1 && Date.now() - rec.at < 24*3600*1000){
       $("f-title").value   = rec.title || "";
       $("f-coll").value    = rec.coll || qc || "";
-      $("f-date").value    = rec.date || "";
+      $("f-date").value    = (rec.date || "") + (rec.time ? " " + rec.time : "");
       $("f-summary").value = rec.summary || "";
       $("f-content").value = rec.content || "";
       // The viewer minted its own address for this draft and did not carry it — the handoff
