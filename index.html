@@ -247,6 +247,8 @@
      11px labels never reads as a button. */
   .linkbtn.go{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
   .linkbtn.go:hover{color:var(--ink);filter:brightness(1.08)}
+  .linkbtn.ord{font-family:var(--mono);font-size:11.5px}   /* a state word, not a verb —
+    mono like the byline, so it reads as fact before it reads as button */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
@@ -749,6 +751,9 @@
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
           <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
         </div>
+        <!-- reading direction: the word IS the state — no "on" style, no second button -->
+        <button id="ordbtn" class="linkbtn ord" type="button"
+          title="Reading direction — tap to flip"></button>
       </div>
     </div>
   </header>
@@ -1082,6 +1087,20 @@ sumTog.addEventListener("click", e => {
 });
 paintSum();
 
+// reading direction. A device preference like the theme, not part of the shared address —
+// the spine is the same spine either way round, so the URL doesn't carry it.
+let readDesc = false;
+try { readDesc = localStorage.getItem("wtc:order") === "new→old"; } catch {}
+const ordBtn = document.getElementById("ordbtn");
+const paintOrd = () => { ordBtn.textContent = readDesc ? "new→old" : "old→new"; };
+ordBtn.addEventListener("click", () => {
+  readDesc = !readDesc;
+  try { localStorage.setItem("wtc:order", readDesc ? "new→old" : "old→new"); } catch {}
+  paintOrd();
+  render();
+});
+paintOrd();
+
 const areaEl   = document.getElementById("timeline-area");
 
 // ═══════════════ helpers ═══════════════
@@ -1286,7 +1305,8 @@ function dateOf(ev){
 const timeOf = ev => tag(ev,"event_time") || "";
 // a time never appears without its zone — the record is UTC and a bare 14:30 reads as local
 const stamp  = ev => esc(dateOf(ev)) + (timeOf(ev) ? ` ${esc(timeOf(ev))}<span class="tz"> UTC</span>` : "");
-const byWhen = (a,b) => (a.frac - b.frac) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+const byWhen = (a,b) => (readDesc ? -1 : 1) *
+  ((a.frac - b.frac) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 function yearFrac(dateStr){
   const p = String(dateStr).split("-").map(Number);
   return (p[0]||1970) + ((p[1]?p[1]-1:0)/12) + ((p[2]?p[2]-1:0)/365);
