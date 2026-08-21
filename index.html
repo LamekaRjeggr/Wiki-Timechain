@@ -736,8 +736,6 @@
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
         <button id="exportbtn" class="linkbtn" type="button"
           title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
-        <button id="jsonbtn" class="linkbtn" type="button"
-          title="Download every signed event of this timeline as raw JSON — lossless, for other clients">⤓ JSON</button>
         <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
@@ -1021,13 +1019,6 @@ copyBtn.addEventListener("click", async () => {
 // per-card cycle (visOf, the same gate the page renders through). Spine order, head version
 // only (a contested d exports the version the spine shows). Absent fields are absent,
 // not blank: presence is the spec's only machine signal and the file keeps it.
-function saveFile(text, name, type){
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], {type}));
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);   // Safari needs the URL alive past the click
-}
 const exportBtn = document.getElementById("exportbtn");
 exportBtn.addEventListener("click", () => {
   if (!activeF) return;
@@ -1040,16 +1031,11 @@ exportBtn.addEventListener("click", () => {
     const c  = (ev.content || "").trim(); if (v.body && c) s += `content:\n${c}\n`;
     return s;
   });
-  saveFile(blocks.join("\n---\n\n"), valOf(activeF) + ".md", "text/markdown;charset=utf-8");
-});
-
-// raw export: every signed event this view holds under the collection — spine, proposed,
-// taken — glyph-ignoring and lossless. What another client needs to rebuild the timeline.
-const jsonBtn = document.getElementById("jsonbtn");
-jsonBtn.addEventListener("click", () => {
-  if (!activeF) return;
-  const evs = entriesOf(activeF).flatMap(en => [...en.evs, ...en.prop, ...en.taken]);
-  saveFile(JSON.stringify(evs, null, 1), valOf(activeF) + ".json", "application/json");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([blocks.join("\n---\n\n")], {type:"text/markdown;charset=utf-8"}));
+  a.download = valOf(activeF) + ".md";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);   // Safari needs the URL alive past the click
 });
 
 // ── how light the page reads. Three fields, one vocabulary: every colour is a token
@@ -1764,7 +1750,6 @@ function renderTabs(V){
   tabsEl.innerHTML = "";
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
   exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
-  jsonBtn.style.display   = activeF ? "" : "none";
   // every option in every axis is a collection, so activeF is always "c:<slug>"
   const name = activeF ? slugName(activeF.slice(2)) : "";
   nowEl.textContent = name;
