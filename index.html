@@ -167,11 +167,11 @@
      here would break one spine, one story. Hidden entirely while a collection has one author. */
   .roster{margin:11px auto 0;max-width:640px;display:flex;flex-wrap:wrap;
     justify-content:center;align-items:center;gap:5px}
-  .rchip,.lchip{background:transparent;border:1px solid var(--border);color:var(--dim);
+  .rchip,.lchip,.vbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:4px 9px;font-size:11.5px;font-family:var(--mono);
     cursor:pointer;line-height:1.4}
-  .rchip:hover,.lchip:hover{color:var(--text)}
-  .rchip.on,.lchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
+  .rchip:hover,.lchip:hover,.vbtn:hover{color:var(--text)}
+  .rchip.on,.lchip.on,.vbtn.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
   .rchip .n,.lchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
   .rchip .oc{color:var(--rail);margin-right:5px}   /* ⌂ is chrome — the app's amber, never a timeline hue */
   /* the accepted lens picker: one chip per key holding live acts here. ✓ is the mark of an
@@ -180,6 +180,12 @@
     align-items:center;gap:5px;margin-top:6px}
   .lenslab{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:2px}
   .lchip .ck{color:var(--rail);margin-right:5px}
+  /* the spine view: whose acceptances hold the line. A stance on reading, so it sits
+     with the roster, not the verbs. Hidden without a key — popular is then the only view. */
+  .viewrow{margin:11px auto 0;display:flex;flex-wrap:wrap;justify-content:center;
+    align-items:center;gap:5px}
+  .viewnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
+    color:var(--faint);margin-top:4px}
   .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
     color:var(--faint);margin-top:2px}
 
@@ -744,6 +750,7 @@
       <!-- band 2: the subject — what you're reading, with its own facts under it -->
       <h2 class="collnow" id="collnow"></h2>
       <div class="collmeta" id="collmeta"></div>
+      <div class="viewrow" id="viewrow" style="display:none"></div>
       <div class="roster" id="roster" style="display:none"></div>
       <!-- band 3: choosing — read something else -->
       <div class="tabs" id="tabs"></div>
@@ -992,6 +999,13 @@ let lensPk = null;
 // Same nature as the roster lens (transient, not in the URL), and exclusive with it: two
 // dims at once would read as a broken page, not two questions.
 let actLensPk = null;
+// the spine view — whose acceptances put a card on the line. "you" (the default): your own
+// cards plus the versions your live acts stand behind, everything else waits one layer out.
+// "popular": the derived authority — curators, adoption, the fold. Your view needs a key;
+// without one popular is the only honest reading, and the toggle stays hidden.
+let spineView = "you";
+try { if (localStorage.getItem("wtc:spineview") === "popular") spineView = "popular"; } catch {}
+const youView = () => spineView === "you" && !!myPk;
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -1000,6 +1014,13 @@ const nowEl    = document.getElementById("collnow");   // the selected timeline,
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
 const addLink  = document.getElementById("addlink");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
+const viewEl   = document.getElementById("viewrow");   // the spine-view toggle — see renderRoster
+viewEl.addEventListener("click", e => {
+  const vb = e.target.closest(".vbtn"); if (!vb || vb.dataset.v === spineView) return;
+  spineView = vb.dataset.v;
+  try { localStorage.setItem("wtc:spineview", spineView); } catch {}
+  render();
+});
 rosterEl.addEventListener("click", e => {
   const lb = e.target.closest(".lchip");
   if (lb){ actLensPk = actLensPk === lb.dataset.pk ? null : lb.dataset.pk; lensPk = null; render(); return; }
@@ -1755,11 +1776,19 @@ function entriesOf(f){
     // parent's words now, and the parent card carries the credit instead.
     const taken = all0.filter(ev => takenOf(ev, d));
     const all   = all0.filter(ev => !taken.includes(ev));
-    const evs  = all.filter(ev => tierOf(ev, A) === 0).sort(ord);
+    // your view: your signature is the sole spine authority — your own cards, and the
+    // versions your live acts stand behind (content copy, the same custody bar as
+    // adoption). Everything else waits one layer out; the popular fold never applies.
+    const backs = ev => ev.pubkey === myPk ||
+      acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
+        .some(a => a.pubkey === myPk && actMoves(a, ev));
+    const evs  = (youView() ? all.filter(backs)
+                            : all.filter(ev => tierOf(ev, A) === 0)).sort(ord);
     // the accepted lens overrides the fold — but only a CONTENT-live act moves a card onto
     // the page (draft NIP: only the content copy moves documents; title/summary is voice)
-    const prop = all.filter(ev => { const t = tierOf(ev, A); if (!t) return false;
-      const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); }).sort(ord);
+    const prop = (youView() ? all.filter(ev => !backs(ev))
+                : all.filter(ev => { const t = tierOf(ev, A); if (!t) return false;
+      const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); })).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
     out.push({ d, evs, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
@@ -1803,6 +1832,21 @@ const vocab = () => [...slugs].sort()
 function renderRoster(){
   const c = activeF ? activeF.slice(2) : null;
   const A = c ? authorityOf(c) : null;
+  // the spine-view toggle: your view is the default and needs your key; popular is the
+  // derived authority everyone sees. An empty your-view is the honest starting state,
+  // not a broken page — the note says so instead of leaving a bare spine unexplained.
+  if (!myPk || !c){ viewEl.style.display = "none"; }
+  else {
+    viewEl.style.display = "";
+    const ents = youView() ? entriesOf(activeF) : [];
+    const empty = !!ents.length && ents.every(e => !e.evs.length);
+    viewEl.innerHTML =
+      `<button class="vbtn${spineView === "you" ? " on" : ""}" type="button" data-v="you"` +
+      ` title="your spine — your cards and the versions you accepted sit on the line">your view</button>` +
+      `<button class="vbtn${spineView === "popular" ? " on" : ""}" type="button" data-v="popular"` +
+      ` title="the derived spine — curators and what they adopted">popular view</button>` +
+      (empty ? `<span class="viewnote">your view is empty here — you haven't accepted a version yet; every card waits one layer out</span>` : "");
+  }
   const L = c ? actLenses(c) : new Map();
   if (actLensPk && !L.has(actLensPk)) actLensPk = null;   // no live acts here — lens drops
   const many = !!(A && A.rank.length >= 2);
