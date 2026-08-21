@@ -1525,7 +1525,14 @@ function renderPubTally(){
   if (!t) return;
   const open = [...relayUp.values()].filter(v => v === "up").length;
   pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
+  // an act was the tab's one job — first relay OK, route back to the timeline it came from
+  if (actSent && t.ok && !backTimer){
+    const url = "index.html" + (qact.c ? "?c=" + encodeURIComponent(qact.c) : "");
+    $("pub-msg").innerHTML += ` — <a href="${url}">back to the timeline</a> (going in 3s…)`;
+    backTimer = setTimeout(() => { location.href = url; }, 3000);
+  }
 }
+let backTimer = null;
 
 async function publish(){
   if (qact) return publishAct();

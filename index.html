@@ -3384,7 +3384,8 @@ function handoffAct(pk, d, w){
   const rec = { v: 1, at: Date.now(), coord: KIND + ":" + pk + ":" + d,
                 e: ev.id, p: ev.pubkey, content: ev.content, w: w ? 1 : 0,
                 t: tag(ev,"title") || "", s: tag(ev,"summary") || "",
-                title: tag(ev,"title") || d };
+                title: tag(ev,"title") || d,
+                c: collectionSlug(ev) || "" };   // the way back: ?c= deep link home
   try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}
   location.href = "add.html?act=1";
 }
