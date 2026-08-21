@@ -42,6 +42,8 @@
     --text:#e9eaee;
     --text-2:#d7d9df;        /* inline code */
     --text-3:#c6c8ce;        /* long-form prose, card bodies */
+    --rung-s:#c8f5c5;        /* summary rung — terminal mint */
+    --rung-c:#f28a4d;        /* record rung — terminal orange */
     --dim:#9296a0;
     --faint:#42454e;
     --gutline:#565b66;       /* the diff gutter's rule */
@@ -59,7 +61,7 @@
     /* the picker's arrow, drawn in --dim. Restated in each theme — url() is a string,
        so var() can't reach inside it; only the stroke hex differs between the three. */
     --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%239296a0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-    --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
     --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
   }
 
@@ -78,6 +80,7 @@
     --past:#eebc84; --past-dim:#8a6c42;
     --future:#4fd8e8; --future-dim:#2f6f79;
     --text:#f8f3ea; --text-2:#eae2d5; --text-3:#dbd2c3;
+    --rung-s:#d3eec6; --rung-c:#f79c62;
     --dim:#c9bca4; --faint:#91836e; --gutline:#a2947e;
     --ink:#2a1c06; --warn:#ffc492;
     --glow:rgba(255,194,102,.10);
@@ -104,6 +107,7 @@
     --past:#8a5410; --past-dim:#d8bb92;
     --future:#0d6f86; --future-dim:#9dc6d2;
     --text:#191b1f; --text-2:#2b2f36; --text-3:#3a3f47;
+    --rung-s:#25502f; --rung-c:#8a4a12;
     --dim:#61666f; --faint:#a8adb5; --gutline:#9aa0a9;
     --ink:#fffaf2; --warn:#9a4a00;
     --glow:rgba(163,92,0,.06);
@@ -223,10 +227,12 @@
      They can't taper as hard as the bare bars do: the words set the floor, and "records"
      needs its 130px. */
   .fglyph .fs.t{cursor:default;width:76px;background:transparent;
-    border-color:var(--rail-dim);color:var(--rail)}
+    border-color:var(--dim);color:var(--text)}
   .fglyph .fs.s{width:104px}
   .fglyph .fs.c{width:130px}
-  .fglyph .fs.on{background:var(--rail);color:var(--ink)}
+  /* lit courses wear the card ladder's own rung colors — the glyph is the ladder's key */
+  .fglyph .fs.s.on{background:var(--rung-s);color:var(--ink)}
+  .fglyph .fs.c.on{background:var(--rung-c);color:var(--ink)}
   .fglyph button.fs:hover{color:var(--text)}
   .fglyph button.fs.on:hover{color:var(--ink)}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
@@ -278,7 +284,7 @@
      content lives ON the rail (no detail pane), so there's nothing to tap-to-reveal.
      editorial serif (Georgia fallback — zero-CDN). Capped to a reading measure and
      centered so it doesn't sprawl on a wide desktop screen. */
-  .mtl{font-family:Georgia,"Times New Roman",serif;padding:6px 2px 4px;
+  .mtl{font-family:var(--mono);padding:6px 2px 4px;
     max-width:720px;margin:18px auto 0;
     --gut:64px;--cgap:16px}      /* ONE gutter number: spine, dots, dashline and chip derive
        from it, so slim mode can narrow the empty column and hand the width to the cards */
@@ -324,7 +330,8 @@
   /* credit sits under the title and above the record, so it shows on a collapsed card too */
   .mtl .via{margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--dim)}
   .mtl .via .mk{color:var(--faint)}
-  .mtl .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:var(--text-3)}
+  .mtl .cbody{margin-top:9px;padding-top:8px;border-top:1px solid var(--border-soft);
+    font-size:14.5px;line-height:1.65;color:var(--rung-c)}
   /* ── diff marks. Scoped to nothing: lens copies render through the same pass. ──
      A whole-line mark becomes a gutter row (rule + −/+); marks inside a sentence
      stay inline. Position and glyph carry the meaning, decoration and lightness
@@ -361,7 +368,7 @@
   .lhost::after{content:"⟩"}
   /* summary mode: these are the publisher's words about the event, not the record's, so
      they get a rule down the side — indent + line, never a hue, and never unmarked */
-  .mtl .cbody.sum{border-left:2px solid var(--gutline);padding-left:11px}
+  .mtl .cbody.sum{border-left:2px solid var(--gutline);padding-left:11px;color:var(--rung-s)}
   /* depth mark: the card's pyramid, pinned to the card's top-right — level with the
      date/author tab but outside it. Three fixed-width lines — title, summary, record —
      same slot on every card; the states are below. The mark IS the control —
@@ -382,10 +389,15 @@
   .mtl .rvz:hover{color:var(--text);text-decoration:underline}
   .mtl .dpb{display:block;height:5px;border-radius:2px;background:var(--dim);box-sizing:border-box}
   .mtl .dpb.t{width:10px}.mtl .dpb.s{width:17px}.mtl .dpb.b{width:24px}
-  .mtl .dpb.on{background:var(--rail)}    /* lit = the same amber as the floor control */
+  /* lit = the card ladder's rung colors, mirroring the floor glyph */
+  .mtl .dpb.t.on{background:var(--text)}
+  .mtl .dpb.s.on{background:var(--rung-s)}
+  .mtl .dpb.b.on{background:var(--rung-c)}
   .mtl .dpb.no{background:transparent;border:1px solid var(--faint)}
   .mtl .dmk:hover .dpb{background:var(--text)}
-  .mtl .dmk:hover .dpb.on{background:var(--rail)}
+  .mtl .dmk:hover .dpb.t.on{background:var(--text)}
+  .mtl .dmk:hover .dpb.s.on{background:var(--rung-s)}
+  .mtl .dmk:hover .dpb.b.on{background:var(--rung-c)}
   .mtl .dmk:hover .dpb.no{background:transparent;border-color:var(--gutline)}
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
@@ -466,7 +478,7 @@
   /* the acts row sits INSIDE the card box, at its bottom */
   .mtl .mrct{font-family:var(--mono);font-size:11px;padding:3px 0;
     display:flex;align-items:center;flex-wrap:wrap;gap:4px}
-  .mtl .card .mrct{margin-top:9px;padding:0}
+  .mtl .card .mrct{margin-top:9px;padding:8px 0 0;border-top:1px solid var(--border-soft)}
   .mtl .vcard .mrct{margin-top:9px;padding:8px 0 0;border-top:1px solid var(--border-soft)}
   .mtl .rg{color:var(--rail);margin-right:8px}
   /* the acts row (kind 8828): word-marked verdicts, dim mono like the byline */
