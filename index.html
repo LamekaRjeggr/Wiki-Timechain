@@ -1017,19 +1017,19 @@ copyBtn.addEventListener("click", async () => {
 // plain-text export of the selected timeline, AS SEEN: each card contributes the lines its
 // glyph has lit — title/event_date always, summary and content per the floor and any
 // per-card cycle (visOf, the same gate the page renders through). Spine order, head version
-// only (a contested d exports the version the spine shows). Absent fields are absent,
-// not blank: presence is the spec's only machine signal and the file keeps it.
+// only (a contested d exports the version the spine shows). No field labels: date + title
+// on one line, then each lit paragraph — a reading copy, not a machine interchange.
 const exportBtn = document.getElementById("exportbtn");
 exportBtn.addEventListener("click", () => {
   if (!activeF) return;
   const blocks = entriesOf(activeF).map(en => {
     const ev = en.evs[0] || en.prop[0], v = visOf(ev, en.d);
-    let s = "";
-    const t  = tag(ev,"title");      if (t)  s += `title: ${t}\n`;
-    const ed = tag(ev,"event_date"); if (ed) s += `event_date: ${ed}\n`;
-    const sm = tag(ev,"summary");    if (v.sum && sm) s += `summary: ${sm}\n`;
-    const c  = (ev.content || "").trim(); if (v.body && c) s += `content:\n${c}\n`;
-    return s;
+    const parts = [];
+    const t  = tag(ev,"title"), ed = tag(ev,"event_date");
+    if (t || ed) parts.push([ed, t].filter(Boolean).join("  "));
+    const sm = tag(ev,"summary");    if (v.sum && sm) parts.push(sm);
+    const c  = (ev.content || "").trim(); if (v.body && c) parts.push(c);
+    return parts.join("\n\n") + "\n";
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([blocks.join("\n---\n\n")], {type:"text/markdown;charset=utf-8"}));
