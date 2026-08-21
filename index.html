@@ -554,17 +554,22 @@
   #drum .head .tri{position:absolute;left:0;top:-4px;width:0;height:0;
     border-top:4px solid transparent;border-bottom:4px solid transparent;
     border-left:6px solid var(--text)}
-  /* tick vocabulary — size carries note length, shape carries kind, never hue alone */
-  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;background:var(--past)}
+  /* tick vocabulary — size carries note length, shape carries kind, FILL answers "accepted?"
+     (a live field-copy from a key other than the author). Hollow = on the record, backed
+     by no one. Fill and shape, never hue alone. */
+  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;
+    background:transparent;border:1px solid var(--past-dim)}
+  #drum .tick.end{background:var(--past);border-color:var(--past)}
   #drum .tick.face{box-shadow:0 0 7px var(--past-glow)}
   #drum .tick.contested{width:9px!important;height:9px;border-radius:0}
-  #drum .tick.rev{height:6px;border-radius:2px;   /* ONE card wearing a visible layer — not two notes */
+  #drum .tick.rev{height:6px;border-radius:2px}   /* ONE card wearing a visible layer — not two notes */
+  #drum .tick.rev.end{
     /* layered in LIGHTNESS, not a second hue — cyan on the drum now means "ahead" */
     background:linear-gradient(180deg,var(--past) 0 62%,var(--past-dim) 62% 100%)}
   #drum .tick.future{background:transparent;border:2px solid var(--future);border-radius:50%;
     width:8px!important;height:8px}
   #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
-    width:2px!important;height:14px;left:23px;border-radius:0}
+    width:2px!important;height:14px;left:23px;border-radius:0;border:none}
   /* the draft being composed: hollow amber — the app's own chrome, not yet a note */
   #drum .tick.draft{background:transparent;border:2px solid var(--rail);border-radius:50%;
     width:8px!important;height:8px}
@@ -1715,6 +1720,7 @@ function authorityOf(c){
 // 2 = behind the fold. Never deleted, only resisted.
 function anyAcceptance(ev){
   return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).some(a => {
+    if (a.pubkey === ev.pubkey) return false;  // self-acceptance backs nothing
     const sc = scopeOf(a);
     return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
   });
@@ -2224,9 +2230,11 @@ function renderTimeline(entries){
 
     const future = e.frac > nowFrac;
     const yr = String(e.date).slice(0,4);
-    // the node carries its year, address, and date-fraction as data: the drum reads them
-    // without scraping rendered text, and `d` stays recoverable now that nothing prints it
-    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"`;
+    // the node carries its year, address, date-fraction, and acceptance as data: the drum
+    // reads them without scraping rendered text or holding act state of its own
+    const acc = e.evs.some(ev => anyAcceptance(ev));
+    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"` +
+      (acc ? ` data-acc="1"` : "");
 
     const propHtml = e.prop.length
       ? `<div class="prop">` + e.prop.map(ev => propCard(ev, e.d)).join("") + `</div>` : "";
@@ -2321,7 +2329,8 @@ function drumMeasure(){
     const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
     const isDraft = n.classList.contains("draft");   // claim-in-progress, not yet record
     const el = document.createElement("div");
-    el.className = "tick" + (isDraft ? " draft" : contested ? " contested" : rev ? " rev" : future ? " future" : "");
+    el.className = "tick" + (isDraft ? " draft" : contested ? " contested" : rev ? " rev" : future ? " future" : "")
+                 + (!isDraft && !future && n.dataset.acc ? " end" : "");
     if (!contested && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
     drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "",
