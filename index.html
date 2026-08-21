@@ -2036,18 +2036,25 @@ function renderTimeline(entries){
     creditRow(ev) + cardBody(ev, d) + lensNote(ev) +
     (beyond(ev, d) ? actRow(ev, d) : "") + `</div>`;
 
-  // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline
-  const gaps = entries.slice(1).map((e,i) => e.frac - entries[i].frac);
+  // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline.
+  // abs: a gap is a span of silence whichever way the spine is read
+  const gaps = entries.slice(1).map((e,i) => Math.abs(e.frac - entries[i].frac));
   const med = median(gaps.filter(g => g > 1e-4)) || 0.5;
   const UNIT = 42, FLOOR = 14, COLLAPSE_H = 240;           // px per median gap · min · collapse threshold
   const pxOf = g => (g/med) * UNIT;
 
-  let nowShown = false;
+  const nowDiv = () => `<div class="nowdiv"><span class="nowchip">now · ${esc(new Date().toISOString().slice(0,10))}</span></div>`;
+  let nowShown = false;                                    // = the future zone is open
   let html = `<div class="mtl"><div class="track"><div class="spine"></div>`;
+  // reading new→old, the walk STARTS in the future — the zone opens before any card,
+  // and the seam falls where the walk leaves it (see the crossing below)
+  if (readDesc && entries.length && entries[0].frac > nowFrac){
+    html += `<div class="futurezone">`; nowShown = true;
+  }
 
   entries.forEach((e, i) => {
     if (i > 0){                                            // the gap that precedes this entry
-      const g = e.frac - entries[i-1].frac, h = pxOf(g);
+      const g = Math.abs(e.frac - entries[i-1].frac), h = pxOf(g);
       const k = entries[i-1].d + "→" + e.d;
       if (h > COLLAPSE_H){                                 // long silence → collapsible marker
         const exp = expandedGaps.has(k);
@@ -2059,14 +2066,15 @@ function renderTimeline(entries){
         html += `<div class="gap" style="height:${Math.round(Math.max(FLOOR, h))}px"></div>`;
       }
     }
-    if (!nowShown && e.frac > nowFrac){                    // bold present threshold, then tint the future
-      const today = new Date().toISOString().slice(0,10);
-      html += `<div class="nowdiv"><span class="nowchip">now · ${esc(today)}</span></div>` +
-              `<div class="futurezone">`;
-      nowShown = true;
+    const future = e.frac > nowFrac;
+    // the seam sits where the walk crosses today — from either side. Old→new it opens
+    // the future zone; new→old it closes the one opened above the loop.
+    if (!readDesc && !nowShown && future){
+      html += nowDiv() + `<div class="futurezone">`; nowShown = true;
+    } else if (readDesc && nowShown && !future){
+      html += `</div>` + nowDiv(); nowShown = false;
     }
 
-    const future = e.frac > nowFrac;
     const yr = String(e.date).slice(0,4);
     // the node carries its year, address, date-fraction, and acceptance as data: the drum
     // reads them without scraping rendered text or holding act state of its own
@@ -2107,7 +2115,9 @@ function renderTimeline(entries){
     }
   });
 
-  if (nowShown) html += `</div>`;                          // close .futurezone
+  // still open past the last card: old→new just closes it; new→old means every card was
+  // future, so the seam lands at the foot — now is below the whole spine
+  if (nowShown) html += readDesc ? `</div>` + nowDiv() : `</div>`;
   // the fold sits at the foot of the spine, outside the future zone: it isn't a moment in the
   // record, it's what the record hasn't taken in.
   const fc = activeF ? activeF.slice(2) : "";
