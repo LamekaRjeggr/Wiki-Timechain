@@ -608,6 +608,8 @@
   .draftcard .dtim{font-family:var(--mono);font-size:11px;color:var(--dim);
     min-width:34px;display:inline-block;margin-left:6px}
   .draftcard .dtim.bad{color:var(--warn)}
+  /* the zone label: the time is the datum, UTC is a qualifier — dim, byline-sized */
+  .mtl .ctab .tz{font-family:var(--mono);font-size:11px;color:var(--dim)}
   .draftcard .dline{display:block;font-size:12px;color:var(--warn);margin:4px 0}
   .draftcard .dline.block{color:var(--rail)}
   .draftcard .dline.hid{display:none}
@@ -1282,7 +1284,8 @@ function dateOf(ev){
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
 const timeOf = ev => tag(ev,"event_time") || "";
-const stamp  = ev => dateOf(ev) + (timeOf(ev) ? " " + timeOf(ev) : "");
+// a time never appears without its zone — the record is UTC and a bare 14:30 reads as local
+const stamp  = ev => esc(dateOf(ev)) + (timeOf(ev) ? ` ${esc(timeOf(ev))}<span class="tz"> UTC</span>` : "");
 const byWhen = (a,b) => (a.frac - b.frac) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
 function yearFrac(dateStr){
   const p = String(dateStr).split("-").map(Number);
@@ -2007,7 +2010,7 @@ function renderTimeline(entries){
   const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
     .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
   const propCard = (ev, d) =>
-    `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
+    `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
     creditRow(ev) + cardBody(ev, d) + lensNote(ev) +
@@ -2073,7 +2076,7 @@ function renderTimeline(entries){
     } else {
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${esc(stamp(ev))}</span>` +
+        `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
@@ -2972,7 +2975,8 @@ function draftNodeHtml(e, future){
     `<div class="ctab"><span class="td dtab" role="button" title="pick the date on the drum">${esc(draftTabText())}</span>` +
     // time rides the date, typed after it — the slot exists only once a full day is committed
     (draft.day ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
-      ` spellcheck="false" title="UTC time, if known — HH:MM">${esc(draft.time)}</span>` : "") +
+      ` spellcheck="false" title="UTC time, if known — HH:MM">${esc(draft.time)}</span>` +
+      `<span class="tz">UTC</span>` : "") +
     `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
     `<button class="dx" type="button" title="discard this draft (Esc)">✕</button></div>` +
     ed("ded-t", "h4", "Title — the event, one line", draft.title) +
