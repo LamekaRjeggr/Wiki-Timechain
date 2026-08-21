@@ -1226,12 +1226,14 @@ function loadMine(){
   $("f-fork-e").value  = fe?.[1] || "";
   // Everything the form owns comes back out of its own fields; anything else on the event
   // is round-tripped through the extra-tags box verbatim so an edit cannot silently drop it.
+  // Ownership is by VALUE, not tag name: the builder re-emits only the marker t and the
+  // timeline.* labels, so a topic t or a location ladder rung must ride the box or vanish.
   // The fork's own p tag is dropped with the fork tags — the builder re-emits it, and a
   // survivor here would ride along in extra tags and be published twice.
   const owned = new Set(["d","title","summary","published_at","event_date","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
-    .filter(t => !owned.has(t[0]) && t[3] !== "fork" && !(t[0] === "p" && t[1] === forkPk))
+    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && t[3] !== "fork" && !(t[0] === "p" && t[1] === forkPk))
     .map(t => t.join(" ")).join("\n");
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
@@ -1384,19 +1386,23 @@ function buildTemplate(){
   return { kind: KIND, created_at: now, tags, content };
 }
 
-// What a collection's cards AGREE on — the exact tags present on every one of them. Topic
-// t's (never the marker) and location L/l ladders (never the spec's own namespaces). A
+// A topic t (never the marker) or a location L/l rung — the tags a card carries that this
+// form does not build itself. Only the builder's own two namespaces are excluded;
+// timeline.location is a ladder rung like the ISO ones and travels the same way.
+function topicOrLadder(t){
+  const ns = t[0] === "L" ? (t[1] || "") : (t[2] || "");
+  return (t[0] === "t" && t[1] !== MARKER) ||
+    ((t[0] === "L" || t[0] === "l") && ns !== NS_COLL && ns !== NS_DATE);
+}
+
+// What a collection's cards AGREE on — the exact tags present on every one of them. A
 // collection whose cards disagree on a tag inherits nothing for it: agreement, not guess.
 function inheritedTags(c){
   const list = [...cards.values()].filter(e => collOf(e) === c);
   if (!list.length) return [];
-  const cand = t =>
-    (t[0] === "t" && t[1] !== MARKER) ||
-    ((t[0] === "L" || t[0] === "l") &&
-      !/^timeline\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
   let common = null;   // key -> original tag array, so a value with a space survives
   for (const ev of list){
-    const m = new Map(ev.tags.filter(cand).map(t => [JSON.stringify(t), t]));
+    const m = new Map(ev.tags.filter(topicOrLadder).map(t => [JSON.stringify(t), t]));
     common = common === null ? m : new Map([...common].filter(([k]) => m.has(k)));
   }
   return [...common.values()];
