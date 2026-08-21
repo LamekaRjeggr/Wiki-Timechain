@@ -3,19 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Deny everything, then name the exceptions. The reader never handles a key at all — every
-     signature comes from a NIP-07 extension — so unlike the writer it can pin connect-src to
-     exactly the relays it reads from: no bunker here, no arbitrary relay to allow for.
+<!-- Deny everything, then name the exceptions. The reader still never handles a key —
+     signing is a NIP-07 extension or a resumed remote signer (add.html's wtc:signin session).
+     The bunker rung is what un-pinned connect-src (2026-08-20, user's call): a bunker://
+     URI names its own relays, so like the writer this allows wss: broadly and still bars
+     every http(s) channel. Pin it back and the bunker resume dies silently.
      'unsafe-inline' is forced by the no-build design, so this stops exfiltration, not execution.
      No frame-buster here, unlike the writer: a reader worth embedding in someone else's
-     page is a feature, and a clickjack can only reach an extension that prompts anyway. -->
+     page is a feature, and a clickjack can only reach a signer that prompts anyway. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
   script-src 'self' 'unsafe-inline';
   style-src 'unsafe-inline';
-  connect-src wss://relay.damus.io wss://nos.lol wss://relay.primal.net
-              wss://relay.mostr.pub wss://relay.nostr.band wss://offchain.pub
-              wss://nostr.mom;
+  connect-src wss:;
   img-src 'self' data:;
   base-uri 'none';
   form-action 'none'">
@@ -724,6 +724,14 @@
     if (t === "light" || t === "medium") document.documentElement.dataset.theme = t;
   }catch{}
 })();
+</script>
+<script type="module">
+  // Vendored, not fetched — nothing loads from a third-party host. Its own module, so a
+  // failure to load bunker support cannot take the extension rung down with it.
+  // The reader only RESUMES a session add.html opened; it never shows a login.
+  import { BunkerSigner, parseBunkerInput } from './nip46.js';
+  window._nip46 = { BunkerSigner, parseBunkerInput };
+  window.dispatchEvent(new Event("nip46ready"));
 </script>
 </head>
 <body>
@@ -2826,13 +2834,14 @@ const cmtErr   = new Map();     // card coord → short error text for the compo
 const cmtDraft = new Map();     // card coord → compose text, held across live re-renders
 let myPk = null;                // my pubkey once a signer produced one — lights .mine
 
-// NIP-07 OR NOTHING. The reader used to mint a throwaway key when no extension was present;
+// A REAL KEY OR NOTHING. The reader used to mint a throwaway key when no extension was present;
 // it doesn't any more (2026-08-07, user's call). A vote signed by a key born on this page a
 // second ago is a vote from nobody, and the page was handing people an identity they never
 // asked to hold. With no extension the write affordances simply don't render — pill, compose,
 // and the whole margin block when there's nothing there to read either.
-// The bunker rung is deliberately NOT here: it lives in add.html, and reaching it from the
-// reader means widening this page's connect-src to arbitrary relays. See CLAUDE.md.
+// The bunker rung is here since 2026-08-20 (user's call) — RESUME ONLY. Sign in happens on
+// add.html; this page silently rides the wtc:signin session it left. The price was paid in
+// the CSP: connect-src widened to wss: because a bunker:// URI names its own relays.
 // Ask for the METHOD, not the namespace. `!!window.nostr` was too weak: Safari here carries a
 // bare `nostr` object with no keys on it, so the page offered the whole write UI against a
 // signer that cannot sign — every tap would fail at the last step. Presence of the object is
@@ -2963,10 +2972,11 @@ async function signWithMint(tmpl, skHex){
 }
 
 // ── the signer seam: everything that writes asks getSigner() and nothing else.
-//    One implementation — the NIP-07 extension. Callers are only reachable when
-//    hasSigner is true, so the throw is a guard, not a path. ──
+//    Two implementations — a resumed bunker session wins, else the NIP-07 extension.
+//    Callers are only reachable when hasSigner is true, so the throw is a guard, not a path. ──
 let signerP = null;
 function getSigner(){
+  if (bunkerSigner) return Promise.resolve(bunkerSigner);
   if (!signerP){
     signerP = (async () => {
       if (!signerReady()) throw new Error("no signer");   // same capability test as hasSigner
@@ -2976,6 +2986,30 @@ function getSigner(){
   }
   return signerP;
 }
+
+// ── bunker rung: resume the wtc:signin session add.html keeps (same origin, same
+//    localStorage). No UI — sign in on add.html once; this page rides the session.
+//    The stored ck is the CLIENT key (ours, not you); reusing it keeps the resume silent. ──
+let bunkerSigner = null;
+(function bunkerResume(){
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("wtc:signin") || "null"); } catch {}
+  if (!s || s.via !== "bunker" || !s.uri || !s.ck) return;
+  const go = async () => {
+    try {
+      const pointer = await window._nip46.parseBunkerInput(s.uri);
+      if (!pointer) return;
+      const b = window._nip46.BunkerSigner.fromBunker(hexToBytes(s.ck), pointer);
+      await b.connect();
+      const pk = await b.getPublicKey();
+      bunkerSigner = { pubkey: pk, sign: t => b.signEvent(t) };
+      rememberPk(pk);
+      if (!hasSigner){ hasSigner = true; }
+      scheduleRender();
+    } catch {}                                   // phone off / revoked = signed out, not an error
+  };
+  window._nip46 ? go() : addEventListener("nip46ready", go, { once: true });
+})();
 
 // ── publish over the already-open sockets; count OK frames and tell the truth ──
 function publish(ev){
