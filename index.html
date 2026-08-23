@@ -612,6 +612,7 @@
   .draftcard .dtim.bad{color:var(--warn)}
   /* the zone label: the time is the datum, UTC is a qualifier — dim, byline-sized */
   .mtl .ctab .tz{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .mtl .ctab .tt{color:var(--rung-s)}  /* the clock is its own channel — date keeps past/future */
   .draftcard .dline{display:block;font-size:12px;color:var(--warn);margin:4px 0}
   .draftcard .dline.block{color:var(--rail)}
   .draftcard .dline.hid{display:none}
@@ -1313,11 +1314,14 @@ function timeMin(t){
   if (m[4]) v += (m[4]==="-" ? 1 : -1) * (+m[5]*60 + +m[6]);
   return v;
 }
-// a time never appears without its zone — the record is UTC and a bare 14:30 reads as local
+// a time never appears without its zone — the record is UTC and a bare 14:30 reads as local.
+// An offset form IS local at the source; the numeric offset is confusing on the face, so the
+// word "local" stands in and the raw value rides the hover.
 const stamp  = ev => { const t = timeOf(ev); if (!t) return esc(dateOf(ev));
   const m = t.match(/^([\d:]+)([+-]\d\d:\d\d)$/);
-  return esc(dateOf(ev)) + (m ? ` ${esc(m[1])}<span class="tz"> ${esc(m[2])}</span>`
-                              : ` ${esc(t)}<span class="tz"> UTC</span>`); };
+  return esc(dateOf(ev)) + (m
+    ? ` <span class="tt" title="${esc(t)}">${esc(m[1])}</span><span class="tz"> local</span>`
+    : ` <span class="tt">${esc(t)}</span><span class="tz"> UTC</span>`); };
 const byWhen = (a,b) => (readDesc ? -1 : 1) *
   ((a.frac - b.frac) || (timeMin(a.time) - timeMin(b.time)));
 function yearFrac(dateStr){
