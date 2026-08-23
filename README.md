@@ -63,7 +63,7 @@ code license.
 Code — `index.html`, `add.html`, `nip46.js`, `tools/` — is
 [MIT](LICENSE).
 
-Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-EDITS.md` — is
+Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md` — is
 [CC0 1.0 Universal](LICENSE-SPEC), matching the
 [nips repo](https://github.com/nostr-protocol/nips), so the text can be absorbed
 there without an attribution clause riding along. Card content in `cards/` is CC0

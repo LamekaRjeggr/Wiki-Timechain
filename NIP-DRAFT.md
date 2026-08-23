@@ -284,6 +284,19 @@ corpus. A card MUST carry the marker of the corpus it belongs to, and a client i
 configured with the marker or markers it reads. A marker is permanent in practice, since
 changing it requires re-signing every card.
 
+A marker SHOULD be distinctive rather than generic — a corpus or project name, not a
+common word such as `history` or `timeline`. There is no registry: a marker is claimed
+by use alone, and two corpora sharing one are indistinguishable to every client
+configured for it.
+
+**What a marker decides, and what it does not.** The tag layout, the membership gate,
+dedup, and the act mechanics of `NIP-DRAFT-ACTS.md` are fixed by this NIP and hold across
+every marker. What the three text fields *mean* — what belongs in a title, what a
+summary is for, how long a `content` runs — is each corpus's own opinion. A corpus MAY
+state that opinion as an ordinary card under its own marker, with the marker as its
+`d`; the card is disclosure, not a claim, and first use remains the only claim on a
+marker.
+
 **The marker and freeform topics share the `t` tag.** A card MAY therefore carry many
 `t` values, and nothing distinguishes a marker from a topic by inspection. Two
 consequences, both intended:
@@ -300,10 +313,11 @@ consequences, both intended:
 apply the following test to every event it receives, whatever the source, and MUST
 discard events that fail it:
 
-> the marker, **and** a parseable `YYYY-MM-DD` `event_date`, **and** a
-> `timeline.collection` label.
+> a parseable `YYYY-MM-DD` `event_date`, **and** a `timeline.collection` label.
 
-The collection identifier is read from that label's value.
+The collection identifier is read from that label's value. A client SHOULD additionally
+require the marker of a corpus it is configured to read; which markers to admit is the
+client's choice, and a client reading the whole kind admits none.
 
 ### Labels are indexed by value only
 
@@ -350,6 +364,9 @@ whose results MUST be re-checked against the gate.
   discovery index only.
 - A card's displayed date MUST be `event_date`. Date buckets are query shadows and MUST
   NOT be used for display.
+- A client that does not know a card's marker MUST still render its `title`, `summary`
+  and `content` plainly, in that order, under `event_date`. The three fields are the
+  floor every card stands on; a marker's opinion of them only refines how.
 - Inbound citations of a card are queried with `#a`, `#e` or `#p` filters, and the
   results MUST be filtered to events carrying an `adopt` or `fork` marker — a bare
   `#p` match is an ordinary mention. Any reputation derived from these edges is
