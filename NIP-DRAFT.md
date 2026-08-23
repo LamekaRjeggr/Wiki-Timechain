@@ -102,7 +102,7 @@ A collection whose events have no location is valid and carries no ladder.
 | `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. |
 | `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. |
 | `published_at` | `["published_at","1784681375"]` | original publication time as in [NIP-23](23.md). SHOULD be preserved across replacements of the same `d`, while `created_at` changes with each. |
-| `event_time` | `["event_time","14:30"]` | UTC time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour. MUST encode only known precision. Emits no bucket and MUST NOT affect discovery or dedup. |
+| `event_time` | `["event_time","14:30"]` `["event_time","06:15:00-07:00"]` | time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour. A bare value is UTC. A trailing ISO 8601 offset (`±HH:MM`) marks local civil time at the event as the source stated it; `event_date` is then that local calendar day and the value MUST NOT be converted. MUST encode only known precision. Clients MAY normalize through the offset for sub-day ordering. Emits no bucket and MUST NOT affect discovery or dedup. |
 
 ## Text fields
 

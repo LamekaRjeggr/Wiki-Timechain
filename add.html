@@ -433,7 +433,7 @@
     <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
     <input id="f-title" placeholder="Mirepoix" autocomplete="off">
 
-    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14 — and a UTC time after a full date, if known: 2003-07-14 14:30.</span></label>
+    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14 — and a time after a full date, if known: 2003-07-14 14:30 (UTC), or 06:15-07:00 for local time with its offset.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
 
     <label for="f-summary">summary <span class="h">— optional, your plain-words gloss; the viewer can show this instead of the record</span></label>
@@ -1309,16 +1309,17 @@ function buildTemplate(){
   if (!d) throw new Error("the address is empty — it is minted under the collection, or type your own");
   if (!title) throw new Error("a title is required — it is what the card says happened");
 
-  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD — and one rung deeper, a UTC time
-  // after a full date ("2026-08-06 14:30"). The TAG is always a full date, because
+  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD — and one rung deeper, a time after a
+  // full date ("2026-08-06 14:30" = UTC; "06:15-07:00" = local, offset kept verbatim).
+  // The TAG is always a full date, because
   // the membership gate needs a concrete point on the spine; a coarse input is placed on
   // day 01 and the precision is recorded where the convention puts it, in the content.
   // Time attaches only to a known day: the grammar has no slot for it on a coarse date.
-  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2})(?: (\d{2}:\d{2}(?::\d{2})?))?)?)?$/);
-  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD, with an optional UTC time after a full date (e.g. 2003-07-14 14:30)");
+  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2})(?: (\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2})?))?)?)?$/);
+  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD, with an optional time after a full date (e.g. 2003-07-14 14:30 UTC, or 2003-07-14 06:15-07:00 local)");
   const [, wy, wmIn, wdIn, wt] = dm;
-  if (wt && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(wt))
-    throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour UTC`);
+  if (wt && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:[+-](?:0\d|1[0-4]):[0-5]\d)?$/.test(wt))
+    throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour; bare is UTC, a trailing ±HH:MM is local`);
   const wm = wmIn || "01";
   const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
   const dchk = new Date(fullDate + "T00:00:00Z");

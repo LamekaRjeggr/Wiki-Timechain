@@ -1303,10 +1303,23 @@ function dateOf(ev){
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
 const timeOf = ev => tag(ev,"event_time") || "";
+// bare = UTC; a trailing ±HH:MM is local civil time as the source stated it (NIP). Sort
+// normalizes through the offset; the tag value itself is never rewritten. No time → -1,
+// so a timeless card still sits ahead of its timed same-day neighbours.
+function timeMin(t){
+  const m = String(t).match(/^(\d\d):(\d\d)(?::(\d\d))?(?:([+-])(\d\d):(\d\d))?$/);
+  if (!m) return -1;
+  let v = +m[1]*60 + +m[2] + (+m[3]||0)/60;
+  if (m[4]) v += (m[4]==="-" ? 1 : -1) * (+m[5]*60 + +m[6]);
+  return v;
+}
 // a time never appears without its zone — the record is UTC and a bare 14:30 reads as local
-const stamp  = ev => esc(dateOf(ev)) + (timeOf(ev) ? ` ${esc(timeOf(ev))}<span class="tz"> UTC</span>` : "");
+const stamp  = ev => { const t = timeOf(ev); if (!t) return esc(dateOf(ev));
+  const m = t.match(/^([\d:]+)([+-]\d\d:\d\d)$/);
+  return esc(dateOf(ev)) + (m ? ` ${esc(m[1])}<span class="tz"> ${esc(m[2])}</span>`
+                              : ` ${esc(t)}<span class="tz"> UTC</span>`); };
 const byWhen = (a,b) => (readDesc ? -1 : 1) *
-  ((a.frac - b.frac) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  ((a.frac - b.frac) || (timeMin(a.time) - timeMin(b.time)));
 function yearFrac(dateStr){
   const p = String(dateStr).split("-").map(Number);
   return (p[0]||1970) + ((p[1]?p[1]-1:0)/12) + ((p[2]?p[2]-1:0)/365);
@@ -2945,8 +2958,9 @@ const CAP_T = 50, CAP_S = 500;   // soft caps: the counter appears, typing is ne
 
 const draftDate = () => draft && draft.y
   ? draft.y + (draft.m ? "-" + draft.m + (draft.day ? "-" + draft.day : "") : "") : null;
-// the spec's whole time grammar: HH:MM or HH:MM:SS, 24-hour UTC — seconds only if typed
-const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+// the spec's whole time grammar: HH:MM or HH:MM:SS, 24-hour; bare = UTC, an optional
+// trailing ±HH:MM marks local civil time as the source stated it — seconds only if typed
+const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:[+-](?:0\d|1[0-4]):[0-5]\d)?$/;
 
 function startDraft(){
   if (draft || !activeF) return;
@@ -3005,7 +3019,7 @@ function draftNodeHtml(e, future){
     `<div class="ctab"><span class="td dtab" role="button" title="pick the date on the drum">${esc(draftTabText())}</span>` +
     // time rides the date, typed after it — the slot exists only once a full day is committed
     (draft.day ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
-      ` spellcheck="false" title="UTC time, if known — HH:MM">${esc(draft.time)}</span>` +
+      ` spellcheck="false" title="time, if known — HH:MM UTC, or HH:MM±HH:MM local">${esc(draft.time)}</span>` +
       `<span class="tz">UTC</span>` : "") +
     `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
     `<button class="dx" type="button" title="discard this draft (Esc)">✕</button></div>` +
