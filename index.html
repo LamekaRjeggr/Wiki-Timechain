@@ -3329,7 +3329,7 @@ function connect(url){
     // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
+    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], limit:500 }])); // markerless while 30828 is ours alone — the sieve gates shape; restore "#t":[MARKER] when strangers arrive
     if (slugs.size)
       ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
     const af = actFilters();
