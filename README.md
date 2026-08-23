@@ -10,17 +10,17 @@ build step.
 ## The convention
 
 One timeline entry is one **kind-30828** addressable event
-([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) carrying the
-`wikitimechain` marker, a `timeline.collection` label
-([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)), and an
-`event_date`.
+([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) carrying an
+`event_date` and a `timeline.collection` label
+([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)). A `t` marker
+(`wikitimechain`) names the corpus; clients may gate on it.
 
-- Cards are found by the marker. No author filter, no list of timelines.
+- Cards are found by kind. No author filter, no list of timelines.
 - A collection is its slug. The first card carrying a new one creates that timeline.
 - Same `d`, same author — edit. Same `d`, different author — both render.
 
 Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
-Acceptances (kind **8828**, draft): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
+Acts — accept, supersede, revoke (kind **8828**): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
 
 ## Run it yourself
 
@@ -34,7 +34,8 @@ python3 -m http.server 8000
 
 To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 
-`MARKER` and `RELAYS` are the two knobs. Change either in **both** HTML files.
+`MARKER` and `RELAYS` are the two knobs, set in **both** HTML files. The writer stamps
+the marker; the viewer reads the whole kind and does not gate on it yet.
 
 ## Built on
 
@@ -42,11 +43,10 @@ To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 - **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** — card shape: `title` / `d` / djot, and the `fork` marker
 - **[NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)** — labels
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** — bech32 entities
-- **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)** — reactions, kind 7
-- **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)** — comments, kind 1111
 - **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** — browser signer extensions
 - **[NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md)** — remote signing, `bunker://`
 - **[BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)** — schnorr signatures
+- [registry-of-kinds](https://github.com/nostr-protocol/registry-of-kinds) — 30828 listed; 8828 in [PR #11](https://github.com/nostr-protocol/registry-of-kinds/pull/11)
 - [djot](https://djot.net) — content format
 - [nstart.me](https://nstart.me) — get keys · [njump.me](https://njump.me) — inspect an event
 
@@ -60,11 +60,11 @@ code license.
 
 ## License
 
-Code — `index.html`, `add.html`, `nip46.js`, `tools/` — is
+Code — `index.html`, `add.html`, `nip46.js` — is
 [MIT](LICENSE).
 
 Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md` — is
 [CC0 1.0 Universal](LICENSE-SPEC), matching the
 [nips repo](https://github.com/nostr-protocol/nips), so the text can be absorbed
-there without an attribution clause riding along. Card content in `cards/` is CC0
-as well.
+there without an attribution clause riding along. `cards/` is CC0 too; it is staging
+copy — the relays hold the truth.
