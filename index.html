@@ -1249,8 +1249,27 @@ function carries(ev){ return { sum: !!tag(ev,"summary"), body: !!(ev.content || 
 // what this card actually shows: the floor, unless the card was cycled past it. No field
 // stands in for another — a lit line means that line is showing, and a card that carries
 // only a title shows only its title.
+// A card someone else has forked is SUPERSEDED: the revision carries the reading now, so the
+// parent falls back to its title alone until a reader opens it. Keyed pubkey:d — a replaceable
+// parent's id moves on every republish, its coordinate does not. A taken fork does not count:
+// assimilated, the parent's text IS the fork's, and there is nothing newer to defer to.
+let superseded = new Set();
+function markSuperseded(){
+  superseded = new Set();
+  for (const ev of events.values()){
+    const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+    if (!a) continue;
+    const [, ppk, pd] = (a[1] || "").split(":");
+    if (ppk && pd && ppk !== ev.pubkey && !takenOf(ev, pd)) superseded.add(ppk + ":" + pd);
+  }
+}
+const sup     = (ev, d) => superseded.has(ev.pubkey + ":" + d);
+const floorOf = (ev, d) => sup(ev, d) ? "t" : showStr(floor);
+// a superseded card cycles on its OWN key: its twin holds the slot and must not move with it
+const okey    = (ev, d) => sup(ev, d) ? ev.pubkey.slice(0,8) + "." + d : d;
+
 function visOf(ev, d, base){
-  const c = carries(ev), v = parseShow(base || openCards.get(d) || showStr(floor));
+  const c = carries(ev), v = parseShow(base || openCards.get(okey(ev, d)) || floorOf(ev, d));
   return { sum: c.sum && v.s, body: c.body && v.c };
 }
 function beyond(ev, d){ const v = visOf(ev, d); return v.sum || v.body; }
@@ -1276,7 +1295,7 @@ function depthMark(ev, d){
   if (i < 0) i = lad.length - 2;   // "c" on a card that also has a summary — record lit, middle
                                    // dim — sits one rung below "everything": tap adds, never takes
   const nxt = lad[(i + 1) % lad.length], prv = lad[(i - 1 + lad.length) % lad.length];
-  const fv = visOf(ev, d, showStr(floor));           // what the floor alone would show —
+  const fv = visOf(ev, d, floorOf(ev, d));           // what the floor alone would show —
   const eff = showStr({ s: fv.sum, c: fv.body });    // landing back on it clears the override
   const rung = (k, has, on, what) =>
     `<span class="dpb ${k}${has ? (on ? " on" : "") : " no"}" title="${what}"></span>`;
@@ -1286,7 +1305,8 @@ function depthMark(ev, d){
   const rvz = `<a class="rvz" href="add.html?c=${encodeURIComponent(collectionSlug(ev) || "")}` +
     `&d=${encodeURIComponent(tag(ev,"d") || d)}&e=${ev.id}&p=${ev.pubkey}"` +
     ` title="revise this card — your own is edited, someone else's gets a proposed revision">revise</a>`;
-  return rvz + `<button class="dmk${openCards.has(d) ? " open" : ""}" type="button" data-open="${esc(d)}"` +
+  const ok = okey(ev, d);
+  return rvz + `<button class="dmk${openCards.has(ok) ? " open" : ""}" type="button" data-open="${esc(ok)}"` +
     ` data-next="${nxt}" data-prev="${prv}" data-eff="${eff}"` +
     ` title="tap to cycle this card — a lit line is showing">` +
     rung("t", true, true, "title") +
@@ -1825,6 +1845,7 @@ function renderTabs(V){
 
 // ═══════════════ render ═══════════════
 function render(){
+  markSuperseded();           // which cards a revision has displaced — recomputed each pass
   const V = vocab();
   // deep link wins until the visitor picks. ?c= is the shareable form; ?l=/?t=
   // land on the first timeline carrying that tag — never a merged spine.
