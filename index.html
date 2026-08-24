@@ -388,7 +388,8 @@
   .mtl .rvz{position:absolute;top:7px;right:52px;padding:4px 6px;
     font-family:var(--mono);font-size:10px;letter-spacing:.04em;
     color:var(--faint);text-decoration:none;line-height:1}
-  .mtl .rvz:hover{color:var(--text);text-decoration:underline}
+  .mtl a.rvz:hover{color:var(--text);text-decoration:underline}
+  .mtl .rvz.was{color:var(--dim);cursor:default}
   .mtl .dpb{display:block;height:5px;border-radius:2px;background:var(--dim);box-sizing:border-box}
   .mtl .dpb.t{width:10px}.mtl .dpb.s{width:17px}.mtl .dpb.b{width:24px}
   /* lit = the card ladder's rung colors, mirroring the floor glyph */
@@ -1253,14 +1254,14 @@ function carries(ev){ return { sum: !!tag(ev,"summary"), body: !!(ev.content || 
 // parent falls back to its title alone until a reader opens it. Keyed pubkey:d — a replaceable
 // parent's id moves on every republish, its coordinate does not. A taken fork does not count:
 // assimilated, the parent's text IS the fork's, and there is nothing newer to defer to.
-let superseded = new Set();
+let superseded = new Map();   // displaced coordinate → the key that revised it
 function markSuperseded(){
-  superseded = new Set();
+  superseded = new Map();
   for (const ev of events.values()){
     const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
     if (!a) continue;
     const [, ppk, pd] = (a[1] || "").split(":");
-    if (ppk && pd && ppk !== ev.pubkey && !takenOf(ev, pd)) superseded.add(ppk + ":" + pd);
+    if (ppk && pd && ppk !== ev.pubkey && !takenOf(ev, pd)) superseded.set(ppk + ":" + pd, ev.pubkey);
   }
 }
 const sup     = (ev, d) => superseded.has(ev.pubkey + ":" + d);
@@ -1302,7 +1303,12 @@ function depthMark(ev, d){
   // revise rides beside the pyramid: the glyph shows what the card carries, the link is how
   // you change it. Same corner on every card — title-only cards have no foot row to hold it.
   // A plain href: add.html decides late whether you're the author (edit) or a visitor (propose).
-  const rvz = `<a class="rvz" href="add.html?c=${encodeURIComponent(collectionSlug(ev) || "")}` +
+  // The word is the card's own state, past or present: a displaced version reads `revised`
+  // and does nothing — the revision holds the reading, so a correction aimed here lands behind it.
+  const rvz = sup(ev, d)
+    ? `<span class="rvz was" title="revised by ${esc(authorLabel(superseded.get(ev.pubkey + ":" + d)))}` +
+      ` — that version carries the reading now; revise it, not this one">revised</span>`
+    : `<a class="rvz" href="add.html?c=${encodeURIComponent(collectionSlug(ev) || "")}` +
     `&d=${encodeURIComponent(tag(ev,"d") || d)}&e=${ev.id}&p=${ev.pubkey}"` +
     ` title="revise this card — your own is edited, someone else's gets a proposed revision">revise</a>`;
   const ok = okey(ev, d);
