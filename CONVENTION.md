@@ -151,7 +151,7 @@ deleted, nothing is reused, and the false claim keeps its place on the timeline.
 
 ## Cutting a diff
 
-The spec says a revision carries `fork` markers and djot's `{-removed-}` / `{+added+}`.
+The spec says a revision carries `cite` markers and djot's `{-removed-}` / `{+added+}`.
 Granularity is the whole craft, and no spec can hold it.
 
 | Mark | Renders as | Use when |

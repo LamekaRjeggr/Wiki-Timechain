@@ -40,7 +40,7 @@ the marker; the viewer reads the whole kind and does not gate on it yet.
 ## Built on
 
 - **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)** — events, relays, addressable events
-- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** — card shape: `title` / `d` / djot, and the `fork` marker
+- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)** — card shape: `title` / `d` / djot, and the citation marker
 - **[NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)** — labels
 - **[NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md)** — bech32 entities
 - **[NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md)** — browser signer extensions

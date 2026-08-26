@@ -524,6 +524,7 @@ const RELAYS = [
   "wss://nostr.mom"
 ];
 const KIND   = 30828;
+const CITE   = new Set(["cite","fork","adopt"]);   // spec marker + the two words it superseded (read only)
 const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 accept handoff
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
 // The spec's namespaces.
@@ -1220,8 +1221,8 @@ function loadMine(){
   loadedPubAt          = tagOf(ev,"published_at");
   $("f-date").value    = whenOf(ev);
   $("f-content").value = ev.content;
-  const fa = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
-  const fe = ev.tags.find(t => t[0] === "e" && t[3] === "fork");
+  const fa = ev.tags.find(t => t[0] === "a" && CITE.has(t[3]));
+  const fe = ev.tags.find(t => t[0] === "e" && CITE.has(t[3]));
   const coord = (fa?.[1] || "").split(":");
   $("f-fork-d").value  = coord.slice(2).join(":");
   $("f-fork-pk").value = coord[1] || "";
@@ -1235,7 +1236,7 @@ function loadMine(){
   const owned = new Set(["d","title","summary","published_at","event_date","event_time","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
-    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && t[3] !== "fork" && !(t[0] === "p" && t[1] === forkPk))
+    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk))
     .map(t => t.join(" ")).join("\n");
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
@@ -1362,7 +1363,8 @@ function buildTemplate(){
   // pins the exact version revised. FOUR elements — the empty third slot is the relay hint
   // and is STRUCTURAL. Built as arrays here and read back into their own fields on load, so
   // they never round-trip through the whitespace-joined extra-tags box, which would eat the
-  // empty slot and turn ["a",coord,"","fork"] into ["a",coord,"fork"] — marker gone.
+  // empty slot and turn ["a",coord,"","cite"] into ["a",coord,"cite"] — marker gone.
+  // `cite` is the spec's one marker; `fork`/`adopt` are read on load, never written.
   const forkD  = val("f-fork-d");
   const forkE  = val("f-fork-e");
   const forkPk = val("f-fork-pk") || (signer ? signer.pubkey : "");
@@ -1370,8 +1372,8 @@ function buildTemplate(){
     if (!forkD || !forkE) throw new Error("a revision needs both halves — the d it revises and the event id of that version");
     if (!/^[0-9a-f]{64}$/i.test(forkE)) throw new Error("the revised version's event id must be 64 hex characters");
     if (!/^[0-9a-f]{64}$/i.test(forkPk)) throw new Error("a revision needs the target author's pubkey (64 hex) — sign in, or type one");
-    tags.push(["a", `${KIND}:${forkPk}:${forkD}`, "", "fork"]);
-    tags.push(["e", forkE, "", "fork"]);
+    tags.push(["a", `${KIND}:${forkPk}:${forkD}`, "", "cite"]);
+    tags.push(["e", forkE, "", "cite"]);
     tags.push(["p", forkPk]);
   }
 
@@ -1519,7 +1521,7 @@ function previewHtml(tmpl){
   const date = t("event_date");
   const future = date > new Date().toISOString().slice(0, 10);
   const who = signer ? npub(signer.pubkey).slice(0, 12) + "…" : "unsigned";
-  const isRev = tmpl.tags.some(x => x[0] === "a" && x[3] === "fork");
+  const isRev = tmpl.tags.some(x => x[0] === "a" && CITE.has(x[3]));
   return `<div class="pv${future ? " future" : ""}">
     <div class="ctab"><span class="td">${esc(date)}</span><span class="sl">/</span>
       <span class="by">by ${esc(who)}</span></div>

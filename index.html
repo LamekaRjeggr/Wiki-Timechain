@@ -868,8 +868,8 @@ content:
 
       <h3>Show a document changing</h3>
       <p>If your timeline follows a document through versions, a card can carry the change
-        instead of describing it. Tag the version you revised with the <code>fork</code>
-        marker — <code>["a","30828:&lt;pubkey&gt;:&lt;their-d&gt;","","fork"]</code>, the empty
+        instead of describing it. Tag the version you revised with the <code>cite</code>
+        marker — <code>["a","30828:&lt;pubkey&gt;:&lt;their-d&gt;","","cite"]</code>, the empty
         third slot is structural and the marker must be the fourth element — and mark
         the text in djot: <code>{-removed-}</code>, <code>{+added+}</code>. A mark alone on its
         own line becomes a gutter row; a mark inside a sentence stays inline. Readers get a
@@ -1209,11 +1209,14 @@ function renderContent(text, plain){
   }).join("");
 }
 
-// A card carrying a NIP-54 `fork` marker is a revision of another card. That marker is the
-// whole schema — no new tag: fork + marks in the content earns the diff bar, in any collection.
+// A card carrying a `cite` marker derives from another card. That marker is the whole
+// schema — no new tag: cite + marks in the content earns the diff bar, in any collection.
+// `fork` and `adopt` are the two words earlier drafts declared; the spec reads both as cite.
+const CITE = new Set(["cite","fork","adopt"]);
+const citeA = ev => ev.tags.find(t => t[0] === "a" && CITE.has(t[3]));
 const hasMarks = ev => /\{-[^]*-\}|\{\+[^]*\+\}/.test(ev.content || "");
 function forkOf(ev){
-  const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+  const a = citeA(ev);
   return a ? (a[1].split(":")[2] || "") : "";
 }
 // A fork's clean text: deletions dropped, insertions kept — the newer document it asserts.
@@ -1225,7 +1228,7 @@ const cleanOf = s => (s || "").replace(/\{-[^]*?-\}/g, "").replace(/\{\+([^]*?)\
 // nowhere; the parent's credit line is the reader's route back to it. Note this compares
 // two cards on display — the fork's `e` id stays undereferenced.
 function takenOf(ev, d){
-  const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+  const a = citeA(ev);
   const ppk = a ? (a[1] || "").split(":")[1] : "";
   if (!ppk || ppk === ev.pubkey) return null;
   const cur = events.get(ppk + ":" + d);
@@ -1258,7 +1261,7 @@ let superseded = new Map();   // displaced coordinate → the key that revised i
 function markSuperseded(){
   superseded = new Map();
   for (const ev of events.values()){
-    const a = ev.tags.find(t => t[0] === "a" && t[3] === "fork");
+    const a = citeA(ev);
     if (!a) continue;
     const [, ppk, pd] = (a[1] || "").split(":");
     if (ppk && pd && ppk !== ev.pubkey && !takenOf(ev, pd)) superseded.set(ppk + ":" + pd, ev.pubkey);
@@ -1397,19 +1400,24 @@ function authorLink(pk){
 // Citation credit, read straight off the card. The pubkey comes out of the `a` coordinate,
 // not the `p` tag: `p` is a SHOULD and its absence must not invalidate the citation, and the
 // stray cards already on the relay carry it unmarked. The `e` id is never dereferenced —
-// nothing here fetches the source, compares versions, or derives a "since edited" state.
-// One line per cited key; a card may carry many forks, at most one adopt.
+// nothing here fetches the source. One line per cited key.
+// The WORD is derived, never declared (NIP-DRAFT "the bytes say"): the card's clean text
+// byte-equal to the source's current content, and that source still the cited version →
+// it carries a copy; anything else is its own text built on the source → revises. The
+// `e` id is only compared against the id already on display.
 function creditsOf(ev){
   const out = new Map();
   for (const t of ev.tags){
-    if (t[0] !== "a" || (t[3] !== "fork" && t[3] !== "adopt")) continue;
-    const pk = String(t[1] || "").split(":")[1] || "";
-    if (/^[0-9a-f]{64}$/.test(pk) && pk !== ev.pubkey && !out.has(pk)) out.set(pk, t[3]);
+    if (t[0] !== "a" || !CITE.has(t[3])) continue;
+    const [, pk, ...dp] = String(t[1] || "").split(":");
+    if (!/^[0-9a-f]{64}$/.test(pk || "") || pk === ev.pubkey || out.has(pk)) continue;
+    const src = events.get(pk + ":" + dp.join(":"));
+    const e = ev.tags.find(x => x[0] === "e" && CITE.has(x[3]));
+    const copy = src && src.content === cleanOf(ev.content) && e && src.id === e[1];
+    out.set(pk, copy ? "carries" : "revises");
   }
   return [...out];
 }
-// The marker names itself — "fork" and "adopt" are the spec's two words, so the line says
-// what the tag says and invents no third vocabulary for it.
 function creditRow(ev){
   const cr = creditsOf(ev);
   return cr.length ? `<div class="via">` + cr.map(([pk, mk]) =>

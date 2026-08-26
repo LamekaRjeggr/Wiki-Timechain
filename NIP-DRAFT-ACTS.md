@@ -68,7 +68,7 @@ page saying what the card it corrected already says.
 
 The owner replaces their own card with the corrected text in clean words, an ordinary
 replacement under their own `d`. Do not instead carry the fork's content verbatim. It is
-byte-exact and so drags the diff marks along, and marks on a card with no `fork` marker
+byte-exact and so drags the diff marks along, and marks on a card with no `cite` marker
 render as nothing at all: the correction becomes unreadable at the very moment it is
 accepted.
 
