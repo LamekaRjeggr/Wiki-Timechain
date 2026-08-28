@@ -177,9 +177,8 @@
   .rchip:hover,.lchip:hover,.vbtn:hover{color:var(--text)}
   .rchip.on,.lchip.on,.vbtn.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
   .rchip .n,.lchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
-  .rchip .oc{color:var(--rail);margin-right:5px}   /* ⌂ is chrome — the app's amber, never a timeline hue */
   /* the accepted lens picker: one chip per key holding live acts here. ✓ is the mark of an
-     act (as ⌂ is of curation) — shape carries it, the amber is chrome */
+     act — shape carries it, the amber is chrome */
   .lensrow{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:center;
     align-items:center;gap:5px;margin-top:6px}
   .lenslab{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:2px}
@@ -451,7 +450,7 @@
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:var(--dim)}
 
-  /* ── third-party cards this collection has NOT adopted. Three channels and no hue: they sit
+  /* ── cards the notary has NOT passed. Three channels and no hue: they sit
      INSET from the spine, their rule and border are DASHED, and they say "proposed" in words.
      (The ocher/cyan axis only ever means time; amber only ever means the app's own chrome.) */
   .mtl .prop{grid-column:2;margin:7px 0 0 20px;padding-left:14px;
@@ -460,7 +459,7 @@
   .mtl .ptag{margin-left:8px;padding:1px 6px;vertical-align:2px;font-family:var(--mono);
     font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
     border:1px dashed var(--gutline);border-radius:5px}
-  /* the fold — cards from keys with no standing here. Nothing is deleted, only resisted, and
+  /* the fold — cards the notary has not passed. Nothing is deleted, only resisted, and
      the count IS the information. */
   .mtl .foldrow{display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
   .mtl .foldrow .lab{grid-column:2;padding:13px 0 2px;color:var(--dim);
@@ -917,7 +916,6 @@ const KIND = 30828;
 const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, accept/revoke
 const NOTARY_KIND = 30829;      // Timeline Notaries (draft NIP): the collection as its own event
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
-const MARGIN = 2;               // deadband on the plurality lead — inside it a collection is co-held, not flipped
 
 // ═══════════════ state ═══════════════
 const events   = new Map();     // pubkey:d → newest card (replaceable per author)
@@ -979,7 +977,7 @@ let lensPk = null;
 let actLensPk = null;
 // the spine view — whose acceptances put a card on the line. "you" (the default): your own
 // cards plus the versions your live acts stand behind, everything else waits one layer out.
-// "popular": the derived authority — curators, adoption, the fold. Your view needs a key;
+// "popular": what the notary passes. Your view needs a key;
 // without one popular is the only honest reading, and the toggle stays hidden.
 let spineView = "you";
 try { if (localStorage.getItem("wtc:spineview") === "popular") spineView = "popular"; } catch {}
@@ -1574,15 +1572,10 @@ function scopeOf(a){
   }
   return s;
 }
-// Only the content copy moves documents (draft NIP, Derivation): adoption, the lens's fold
+// Only the content copy moves documents (draft NIP, Derivation): the lens's fold
 // override — anything that gives a card a place — requires content in scope and LIVE.
 // Title/summary acceptance is voice: it counts and renders, never carries custody.
 const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
-// Live consent with custody weight: keys whose content copy is live on this card.
-function consentOn(ev, d){
-  const coord = KIND + ":" + ev.pubkey + ":" + d;
-  return acceptances(coord, ev.id).filter(a => actMoves(a, ev)).map(a => a.pubkey);
-}
 // the accepted lens, derived: every key holding a live acceptance on a card of this
 // collection, with its count. Any such key IS a lens — no role, no permission; reading
 // one is following that key's editorial judgment, rebuilt purely from its signatures.
@@ -1628,76 +1621,8 @@ function scheduleRender(){
 function matching(f){
   return [...events.values()].filter(ev => matchesF(ev, f));
 }
-// ═══════════ authority: who curates a collection, and which cards stand on its spine ═══════════
-// All derived from what's already on the events — signatures and card counts. Nothing new is
-// tagged. THE RULE: prominence is earned by a SIGNED ACT, never by a number. Stance tallies
-// can't rank (a key is free to mint anywhere, so one visitor is fifty +'s), created_at can't
-// rank (self-asserted), follows can't rank (no login, no key in the repo). What is left that
-// cannot be faked: how many cards an author has published here, and a list someone signed.
-function coinedAt(ev){
-  // coinage reads published_at, NOT created_at: 30828 is replaceable, so created_at moves when
-  // you fix a typo — under created_at you'd lose your own coinage by editing your oldest card.
-  return +tag(ev,"published_at") || ev.created_at;
-}
-function authorityOf(c){
-  const evs = matching("c:" + c);
-  const n = new Map(), first = new Map();
-  for (const ev of evs){
-    n.set(ev.pubkey, (n.get(ev.pubkey) || 0) + 1);
-    const t = coinedAt(ev);
-    if (!(first.get(ev.pubkey) <= t)) first.set(ev.pubkey, t);
-  }
-  const rank = [...n.keys()].sort((a,b) => (n.get(b) - n.get(a)) || (first.get(a) - first.get(b)));
-  // PLURALITY DECIDES; FIRST COINAGE IS ONLY THE TIEBREAK — and that order is the whole
-  // security of it. Coinage-first is seizable with ONE backdated card; plurality-first makes
-  // that same card lose to the nineteen already here, so coinage is reached for only at a tie,
-  // which on real data means a collection holding one card and having nothing to take.
-  // MARGIN is a deadband, not a majority: without it the crown turns over every time either
-  // author publishes and the roster and the adoption gate flap with it. Inside the band nobody
-  // flips — the collection is CO-HELD and every holder curates.
-  const top = n.get(rank[0]) || 0;
-  const origins = new Set(rank.filter(pk => n.get(pk) > top - MARGIN));
-  // Adoption is a FRANCHISE, not a crown: a list counts if its signer already stands on the
-  // spine. The originator grants the first one — that bootstraps it, and it is what stops a
-  // fresh key adopting itself on. It's also what makes the flip harmless: an author who loses
-  // the count keeps every adoption they granted, so nothing a reader was reading falls off.
-  // A CURATOR'S LIVE ACCEPTANCE IS THE ADOPTION (kind-7 `+` retired with reactions,
-  // 2026-08-20): consent per the acts NIP — a curator's current act with a content copy
-  // live on the version now held at the coord. It lapses when the card is replaced,
-  // which is what makes it the stronger claim. Withdrawing is the withdraw button:
-  // a revoke act, nothing to delete and no kind 5 to be refused by the paid relays.
-  const curators = new Set(origins);   // whose acceptance counts
-  const adopted = new Set();           // card coords one of them vouched for
-  for (let pass = 0; pass < 8; pass++){
-    const was = adopted.size + curators.size;
-    for (const ev of evs){
-      const coord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
-      if (adopted.has(coord)) continue;
-      const consent = new Set(consentOn(ev, tag(ev,"d")));
-      if (!consent.size) continue;
-      for (const pk of [...curators]){
-        if (!consent.has(pk)) continue;
-        adopted.add(coord); curators.add(ev.pubkey); break;
-      }
-    }
-    if (adopted.size + curators.size === was) break;
-  }
-  // Standing — who gets the inset shelf rather than the fold — is WIDER than curation, and
-  // deliberately: substantial presence earns a hearing. It's what stops the flip from burying
-  // a deposed originator's record in the fold, and it can't be used to climb, because a list
-  // only counts from a CURATOR. (Note the limit this accepts: a deposed originator's cards go
-  // inset, not spine. Any rule that kept them on the spine is a rule a squatter could use to
-  // reach the spine, since coinage is self-asserted. One adoption from the new holder restores
-  // them, and until then the record is on the page, attributed, never hidden.)
-  const stand = new Set([...curators, ...rank.filter(pk => n.get(pk) >= MARGIN)]);
-  return { n, rank, origins, coheld: origins.size > 1, adopted, curators, stand };
-}
-// three shelves. 0 = on the spine (a curator's own card, or one they adopted — adoption makes
-// a card indistinguishable from a founding one, which is what accepting means). 1 = proposed,
-// from an author who already stands here AND at least one key's acceptance has a field-copy
-// live on this exact version — standing earns a hearing, acceptance is what puts it in the
-// line. A card no one accepts is off the page, however many cards its author holds.
-// 2 = behind the fold. Never deleted, only resisted.
+// three shelves. 0 = on the spine (what the notary passes). 1 = passed, waiting on the
+// notary's re-read. 2 = behind the fold. Never deleted, only resisted.
 function anyAcceptance(ev){
   return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).some(a => {
     if (a.pubkey === ev.pubkey) return false;  // self-acceptance backs nothing
@@ -1714,16 +1639,11 @@ function notaryTier(N, ev){
   const a = acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).find(a => a.pubkey === N.pubkey);
   return !a ? 2 : actMoves(a, ev) ? 0 : 1;
 }
-function tierOf(ev, A, N){
-  if (N) return notaryTier(N, ev);
-  if (!A || A.origins.has(ev.pubkey)) return 0;
-  if (A.adopted.has(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))) return 0;
-  return A.stand.has(ev.pubkey) && anyAcceptance(ev) ? 1 : 2;
-}
+const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 // what the fold is holding back — the count IS the information
 function foldOf(c){
-  const A = authorityOf(c), N = notaryOf(c);
-  const hid = matching("c:" + c).filter(ev => tierOf(ev, A, N) === 2);
+  const N = notaryOf(c);
+  const hid = matching("c:" + c).filter(ev => tierOf(ev, N) === 2);
   return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
 }
 
@@ -1731,7 +1651,7 @@ function foldOf(c){
 // entry can carry spine versions, proposed versions, or (a pure addition) only proposed ones.
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
-  const A = c ? authorityOf(c) : null, N = c ? notaryOf(c) : null;
+  const N = c ? notaryOf(c) : null;
   const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders shelf 3 as shelf 2
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
@@ -1752,11 +1672,11 @@ function entriesOf(f){
       acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
         .some(a => a.pubkey === myPk && actMoves(a, ev));
     const evs  = (youView() ? all.filter(backs)
-                            : all.filter(ev => tierOf(ev, A, N) === 0)).sort(ord);
+                            : all.filter(ev => tierOf(ev, N) === 0)).sort(ord);
     // the accepted lens overrides the fold — but only a CONTENT-live act moves a card onto
     // the page (draft NIP: only the content copy moves documents; title/summary is voice)
     const prop = (youView() ? all.filter(ev => !backs(ev))
-                : all.filter(ev => { const t = tierOf(ev, A, N); if (!t) return false;
+                : all.filter(ev => { const t = tierOf(ev, N); if (!t) return false;
       const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); })).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
@@ -1795,14 +1715,15 @@ const vocab = () => [...slugs].sort().map(c => ["c:" + c, slugName(c)]);
 
 // Who else has published here. A LENS, not a filter — it never changes which cards are on the
 // page. Hidden at one author, so it stays invisible until a second key publishes: that is the
-// expected state on today's data, not a broken build. The note is there because "originator" reads as ownership if nothing says
-// otherwise — what the title carries is curation, and never anyone's record.
+// expected state on today's data, not a broken build.
 function renderRoster(){
   const c = activeF ? activeF.slice(2) : null;
-  const A = c ? authorityOf(c) : null, N = c ? notaryOf(c) : null;
-  const oc = pk => !N && A.origins.has(pk);   // ⌂ only means something without a notary
+  const N = c ? notaryOf(c) : null;
+  const n = new Map();                        // cards per key — a count, never a rank of authority
+  if (c) for (const ev of matching("c:" + c)) n.set(ev.pubkey, (n.get(ev.pubkey) || 0) + 1);
+  const rank = [...n.keys()].sort((a,b) => (n.get(b) - n.get(a)) || (a < b ? -1 : 1));
   // the spine-view toggle: your view is the default and needs your key; popular is the
-  // derived authority everyone sees. An empty your-view is the honest starting state,
+  // notary's spine everyone sees. An empty your-view is the honest starting state,
   // not a broken page — the note says so instead of leaving a bare spine unexplained.
   if (!myPk || !c){ viewEl.style.display = "none"; }
   else {
@@ -1813,24 +1734,22 @@ function renderRoster(){
       `<button class="vbtn${spineView === "you" ? " on" : ""}" type="button" data-v="you"` +
       ` title="your spine — your cards and the versions you accepted sit on the line">your view</button>` +
       `<button class="vbtn${spineView === "popular" ? " on" : ""}" type="button" data-v="popular"` +
-      ` title="${N ? "the notary's spine — what its key passes" : "the derived spine — curators and what they adopted"}">popular view</button>` +
+      ` title="the notary's spine — what its key passes">popular view</button>` +
       (empty ? `<span class="viewnote">your view is empty here — you haven't accepted a version yet; every card waits one layer out</span>` : "");
   }
   const L = c ? actLenses(c) : new Map();
   if (actLensPk && !L.has(actLensPk)) actLensPk = null;   // no live acts here — lens drops
-  const many = !!(A && A.rank.length >= 2);
+  const many = rank.length >= 2;
   if (!many) lensPk = null;
-  else if (lensPk && !A.n.has(lensPk)) lensPk = null;     // switched to a timeline they aren't in
+  else if (lensPk && !n.has(lensPk)) lensPk = null;     // switched to a timeline they aren't in
   if (!many && !L.size){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; return; }
   rosterEl.style.display = "";
-  rosterEl.innerHTML = (many ? A.rank.map(pk =>
+  rosterEl.innerHTML = (many ? rank.map(pk =>
       `<button class="rchip${pk === lensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
-      ` title="${oc(pk) ? "curates this collection" : "contributor"} — tap to pick out their cards">` +
-      (oc(pk) ? `<span class="oc">⌂</span>` : "") +
-      `${authorLabel(pk)}<span class="n">${A.n.get(pk)}</span></button>`
+      ` title="contributor — tap to pick out their cards">` +
+      `${authorLabel(pk)}<span class="n">${n.get(pk)}</span></button>`
     ).join("") +
-    `<div class="rnote">${N ? `notary ${authorLabel(N.pubkey)} ${tag(N,"passes") === "auto" ? "passes every submission" : "passes what its key accepted"}`
-                            : A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
+    `<div class="rnote">notary ${authorLabel(N.pubkey)} ${tag(N,"passes") === "auto" ? "passes every submission" : "passes what its key accepted"}` +
     ` · every author keeps their own cards</div>` : "") +
     // the accepted lens row: only keys with live acts here appear, count = cards backed
     (L.size ? `<div class="lensrow"><span class="lenslab">accepted lens</span>` +
@@ -1997,7 +1916,7 @@ function bindTaps(){                                      // gap expanders + acc
 function renderTimeline(entries){
   const nowFrac = yearFrac(new Date().toISOString().slice(0,10));
 
-  // acts subscribe collection-wide: EVERY card, rendered or not. A curator's acceptance is
+  // acts subscribe collection-wide: EVERY card, rendered or not. The notary's acceptance is
   // what promotes a card, and a folded card is never rendered — gate the subscription on
   // rendering and a promotion could never be observed, so nothing would ever leave the fold.
   if (activeF) matching(activeF).forEach(ev =>
@@ -3311,8 +3230,8 @@ window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eve
 // Nothing a relay says is believed until the signature checks out. Every event arrives
 // CLAIMING a pubkey, and a relay can put any pubkey on anything it invents — so the
 // claim is worth exactly what it is until checked. Everything downstream reads those
-// claims as authority: whose cards sit on the spine, whose `+` adopts a foreign one,
-// who counts as the originator. All of that is only as true as this check.
+// claims as authority: whose cards sit on the spine, which notary passed them. All of
+// that is only as true as this check.
 //
 // Two things are wrong with an unchecked event and both are checked here: the id must
 // be the hash of the event's OWN contents (or a valid signature could be lifted off one
