@@ -7,10 +7,9 @@ Timeline Cards
 `draft` `optional`
 
 A timeline card is an addressable event placing one dated fact on a shared timeline.
-Cards carrying the same collection label form a collection; any key may publish into
-any collection, and no key may exclude another. Discovery is a marker in the indexed
-`t` tag, plus query shadows: self-labels for date and jurisdiction, a `g` tag for
-geohash.
+A card is submitted to a notary ([Timeline Notaries NIP], kind `30829`) by an `a` tag;
+any key may submit to any notary, and what a notary passes on is its own key's
+acceptances ([Timeline Acts NIP], kind `8828`). Discovery runs through the notary.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
@@ -20,27 +19,22 @@ interpreted as described in RFC 2119.
 
 Two problems recur wherever events are recorded permissionlessly.
 
-**An open discovery marker is squattable.** This NIP splits discovery from membership:
-a marker for the relay to filter on, and a shape test the client applies to what comes
-back.
+**Anyone can submit anything.** This NIP splits submission from passing: a card names
+the notary it is submitted to, and the notary's own acceptances decide what a reader
+sees. No allowlist, and no key may exclude another from submitting.
 
-**A client that does not implement a spec silently drops the tags it does not know**,
-so declared state fails to travel. This NIP declares no state a card's meaning depends
-on: the load-bearing signal is a field's **presence or absence**, which no client can
-drop, and a dropped `cite` marker leaves an ordinary card.
-
-**One case degrades worse, and this NIP does not claim otherwise.** Drop the marker on
-a fork that took its parent's `d` (see *The address a citing card takes*) and an unexplained
-rival remains at a shared address. That is the cost of having a correction mechanism at
-all; it is bounded by the marks, which travel in `content` where no client can drop them.
+**A client that does not implement a spec silently drops the tags it does not know.**
+So this NIP declares no state a card's meaning depends on: the load-bearing signal is a
+field's **presence or absence**, which no client can drop. The one case that degrades
+worse — a `cite` marker dropped from a fork holding its parent's `d` — leaves an
+unexplained rival at a shared address, bounded by the marks, which travel in `content`.
 
 ## Event kind
 
 A timeline card is kind `30828`, an addressable event as defined in
-[NIP-01](01.md). The event is self-labeling per [NIP-32](32.md): every field is a tag
-on the card itself. A client MUST ignore external kind `1985` labeling events when
-applying this NIP — a card's membership and axes are read from the card alone, so that
-no third party can attach a card to a collection its author did not choose.
+[NIP-01](01.md). Every field is a tag on the card itself; a client MUST ignore external
+labeling events (kind `1985`) when applying this NIP, so that no third party can attach
+a card to a notary its author did not choose.
 
 `content` is [djot](https://djot.net). Clients that do not implement djot SHOULD render
 `content` as plain text rather than as another markup language.
@@ -51,61 +45,25 @@ no third party can attach a card to a collection its author did not choose.
 |---|---|---|
 | `d` | `["d","proposition-number-assigned"]` | addressable identifier; republishing under the same `d` replaces |
 | `event_date` | `["event_date","2026-07-01"]` | the date the card is *about*, `YYYY-MM-DD` |
-| marker | `["t","wikitimechain"]` | discovery marker; see *Discovery* |
-| collection | `["L","timeline.collection"]` `["l","example-timeline","timeline.collection"]` | which timeline this card belongs to |
 
 `event_date` MUST be a full `YYYY-MM-DD` date and is the card's position on the
 timeline. It is distinct from the event's `created_at`, which records when this version
-was signed, and from the OPTIONAL `published_at`; see *Optional tags*.
+was signed, and from the OPTIONAL `published_at`; see *Optional tags*. Where the true
+date is coarser than a day, the placeholder components are the publisher's convention
+and a client MUST NOT read precision from them.
 
 **`d` is opaque.** How a publisher mints it is their business; a client MUST NOT
 derive meaning from it, whatever it appears to encode.
-
-A card MUST carry exactly one collection label. Its value is the collection's
-identifier and SHOULD be lowercase kebab-case.
-
-**Date buckets** are a query shadow of `event_date`, and exist because multi-letter tags
-are not indexed by relays: `["L","timeline.date"]` `["l","2026","timeline.date"]`
-`["l","2026-07","timeline.date"]`. A card SHOULD emit a `YYYY` bucket, and SHOULD emit a
-`YYYY-MM` bucket when the month is known; they are the only date axis a relay can filter
-on, and the only axis that crosses collections. A card without them is valid and is found
-by the marker filter alone. **Buckets MUST encode only known precision.** Where the true
-date is coarser than a day, the placeholder components of `event_date` MUST NOT be
-emitted as buckets — a card known only to the year emits no month bucket.
-
-### Location
-
-A card describing an event with a location SHOULD carry a jurisdiction ladder. If it
-does, the ladder MUST run from the top down to the event's true scope, with every rung
-present.
-
-```json
-["L", "ISO-3166-1"],            ["l", "JP", "ISO-3166-1"],
-["L", "ISO-3166-2"],            ["l", "JP-13", "ISO-3166-2"],
-["L", "timeline.location"],     ["l", "jp-13-shibuya", "timeline.location"]
-```
-
-Relays filter on a label's *value*, not on the (`L`,`l`) pair, so an omitted rung is not
-queryable even when a deeper rung implies it. That is why the whole ladder is written
-out rather than derived.
-
-- ISO rungs MUST use ISO codes verbatim under the standard namespaces `ISO-3166-1` and
-  `ISO-3166-2`.
-- Rungs below the ISO-3166-2 level are namespaced `timeline.location` and SHOULD be
-  lowercase kebab-case, prefixed by their parent rung.
-- The ladder MUST NOT extend deeper than the event's real scope. A national act stops
-  at the country rung.
-
-A collection whose events have no location is valid and carries no ladder.
 
 ### Optional tags
 
 | Tag | Example | Rule |
 |---|---|---|
-| `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. |
-| `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. |
+| `a` | `["a","30829:<pubkey>:<d>"]` | submission: the notary this card belongs to. At most two. A card carrying none belongs to no notary and is found only by the whole-kind filter. Distinguished from a citation by the kind prefix; no marker. |
+| `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. A card carrying none takes its notary's. |
+| `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. A corpus marker MAY ride here too; see *Discovery*. |
 | `published_at` | `["published_at","1784681375"]` | original publication time as in [NIP-23](23.md). SHOULD be preserved across replacements of the same `d`, while `created_at` changes with each. |
-| `event_time` | `["event_time","14:30"]` `["event_time","06:15:00-07:00"]` | time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour. A bare value is UTC. A trailing ISO 8601 offset (`±HH:MM`) marks local civil time at the event as the source stated it; `event_date` is then that local calendar day and the value MUST NOT be converted. MUST encode only known precision. Clients MAY normalize through the offset for sub-day ordering. Emits no bucket and MUST NOT affect discovery or dedup. |
+| `event_time` | `["event_time","14:30"]` `["event_time","06:15:00-07:00"]` | time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour. A bare value is UTC. A trailing ISO 8601 offset (`±HH:MM`) marks local civil time at the event as the source stated it; `event_date` is then that local calendar day and the value MUST NOT be converted. MUST encode only known precision. Clients MAY normalize through the offset for sub-day ordering. MUST NOT affect discovery or dedup. |
 
 ## Text fields
 
@@ -146,9 +104,8 @@ silently reattach.
 
 ## Citations
 
-A card MAY be built from a version that another card records — a revision, an
-extract, a verbatim carry, or a new text drawing on it. Such a card MUST tag its source
-with a `cite` marker in both forms:
+A card built from a version another card records — a revision, an extract, a verbatim
+carry, a new text drawing on it — MUST tag its source with a `cite` marker in both forms:
 
 ```json
 ["a", "30828:<pubkey>:<source-d>", "", "cite"],
@@ -156,214 +113,104 @@ with a `cite` marker in both forms:
 ```
 
 The third element is the relay-hint slot and MUST be present, empty if unknown; the
-marker is the fourth element. Both tags are REQUIRED: the `a` coordinate survives an
-edit of the source, while the `e` id pins the exact version this card was built
-against. A `p` tag carrying the same marker SHOULD accompany them to route credit;
-a client MUST NOT treat its absence as invalidating the citation. A card MAY carry many
-`cite` markers. `cite` is the only citation marker.
+marker is the fourth. Both tags are REQUIRED: `a` survives an edit of the source, `e` pins
+the exact version. A `p` tag with the same marker SHOULD route credit; its absence does
+not invalidate the citation. A card MAY carry many. `cite` is the only citation marker;
+a client MUST read the retired words `fork` and `adopt` as `cite`, and a publisher MUST
+NOT emit them.
 
 **A citation asserts only that this card derives from that exact version.** It claims no
-replacement: the source stands, the citing card stands, and whether the citing card is a
-revision, a rival framing, a copy, or a departure is derived by each reader from the
-content and from acts — never declared by the marker.
+replacement and declares no kind; what kind it is, the bytes say.
 
 ### What kind of citation it is, the bytes say
 
-A citing card's **newer document** is its reconstruction if it carries marks (see below),
-and its `content` as published if it does not. Let the **source's current version** be the
-event now held at the cited coordinate. Then, comparing the newer document with the
-source's current `content`, byte for byte:
+A citing card's **newer document** is its reconstruction if it carries marks (below), else
+its `content`. Compare it, byte for byte, with the `content` now held at the cited
+coordinate:
 
-- **Equal, and the source's current id is the cited `e` id** — the card **carries** its
-  source: a verbatim copy of the version it cites.
-- **Equal, and the id differs** — the source moved to meet the card after it was
-  published: the card is **taken**, see *Taking a revision*.
+- **Equal, and the source's current id is the cited `e`** — the card **carries** its source.
+- **Equal, and the id differs** — the source moved to meet the card: the card is **taken**.
 - **Different** — the card is a **fork**: its own text, built on the source.
 
-Nothing is declared. Every case is read from two events on display; the `e` id is
-compared against an id already on the page and is never dereferenced. A client MAY
-render the derived case (`via <npub> · carries`, `· revises`), and MUST NOT let a card
-declare one.
-
-When the source is replaced, a carry may stop matching and read as a fork. That is the
-same drift *Taking a revision* accepts, and it is accepted here.
-
-Earlier drafts used two marker words, `fork` and `adopt`, and declared the distinction.
-A client MUST read either word as `cite`; a publisher MUST NOT emit them.
+The `e` id is a commitment, not a link: it is compared against an id already on the page
+and MUST NOT be dereferenced. A client MAY render the derived case (`· carries`,
+`· revises`) and MUST NOT let a card declare one. A replaced source may turn a carry into
+a fork; that drift is accepted.
 
 ### The address a citing card takes
 
-A citing card under a **different** key MAY carry the same `d` as its source, and SHOULD
-when it answers that card rather than adding to the record. The two then share the
-address under different keys: the rival-version case of *Text fields*, which a client
-stacks as one entry — with the lineage named, since the `e` id pins which version is
-being answered. A citing card taking a new `d` instead is an additional card, and a
-client shows it beside the source, not stacked with it. Both are legal; the choice is
-which of those two a publisher means. A card doing both takes the source's `d`:
-answering is the stronger claim, and what it adds rides along. A card carrying its
-source verbatim answers nothing and SHOULD take its own `d`.
+Under a **different** key, a citing card MAY take its source's `d`, and SHOULD when it
+answers that card rather than adding to the record: the two then stack as rival versions
+of one entry, lineage named by the `e` id. A new `d` is an additional card, shown beside
+the source. A card doing both takes the source's `d`; a verbatim carry answers nothing
+and SHOULD take its own.
 
-**This is the only way to correct another key's card.** A rival version with no `cite`
-marker leaves a reader no way to tell which version it answers, and a fork under a new
-`d` puts a second card on the record for one event. Neither the source nor the fork
-yields on publication: nothing is retracted, and the source's key remains the only one
-that can replace it. A fork stops standing only when the source's own words come to
-match it — see *Taking a revision*.
+This is the only way to correct another key's card. Nothing is retracted on publication:
+the source's key remains the only one that can replace it, and a fork stops standing only
+when the source's words come to match it (*Taking a revision*).
 
-Because it can, a fork taking its source's `d` **SHOULD** carry the marks described
-below. The source may be replaced at any time — that is what holding the address means —
-and a marked fork survives it: both documents are recoverable from the fork's own bytes,
-so what it answers is carried rather than linked. An unmarked fork stacked on a replaced
-source can only name a version no longer on display.
+A citing card MUST NOT take the source's `d` under the **source's own** key — that is
+replacement per [NIP-01](01.md), the one act that destroys a version.
 
-**The `e` id is a commitment, not a link.** A client MUST NOT dereference it: no
-fetching the source. The one use it has is the id comparison above, which reads nothing
-that is not already on the page.
-
-A citing card MUST NOT take the source's `d` under the **source's own** key. Same key,
-same `d` is replacement per [NIP-01](01.md) — the owner's affordance, and the one act
-that destroys a version.
-
-A fork MAY express its changes with djot's insert and delete syntax, `{-removed-}` and
-`{+added+}`; the marks are voluntary. A client MUST NOT render a card as a diff unless
-it carries both a `cite` marker and marks in `content`; either alone is an ordinary card.
-
-A marked card asserts two documents, and both MUST be recoverable from it: stripping the
-deletions and unwrapping the insertions yields the newer document exactly, and the
-converse yields the older. A publisher SHOULD verify a marked card by performing both
-reconstructions rather than by reading it.
+A fork MAY mark its changes with djot's `{-removed-}` and `{+added+}`, and a fork holding
+its source's `d` SHOULD: the source may be replaced at any time, and a marked fork carries
+both documents in its own bytes. A client MUST NOT render a diff unless the card carries
+both a `cite` marker and marks. Both documents MUST be recoverable — strip deletions and
+unwrap insertions for the newer, the converse for the older — and a publisher SHOULD
+verify by performing both reconstructions.
 
 ### Taking a revision
 
 A fork is **taken** when the source's current `content` is byte for byte the fork's newer
-document and the source has been replaced since the fork cited it (the second case
-above). Nothing else is required. The words agreeing is the whole evidence, and it is
-evidence anyone can check from the two events alone — no act, no tag, no announcement.
-The owner takes a revision the obvious way: by replacing their own card with the
-corrected text in clean words, an ordinary replacement under their own `d`.
+document (no normalization, no trimming; `content` only) and the source was replaced after
+the fork cited it. The words agreeing is the whole evidence: no act, no tag. The owner
+takes a revision by replacing their own card with the corrected text in clean words.
 
-A taken fork MUST NOT hold a slot of its own in the entry. It is the redundant one — its
-words are now the source's words — and it is what gets out of the reader's way. Where it
-goes instead is the client's choice: behind the source, or nowhere but a mark on the
-source saying this card has been revised. Either way the source MUST credit the fork's
-author, named from the fork's `p` tag or its pubkey.
+A taken fork MUST NOT hold a slot of its own: behind the source, or a mark on it, at the
+client's choice. It stays addressable, and the source MUST credit the fork's author (its
+`p` tag or pubkey) — the credit is the reader's route to it, and the point of the rule.
 
-Out of the way is not deleted. The fork stands as its own event, addressable and
-reachable, and the credit is the reader's route to it. **The credit is the point of the
-rule.** A fork left in the reading line after its text has been taken is noise, saying
-what the card it corrected already says; getting it out of the way without naming who
-wrote it is worse, because it hides who caught the error.
-
-Byte for byte means byte for byte: no normalization, no trimming. A source that took the
-substance but rewrote a word has not taken that fork, and the fork stands. The comparison
-is over `content` only — a fork's other fields are its own card's words, and they go with
-it when it collapses.
-
-A citing card is an ordinary card. It MUST pass the membership gate on its own tags, and
-it deduplicates, replaces and displays like any other. A reaction ([NIP-25](25.md)) is
-not a citation. Citing a source requires publishing a card.
+A citing card is an ordinary card: it passes the gate on its own tags and deduplicates,
+replaces and displays like any other. A reaction ([NIP-25](25.md)) is not a citation.
 
 ## Discovery
 
-A client discovers cards with a single indexed filter (the limit is illustrative):
+A card is found through its notary, in two indexed filters (the notary NIP has the
+third, for acceptances):
 
 ```json
-{"kinds": [30828], "#t": ["<marker>"], "limit": 500}
+{"kinds": [30829], "#t": ["<marker>"]}
+{"kinds": [30828], "#a": ["30829:<pubkey>:<d>", "…"]}
 ```
 
-The marker names a corpus, not this protocol. It is a lowercase single-word `t` value
-chosen by whoever starts one; `wikitimechain` is the marker of the first deployed
-corpus. A card MUST carry the marker of the corpus it belongs to, and a client is
-configured with the marker or markers it reads. A marker is permanent in practice, since
-changing it requires re-signing every card.
+The marker names a corpus, not this protocol; it lives on the notary. `wikitimechain`
+is the marker of the first deployed corpus. A card MAY carry it in `t` as well, so that
+`{"kinds":[30828],"#t":["<marker>"]}` still finds it, but nothing reads membership from
+it.
 
-A marker SHOULD be distinctive rather than generic — a corpus or project name, not a
-common word such as `history` or `timeline`. There is no registry: a marker is claimed
-by use alone, and two corpora sharing one are indistinguishable to every client
-configured for it.
+**The membership gate.** A client MUST apply the following test to every event it
+receives, whatever the source, and MUST discard events that fail it:
 
-**What a marker decides, and what it does not.** The tag layout, the membership gate,
-dedup, and the act mechanics of `NIP-DRAFT-ACTS.md` are fixed by this NIP and hold across
-every marker. What the three text fields *mean* — what belongs in a title, what a
-summary is for, how long a `content` runs — is each corpus's own opinion. A corpus MAY
-state that opinion as an ordinary card under its own marker, with the marker as its
-`d`; the card is disclosure, not a claim, and first use remains the only claim on a
-marker.
+> a parseable `YYYY-MM-DD` `event_date`.
 
-**The marker and freeform topics share the `t` tag.** A card MAY therefore carry many
-`t` values, and nothing distinguishes a marker from a topic by inspection. Two
-consequences, both intended:
-
-- A client MUST test for the *presence* of its corpus marker among a card's `t` values,
-  and MUST NOT assume a card carries only one.
-- A topic value on an unrelated card may coincide with a corpus marker, and that card
-  will be returned by the corpus's discovery filter. This is not a defect to be patched
-  in the tag layout; it is precisely what the membership gate below exists to absorb.
-
-### The membership gate
-
-**A marker is discovery bait, not proof.** Any key may wear any marker. A client MUST
-apply the following test to every event it receives, whatever the source, and MUST
-discard events that fail it:
-
-> a parseable `YYYY-MM-DD` `event_date`, **and** a `timeline.collection` label.
-
-The collection identifier is read from that label's value. A client SHOULD additionally
-require the marker of a corpus it is configured to read; which markers to admit is the
-client's choice, and a client reading the whole kind admits none.
-
-### Labels are indexed by value only
-
-Relays index a label by its value; the namespace (the `L` tag, and the label's third
-element) is **not** part of the filter. `{"#l":["2026"]}` matches the value `2026` in
-any namespace, including an unrelated one.
-
-Implementations MUST NOT substitute an `#l` filter for the membership gate. Value
-grammars in this NIP (ISO codes, kebab identifiers, `YYYY` and `YYYY-MM` dates) are
-kept mutually distinguishable to make collisions unlikely, but they are not a guarantee
-and MUST NOT be relied on as one.
-
-### Axes do not compose
-
-Collection, date and location are all `l` values. A single filter's `#l` array is an
-OR, and two constraints sharing the key `l` cannot be AND-ed in one `REQ`. A client
-requiring more than one axis MUST fetch on the most selective one and filter the
-remainder locally. Implementations MUST NOT assume server-side multi-axis AND.
-
-Exact membership of one collection is:
-
-```json
-{"kinds": [30828], "#l": ["<collection>"]}
-```
-
-whose results MUST be re-checked against the gate.
+Whether the card is *shown* is the notary's decision, per its `passes` rule; the gate
+only discards what cannot be placed on a timeline.
 
 ## Client behavior
 
-- Cards are deduplicated by the addressable-event rules of [NIP-01](01.md) — newest
-  `created_at` per (kind, pubkey, `d`) — which, since this NIP defines a single kind,
-  is a key of pubkey and `d`.
-- Cards from **different** pubkeys sharing a `d` MUST NOT be collapsed. They are rival
-  versions of one entry and a client SHOULD present them as such rather than choosing
-  between them silently. The one exception is a **taken** fork — one whose newer document
-  is byte for byte the parent's current `content` — which MUST NOT be shown as a rival and
-  whose author MUST be credited on the source's card (see *Taking a revision*). When such a card carries a `cite` marker, a client SHOULD show
-  what it answers **from the fork's own marks**, not by naming the `e` id — an id is not
-  an answer a reader can read, and it MUST NOT be dereferenced. An unmarked fork has
-  nothing to show, and a client SHOULD say only that the card is a fork.
-- **Citation edges are traversed by `e`, never by `a`.** An `e` id is a hash and cannot
-  close a loop; an `a` coordinate is a name and can — two keys may fork each other at a
-  shared `d`. A client walking lineage MUST use `e` ids, and MUST treat `a` as a
-  discovery index only.
-- A card's displayed date MUST be `event_date`. Date buckets are query shadows and MUST
-  NOT be used for display.
-- A client that does not know a card's marker MUST still render its `title`, `summary`
-  and `content` plainly, in that order, under `event_date`. The three fields are the
-  floor every card stands on; a marker's opinion of them only refines how.
-- Inbound citations of a card are queried with `#a`, `#e` or `#p` filters, and the
-  results MUST be filtered to events carrying a `cite` marker — a bare
-  `#p` match is an ordinary mention. Any reputation derived from these edges is
-  computed at read time; no score is stored or declared.
+- Cards deduplicate per [NIP-01](01.md): newest `created_at` per (pubkey, `d`).
+- Cards from **different** pubkeys sharing a `d` MUST NOT be collapsed; they are rival
+  versions of one entry. The exception is a taken fork (*Taking a revision*). A fork's
+  answer is shown from its own marks, never by naming the `e` id; an unmarked fork is
+  called a fork and nothing more.
+- **Lineage is walked by `e`, never by `a`.** An id is a hash and cannot loop; a
+  coordinate is a name and can. `a` is a discovery index only.
+- A card's displayed date MUST be `event_date`.
+- A client that does not know a card's corpus MUST still render `title`, `summary` and
+  `content` plainly, in that order, under `event_date`.
+- Inbound citations are queried with `#a`, `#e` or `#p` and MUST be filtered to events
+  carrying a `cite` marker — a bare `#p` match is a mention. Reputation from these edges
+  is computed at read time; nothing is stored or declared.
 
 ### Marginalia is addressed by kind
 
@@ -374,19 +221,19 @@ address and silently orphans every existing reaction and comment.
 ## Publishing
 
 A publisher signs a kind `30828` with the required tags and sends it to any relay. A
-collection exists once a card carries its identifier; there is no registry. What a
-client chooses to show is outside this NIP.
+notary exists once someone publishes one; there is no registry. What a client chooses
+to show is outside this NIP.
 
 ## Security considerations
 
-**The marker is squattable** (see *The membership gate*). The gate discards an unusable
-card on shape; it cannot establish authorship or good faith, and it is not intended to.
+**Submission is self-asserted.** Any key may name any notary; the gate discards an
+unusable card on shape and establishes neither authorship nor good faith. What a reader
+sees is the notary's decision, and choosing a notary is the reader's whole trust
+decision. Under `passes: auto` everything submitted is shown, junk included.
 
-**There is no author allowlist.** Any key passing the gate is admitted, which is the
-point of the scheme and also its cost: junk and forgeries pass a shape test as readily
-as records do. Clients expecting adversarial input SHOULD rank rather than gate, using
-signals outside this NIP such as the reader's own follow graph. Reaction and citation counts MUST NOT be treated as
-authority: keys are free to mint.
+**There is no author allowlist.** A key costs nothing, so a card may be published under
+a key used once; the signature is the whole credit and nothing else is required. Reaction
+and citation counts MUST NOT be treated as authority: keys are free to mint.
 
 **Citation edges are self-asserted.** A key may cite its own cards under other keys;
 copying without a `cite` tag is undetectable. A cited `e` id
@@ -397,7 +244,7 @@ may reference a version no relay still holds; a dangling id is not an error.
 
 ## Example
 
-A region-scoped card, with no local rung and no geohash:
+A card submitted to one notary, with no geohash of its own:
 
 ```json
 {
@@ -409,16 +256,7 @@ A region-scoped card, with no local rung and no geohash:
     ["published_at", "1784681375"],
     ["event_date", "2026-07-01"],
     ["event_time", "14:30"],
-    ["t", "wikitimechain"],
-    ["L", "timeline.collection"],
-    ["l", "example-timeline", "timeline.collection"],
-    ["L", "timeline.date"],
-    ["l", "2026", "timeline.date"],
-    ["l", "2026-07", "timeline.date"],
-    ["L", "ISO-3166-1"],
-    ["l", "JP", "ISO-3166-1"],
-    ["L", "ISO-3166-2"],
-    ["l", "JP-13", "ISO-3166-2"]
+    ["a", "30829:<pubkey>:example-timeline"]
   ]
 }
 ```

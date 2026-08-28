@@ -21,6 +21,7 @@ One timeline entry is one **kind-30828** addressable event
 
 Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
 Acts — accept, supersede, revoke (kind **8828**): [NIP-DRAFT-ACTS.md](NIP-DRAFT-ACTS.md).
+Notaries — where cards are submitted, whose acceptances pass them on (kind **30829**, provisional): [NIP-DRAFT-NOTARY.md](NIP-DRAFT-NOTARY.md).
 
 ## Run it yourself
 

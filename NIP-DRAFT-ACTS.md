@@ -56,21 +56,12 @@ meaning: this acceptance replaces that one in the signer's current position.
 
 #### Taking a revision
 
-**Taking a revision requires no act.** A fork is taken when the owner's card comes to
-read as the fork's newer document, byte for byte; the words agreeing is the whole
-evidence, and credit routes on the fork's own `p` tag. The rule belongs to forks and is
-specified there, in the cards NIP under *Taking a revision*.
-
-An acceptance of a fork remains available and is ordinary voice — the accepting key backs
-that version. It is not what takes the revision, and a client MUST NOT require one before
-treating a matching fork as taken. Waiting on a ceremony leaves the absorbed fork on the
-page saying what the card it corrected already says.
-
-The owner replaces their own card with the corrected text in clean words, an ordinary
-replacement under their own `d`. Do not instead carry the fork's content verbatim. It is
-byte-exact and so drags the diff marks along, and marks on a card with no `cite` marker
-render as nothing at all: the correction becomes unreadable at the very moment it is
-accepted.
+Requires no act: a fork is taken when the owner's card comes to read as the fork's newer
+document, byte for byte (cards NIP, *Taking a revision*). An acceptance of a fork is
+ordinary voice, and a client MUST NOT require one before treating a matching fork as
+taken. The owner replaces their card with the corrected text in clean words — not the
+fork's `content` verbatim, which drags the diff marks onto a card with no `cite` marker,
+where they render as nothing.
 
 ### Revoke
 
@@ -105,8 +96,7 @@ A client MUST apply all of the following; an act failing any is ignored for deri
    — the target's own kind, pubkey and `d` — and MUST NOT require the act's `a` tag to
    match it. A missing, unparseable or mismatched `a` SHOULD be flagged, never dropped:
    discovery runs on `#a`, so a bad coordinate costs the act findability, and it must
-   not also cost it validity. (Found in practice: one dropped colon in a hand-typed
-   coordinate silently hid an otherwise valid acceptance.)
+   not also cost it validity.
 
 A publisher SHOULD parse the `a` value as `<kind>:<64-hex-pubkey>:<d>` before signing
 and refuse to publish on mismatch with the accepted target — recovery on the reading
@@ -119,54 +109,32 @@ so the reference graph is acyclic by construction. No traversal guard is require
 
 All state is computed by the reader; none is declared.
 
-**Current position** of a pubkey = its accept acts, minus those it revoked, minus those
-it superseded, minus invalid. Ties on `created_at` break by lowest event id (as NIP-01).
-A key MAY hold current acceptances on several cards at once; exclusivity ("one vote")
-is a rule of a particular tally, never of this kind. At one coordinate, the newest
-non-revoked act is the position (*Position is total*, below).
+**Current position** of a pubkey = its accept acts, minus revoked, minus superseded, minus
+invalid. Ties on `created_at` break by lowest id (NIP-01). A key MAY hold current
+acceptances on several cards; exclusivity is a rule of a tally, never of this kind.
+**Position is total:** one key's current act at a coordinate is its whole position there;
+a new act's scope replaces the prior act's entirely.
 
-**Consent is granted per field, and bytes decide it.** A copy grants consent for its
-field exactly while it byte-equals that field on the event now current at the `a`
-coordinate. A field the owner rewrites sheds only its own consent — with no act, no
-withdrawal and no cooperation from the accepting key, who may be long gone. A field the owner
-reverts to previously accepted bytes restores that consent: same bytes, same claim.
+**Consent is per field, and bytes decide it.** A copy grants consent exactly while it
+byte-equals that field on the event now current at the `a` coordinate. A rewritten field
+sheds its own consent — no act, no cooperation from the accepting key; a field reverted
+to accepted bytes regains it. **The `e` id never gates consent:** it records what version
+was read, and a client still holding a superseded version MUST NOT read consent from it.
+Consent surviving a rewrite would let an owner collect agreement on one text and serve
+another; the inverse edge — a narrow acceptance standing while other fields move — is
+open, and clients SHOULD render scope loudly ("title only · content changed since").
 
-**The `e` id never gates consent.** It is the permanent answer to what version this key
-actually read; liveness has one authority, the bytes. Test the copies against the
-coordinate, never the retrievability of the old event — a client that still holds a
-superseded version MUST NOT read consent from it.
+**Only the content copy moves documents.** Any derivation that gives a card a place
+REQUIRES content in scope and live. Title and summary acceptance is voice: it counts,
+renders and tallies, never custody.
 
-The unaccepted remainder is deliberately unforgiving: consent that survived a field's
-rewrite would let an owner collect agreement on one text and serve another under it. The
-open edge is the inverse — a field accepted narrowly stands while the fields below it
-move. Clients SHOULD render scope loudly ("title only · content changed since") rather
-than soften lapse.
+Two uses, never conflated: **the record** — this key signed these bytes on this date,
+permanent, untouched by replacement — and **the permission** — this card may occupy that
+place, lapsing on replacement. A NIP-25 reaction is neither: it carries no copy, pins no
+version, and cannot lapse.
 
-**Position is total.** One key's current act at a coordinate is its whole position there;
-a new act's scope replaces the prior act's entirely. Positions never accumulate across
-acts.
-
-**Only the content copy moves documents.** Any derivation that gives a card a place — an
-author yielding a contested slot, taking a revision, a reader's own-acts spine — REQUIRES
-content in scope and live. Title and summary acceptance is voice: it counts, renders and
-tallies, and never carries custody. Nobody hands a slot to text they did not sign.
-
-Two uses follow, and a client MUST NOT conflate them:
-
-- **The record** — this key signed these bytes on this date. Permanent. Replacement cannot
-  touch it; that is why acceptances carry byte copies at all.
-- **The permission** — this card may occupy that place in the reader's view. Lapses on
-  replacement, as above.
-
-**Accepting a card is an act, never a reaction.** A NIP-25 reaction carries no copy, pins
-no version, and so cannot lapse when the text moves — it would keep saying yes to whatever
-the address later held. Where a corpus needs an owner or curator to admit a card, the
-signal is an acceptance of an exact version.
-
-**Tallies** are views. A client counts current acceptances through whatever lens it
-chooses (its follow graph, all keys, anything else). No event declares a result; two
-honest clients MAY disagree. Acceptance counts MUST NOT be treated as authority — keys
-are free to mint.
+**Tallies are views.** A client counts current acceptances through whatever lens it
+chooses; two honest clients MAY disagree. Counts are not authority — keys are free to mint.
 
 ## Degradation
 
