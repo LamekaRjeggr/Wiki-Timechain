@@ -917,6 +917,7 @@ const RELAYS = [
 // read that carried the move is retired, so a leftover 30818 on a relay is not a card.
 const KIND = 30828;
 const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, accept/revoke
+const NOTARY_KIND = 30829;      // Timeline Notaries (draft NIP): the collection as its own event
 const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
 const MARGIN = 2;               // deadband on the plurality lead — inside it a collection is co-held, not flipped
 
@@ -926,6 +927,7 @@ const profiles = new Map();     // pubkey → {name, fetched}
 const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
 const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
+const notaries = new Map();     // 30829:pubkey:d → newest notary; a slug is a notary's d
 const actA     = new Set();     // card coords whose acts we've asked for (#a) — grow-only
 const acts     = new Map();     // act id → kind-8828 event; derived at render, nothing replaces
 const actE     = new Set();     // act ids whose revokes we've asked for (#e) — grow-only
@@ -1120,9 +1122,20 @@ function labelVal(ev, ns){
 // arm and the v1 `c` fallback are both gone. The `t` MARKER did NOT get renamed
 // (NIP-DRAFT: it names the first deployed timeline, not a version) — discovery is untouched.
 const nsVal = (ev, name) => labelVal(ev, "timeline." + name);
-// a card's collection slug. One place decides membership.
+// a card's collection slug. One place decides membership. DUAL READ during the notary
+// migration: a submission `a` (NOTARY_KIND coordinate) wins, its d is the slug — notaries were
+// minted with d = the old collection slug, so both forms of a card land in one timeline.
+// The label arm goes once every card carries an `a`.
 function collectionSlug(ev){
-  return nsVal(ev, "collection");
+  const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
+  return a ? a[1].split(":").slice(2).join(":") : nsVal(ev, "collection");
+}
+// the notary a slug names, if one has arrived (several keys may mint the same d; newest wins)
+function notaryOf(c){
+  let best = null;
+  for (const n of notaries.values())
+    if (tag(n,"d") === c && (!best || n.created_at > best.created_at)) best = n;
+  return best;
 }
 
 // ── the filter, "axis:value" ──
@@ -1449,12 +1462,30 @@ function scheduleMemberFetch(){
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","wtc"]));
-      // #l is value-only-indexed, so a card wearing our slug as some other label
-      // value could sneak in — same squatting exposure as v1's #c fetch, and our
-      // slugs are distinct kebab names that won't collide with date/location values.
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
+      ws.send(JSON.stringify(["REQ","wtc", ...memberFilters()]));
     });
   }, 400);
+}
+// membership = both wire forms: cards labelled with a known slug, cards submitted to a known
+// notary. #l is value-only-indexed, so a card wearing our slug as some other label value could
+// sneak in — our slugs are distinct kebab names that won't collide with date/location values.
+function memberFilters(){
+  const f = [];
+  if (slugs.size)    f.push({ kinds:[KIND], "#l": [...slugs] });
+  if (notaries.size) f.push({ kinds:[KIND], "#a": [...notaries.keys()] });
+  return f;
+}
+
+function ingestNotary(ev){
+  if (!ev || ev.kind !== NOTARY_KIND) return;
+  const d = tag(ev,"d"); if (!d) return;
+  const coord = NOTARY_KIND + ":" + ev.pubkey + ":" + d;
+  const cur = notaries.get(coord);
+  if (cur && cur.created_at >= ev.created_at) return;
+  notaries.set(coord, ev);
+  slugs.add(d);               // a notary is a timeline even before its first card lands
+  scheduleMemberFetch();
+  scheduleRender();
 }
 
 function ingest(ev){
@@ -1751,7 +1782,8 @@ function entriesOf(f){
 }
 
 // ═══════════════ render: status + tabs ═══════════════
-function slugName(c){ return c.replaceAll("-"," "); }
+// a notary names its timeline; a label-only slug still reads kebab→words
+function slugName(c){ const n = notaryOf(c); return n ? tag(n,"title") || c : c.replaceAll("-"," "); }
 
 // plumbing only. The timeline count lives on the "timelines" axis chip and the entry
 // count under the collection's own name (collmeta) — each fact beside its subject.
@@ -1836,7 +1868,11 @@ function renderTabs(V){
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
-  metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}` : "";
+  // the notary's `passes` MUST be shown (notary NIP): open and curated look alike otherwise.
+  // Read only, not enforced yet — every live notary is `auto`; `accept` gating is port debt.
+  const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
+  const passes = ntry ? (tag(ntry,"passes") === "auto" ? " · open notary" : " · curated notary") : "";
+  metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}` : "";
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
@@ -3365,8 +3401,10 @@ function connect(url){
     // Kept open so a brand-new timeline appears live. Window-limited (newest
     // first), which is why known slugs also get the exact membership query.
     ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], limit:500 }])); // markerless while 30828 is ours alone — the sieve gates shape; restore "#t":[MARKER] when strangers arrive
-    if (slugs.size)
-      ws.send(JSON.stringify(["REQ","wtc", { kinds:[KIND], "#l": [...slugs] }]));
+    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }])); // the corpus's notaries: the marker lives here now
+    const mf = memberFilters();
+    if (mf.length)
+      ws.send(JSON.stringify(["REQ","wtc", ...mf]));
     const af = actFilters();
     if (af.length)
       ws.send(JSON.stringify(["REQ","act", ...af]));
@@ -3377,6 +3415,7 @@ function connect(url){
       // every path goes through admit() — there is no unchecked way in
       if (data[1] === "tsieve") admit(data[2], sieve);
       if (data[1] === "wtc")    admit(data[2], ingest);
+      if (data[1] === "ntry")   admit(data[2], ingestNotary);
       if (data[1] === "prof")   admit(data[2], ingestProfile);
       if (data[1] === "act")    admit(data[2], ingestAct);
     }
