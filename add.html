@@ -913,7 +913,8 @@ function setSigner(s){
     ? "This browser remembers nothing. Close the tab, or sit idle for fifteen minutes, and you are out."
     : "This browser will sign you back in on your next visit. Sign out to forget it.";
   signMsg("");
-  renderMine();          // your cards can only be listed once we know who you are
+  subMine();             // your cards are read only once we know who you are
+  renderMine();
   tryRevise();           // an addressed card might turn out to be this key's own
   refresh();
 }
@@ -940,6 +941,7 @@ function signOut(keep){
   if (keep !== true) { ncClose(); forget(); }
   $("signed-out").style.display = "";
   $("signed-in").style.display = "none";
+  subMine();
   renderMine();
   refresh();
 }
@@ -988,11 +990,13 @@ $("b-nc-copy").addEventListener("click", async () => {
 resume();
 
 // ═══════════════ reading the corpus ═══════════════
-// Two subs, the viewer's own: the corpus's notaries by marker, cards whole-kind. Together they
-// feed all three things this page needs — the collection list, the d-collision guard, and the
-// fork picker — with no author filter and no baked pubkey anywhere.
+// Three subs, none of them the whole corpus. `ntry`: the notaries, by marker — the collection
+// list. `mine`: your own cards, by author, once you sign in — the edit list and the d-collision
+// guard. `coll`: the cards submitted to the collection you picked — the fork picker and the
+// inherited tags. No baked pubkey anywhere; nothing is read that the form does not need.
 const cards    = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
 const notaries = new Map();   // "30829:pubkey:d" → newest notary; a collection slug is a notary's d
+const loaded   = new Set();   // notary coords whose cards have been asked for
 const relayUp = new Map();
 let eosed = 0, settled = false;
 
@@ -1041,8 +1045,26 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
+  drawT = setTimeout(() => { drawT = null; wantColl(); renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
 }
+const openSockets = () => sockets.filter(ws => ws.readyState === WebSocket.OPEN);
+const sub = (ws, id, f) => { ws.send(JSON.stringify(["CLOSE", id])); ws.send(JSON.stringify(["REQ", id, f])); };
+// your cards, per signer. Sign-in change re-reads; the collision guard is unsettled until
+// this read comes back (≥2 relays, or the 9 s fallback) — there is no read to settle before.
+function subMine(){
+  eosed = 0; settled = false;
+  openSockets().forEach(ws => signer ? sub(ws, "mine", { kinds:[KIND], authors:[signer.pubkey] }) : ws.send(JSON.stringify(["CLOSE","mine"])));
+  if (signer) setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
+}
+// the picked collection's cards, once per notary. Reads the field on every draw, so a
+// notary that lands after a ?c= deep link is still fetched.
+function wantColl(){
+  const n = notaryOf(wikiSlug(val("f-coll")));
+  if (!n || loaded.has(coordOf(n))) return;
+  loaded.add(coordOf(n));
+  openSockets().forEach(subColl);
+}
+const subColl = ws => loaded.size && sub(ws, "coll", { kinds:[KIND], "#a":[...loaded] });
 
 function connect(url){
   let ws;
@@ -1050,15 +1072,16 @@ function connect(url){
   relayUp.set(url, "connecting");
   ws.onopen = () => {
     relayUp.set(url, "up"); renderRelays();
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], limit:500 }]));   // markerless while 30828 is ours alone — passes() gates shape
     ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }]));
+    if (signer) sub(ws, "mine", { kinds:[KIND], authors:[signer.pubkey] });   // a late socket joins the reads already open
+    subColl(ws);
   };
   ws.onmessage = m => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
-    if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EVENT" && (data[1] === "mine" || data[1] === "coll")) ingest(data[2]);
     if (data[0] === "EVENT" && data[1] === "ntry") ingestNotary(data[2]);
     if (data[0] === "EVENT" && data[1] === "acts" && data[2]) priorActs.push(data[2]);
-    if (data[0] === "EOSE" && data[1] === "tsieve"){ eosed++; if (eosed >= 2) markSettled(); }
+    if (data[0] === "EOSE" && data[1] === "mine"){ eosed++; if (eosed >= 2) markSettled(); }
     if (data[0] === "OK"){
       const t = tallies.get(data[1]);
       if (t){ data[2] ? t.ok++ : (t.no++, t.why = t.why || String(data[3] || "")); renderPubTally(); }
@@ -1070,14 +1093,13 @@ function connect(url){
 }
 const sockets = [];
 
-// Until the read settles, a d that looks free may only look free — and publishing over your
-// own card cannot be undone. So an unsettled read blocks the publish rather than passing it.
+// Until the read of your cards settles, a d that looks free may only look free — and
+// publishing over your own card cannot be undone. So an unsettled read blocks the publish.
 function markSettled(){
   if (settled) return;
   settled = true;
   refresh();
 }
-setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
 
 function renderRelays(){
   $("relays").innerHTML = RELAYS.map(r => {
@@ -1199,11 +1221,13 @@ $("f-coll").addEventListener("input", () => { $("f-coll-select").value = ""; });
 
 function renderCollections(){
   const sel = $("f-coll-select"), keep = sel.value;
-  // a notary is a timeline even before its first card lands
+  // a notary is a timeline even before its first card lands; a count is shown only once
+  // that collection's cards were read — until then the number would be a lie
   const seen = [...new Set([...cards.values()].map(collOf).concat([...notaries.values()].map(dOf)))].filter(Boolean).sort();
+  const cnt = c => { const n = notaryOf(c); return n && loaded.has(coordOf(n))
+    ? ` · ${[...cards.values()].filter(e => collOf(e) === c).length} cards` : ""; };
   sel.innerHTML = '<option value="">— pick one —</option>' +
-    seen.map(c => `<option value="${esc(c)}">${esc(c)} · ${
-      [...cards.values()].filter(e => collOf(e) === c).length} cards</option>`).join("");
+    seen.map(c => `<option value="${esc(c)}">${esc(c)}${cnt(c)}</option>`).join("");
   // A prefilled collection — a ?c= deep link or a handoff draft — is a choice already made
   // elsewhere. Show it as chosen; "— pick one —" beside a filled field reads as unset.
   const pre = wikiSlug(val("f-coll"));
@@ -1467,6 +1491,7 @@ function refresh(){
     else if (!actSent) pubMsg("");
     return;
   }
+  wantColl();                          // the picked collection's cards, if not read yet
   let tmpl = null, err = null;
   try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
 
@@ -1498,7 +1523,7 @@ function refresh(){
 
   const why = !signer ? "sign in first"
     : err ? err
-    : !settled ? `still reading the existing cards from the relays (${cards.size} so far) — the d check can't answer yet`
+    : !settled ? `still reading your cards from the relays — the d check can't answer yet`
     : "";
   $("b-pub").disabled = !!why;
   if (why && !$("pub-msg").classList.contains("ok")) pubMsg(why, err && signer && settled ? "bad" : "");

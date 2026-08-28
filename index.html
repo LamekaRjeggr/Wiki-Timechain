@@ -966,6 +966,7 @@ const openCards = new Map((_q.get("open") || "").split(",").filter(Boolean).map(
 let renderTimer = null;
 let profileTimer = null;
 let memberTimer = null;
+const wanted = new Set();                // slugs whose cards were asked for — the only ones fetched
 let actTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const showFold     = new Set();          // slugs whose "proposed" fold the visitor opened
@@ -1422,13 +1423,14 @@ function creditRow(ev){
 }
 
 // ═══════════════ ingest ═══════════════
-// Discovery = the notaries (see ingestNotary); cards arrive only by submission to one.
-// (re)subscribe membership on every open socket whenever a notary arrives
+// Discovery = the notaries (see ingestNotary). Cards are fetched per timeline, when looked at:
+// the relay's #a index is the manifest, so a reload costs the notaries plus one timeline.
+// (re)subscribe membership on every open socket whenever a notary arrives or a slug is wanted
 function scheduleMemberFetch(){
   if (memberTimer) return;
   memberTimer = setTimeout(() => {
     memberTimer = null;
-    if (!slugs.size) return;
+    if (!memberFilters().length) return;
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","wtc"]));
@@ -1436,10 +1438,15 @@ function scheduleMemberFetch(){
     });
   }, 400);
 }
-// membership = cards submitted to a known notary
+// membership = cards submitted to the notaries of wanted slugs (every key holding that d),
+// plus the deep-linked tag when the URL carries one — relays index t and l by value
 function memberFilters(){
-  return notaries.size ? [{ kinds:[KIND], "#a": [...notaries.keys()] }] : [];
+  const coords = [...notaries.keys()].filter(k => wanted.has(k.split(":").slice(2).join(":")));
+  const f = coords.length ? [{ kinds:[KIND], "#a": coords }] : [];
+  if (wantedF && axisOf(wantedF) !== "c") f.push({ kinds:[KIND], ["#" + axisOf(wantedF)]: [valOf(wantedF)] });
+  return f;
 }
+function wantSlug(c){ if (c && !wanted.has(c)){ wanted.add(c); scheduleMemberFetch(); } }
 
 function ingestNotary(ev){
   if (!ev || ev.kind !== NOTARY_KIND) return;
@@ -1779,11 +1786,9 @@ function selectF(f){
   render();
 }
 
-// The picker's catalog: every timeline the relays hold, flat and alphabetical, as
-// [filter, label] pairs. Derived fresh each render from the tags, nothing baked.
-const vocab = () => [...slugs].sort()
-  .filter(c => entriesOf("c:" + c).length)
-  .map(c => ["c:" + c, slugName(c)]);
+// The picker's catalog: every notary the relays hold, flat and alphabetical, as
+// [filter, label] pairs — cards not needed, so an unopened timeline still lists.
+const vocab = () => [...slugs].sort().map(c => ["c:" + c, slugName(c)]);
 
 // Who else has published here. A LENS, not a filter — it never changes which cards are on the
 // page. Hidden at one author, so it stays invisible until a second key publishes: that is the
@@ -1862,7 +1867,7 @@ function renderTabs(V){
   for (const [f, text] of V){
     const o = document.createElement("option");
     o.value = f;
-    o.textContent = `${text}  (${entriesOf(f).length})`;
+    o.textContent = text + (wanted.has(f.slice(2)) ? `  (${entriesOf(f).length})` : "");  // count once fetched
     o.selected = f === activeF;
     sel.appendChild(o);
   }
@@ -1880,6 +1885,7 @@ function render(){
     ? [...new Set(matching(wantedF).map(collectionSlug))].sort() : [];
   if (want.length) activeF = "c:" + want[0];
   else if (activeF === null && V.length) activeF = V[0][0];
+  if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
   renderStatus();
   renderTabs(V);
 
