@@ -402,7 +402,8 @@
   <section id="sec-card">
     <h2><i>2</i>the card</h2>
     <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
-      existing one or type a new slug, which is all it takes to start one.</p>
+      existing one or type a new slug, which is all it takes to start one — it is minted as a
+      notary under your key when you publish.</p>
 
     <div id="mine-row">
       <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
@@ -527,9 +528,8 @@ const KIND   = 30828;
 const CITE   = new Set(["cite","fork","adopt"]);   // spec marker + the two words it superseded (read only)
 const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 accept handoff
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
-// The spec's namespaces.
-const NS_COLL = "timeline.collection";
-const NS_DATE = "timeline.date";
+const NOTARY_KIND = 30829;        // Timeline Notaries (draft NIP): the collection as its own event
+const NS_DATE = "timeline.date";  // the spec's one label namespace this form still writes
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -988,10 +988,11 @@ $("b-nc-copy").addEventListener("click", async () => {
 resume();
 
 // ═══════════════ reading the corpus ═══════════════
-// One sub, the viewer's own discovery filter: kind + marker, no author filter. That single
-// read feeds all three things this page needs — the collection list, the d-collision guard,
-// and the fork picker — so there is no second query and no baked pubkey anywhere.
-const cards   = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
+// Two subs, the viewer's own: the corpus's notaries by marker, cards whole-kind. Together they
+// feed all three things this page needs — the collection list, the d-collision guard, and the
+// fork picker — with no author filter and no baked pubkey anywhere.
+const cards    = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
+const notaries = new Map();   // "30829:pubkey:d" → newest notary; a collection slug is a notary's d
 const relayUp = new Map();
 let eosed = 0, settled = false;
 
@@ -1000,18 +1001,33 @@ const dOf     = ev => tagOf(ev, "d");
 const dateOf  = ev => tagOf(ev, "event_date");
 // the field's one grammar: "date" or "date time" — how a card's when reads back into it
 const whenOf  = ev => dateOf(ev) + (tagOf(ev, "event_time") ? " " + tagOf(ev, "event_time") : "");
+// a card's collection = the d of the notary it submits to (["a","30829:<pubkey>:<d>"])
 const collOf  = ev => {
-  const l = ev.tags.find(t => t[0] === "l" && t[2] === NS_COLL);
-  return l ? l[1] : "";
+  const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
+  return a ? a[1].split(":").slice(2).join(":") : "";
 };
+// the notary a slug names, if one has arrived (several keys may mint the same d; newest wins)
+function notaryOf(c){
+  let best = null;
+  for (const n of notaries.values())
+    if (dOf(n) === c && (!best || n.created_at > best.created_at)) best = n;
+  return best;
+}
+const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + dOf(n);
 
-// The membership gate, exactly as the spec states it: the marker is squattable, so a card
-// counts only if it ALSO carries a collection label and a parseable YYYY-MM-DD event_date.
+// The membership gate, exactly as the spec states it: a card counts only if it submits to a
+// notary and carries a parseable YYYY-MM-DD event_date. The marker is discovery bait, not proof.
 function passes(ev){
   if (ev.kind !== KIND) return false;
-  if (!ev.tags.some(t => t[0] === "t" && t[1] === MARKER)) return false;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOf(ev))) return false;
   return !!collOf(ev) && !!dOf(ev);
+}
+function ingestNotary(ev){
+  if (!ev || ev.kind !== NOTARY_KIND || !dOf(ev)) return;
+  const cur = notaries.get(coordOf(ev));
+  if (cur && cur.created_at >= ev.created_at) return;
+  notaries.set(coordOf(ev), ev);
+  scheduleDraw();
 }
 function ingest(ev){
   if (!passes(ev)) return;
@@ -1034,13 +1050,15 @@ function connect(url){
   relayUp.set(url, "connecting");
   ws.onopen = () => {
     relayUp.set(url, "up"); renderRelays();
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], "#t":[MARKER], limit:500 }]));
+    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], limit:500 }]));   // markerless while 30828 is ours alone — passes() gates shape
+    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }]));
   };
   ws.onmessage = m => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EVENT" && data[1] === "ntry") ingestNotary(data[2]);
     if (data[0] === "EVENT" && data[1] === "acts" && data[2]) priorActs.push(data[2]);
-    if (data[0] === "EOSE"){ eosed++; if (eosed >= 2) markSettled(); }
+    if (data[0] === "EOSE" && data[1] === "tsieve"){ eosed++; if (eosed >= 2) markSettled(); }
     if (data[0] === "OK"){
       const t = tallies.get(data[1]);
       if (t){ data[2] ? t.ok++ : (t.no++, t.why = t.why || String(data[3] || "")); renderPubTally(); }
@@ -1181,7 +1199,8 @@ $("f-coll").addEventListener("input", () => { $("f-coll-select").value = ""; });
 
 function renderCollections(){
   const sel = $("f-coll-select"), keep = sel.value;
-  const seen = [...new Set([...cards.values()].map(collOf))].filter(Boolean).sort();
+  // a notary is a timeline even before its first card lands
+  const seen = [...new Set([...cards.values()].map(collOf).concat([...notaries.values()].map(dOf)))].filter(Boolean).sort();
   sel.innerHTML = '<option value="">— pick one —</option>' +
     seen.map(c => `<option value="${esc(c)}">${esc(c)} · ${
       [...cards.values()].filter(e => collOf(e) === c).length} cards</option>`).join("");
@@ -1230,13 +1249,14 @@ function loadMine(){
   // Everything the form owns comes back out of its own fields; anything else on the event
   // is round-tripped through the extra-tags box verbatim so an edit cannot silently drop it.
   // Ownership is by VALUE, not tag name: the builder re-emits only the marker t and the
-  // timeline.* labels, so a topic t or a location ladder rung must ride the box or vanish.
-  // The fork's own p tag is dropped with the fork tags — the builder re-emits it, and a
-  // survivor here would ride along in extra tags and be published twice.
+  // timeline.date labels, so a topic t or a location ladder rung must ride the box or vanish.
+  // The fork's own p tag and the submission `a` are dropped too — the builder re-emits
+  // both, and a survivor here would ride along in extra tags and be published twice.
   const owned = new Set(["d","title","summary","published_at","event_date","event_time","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
-    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk))
+    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk)
+              && !(t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")))
     .map(t => t.join(" ")).join("\n");
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
@@ -1351,10 +1371,13 @@ function buildTemplate(){
   // Seconds only if typed — precision-only, like the buckets. prec, not wdIn: a content
   // line declaring a coarser date wins, and a time on a placeholder day would be a lie.
   if (wt && prec === "day") tags.push(["event_time", wt]);
-  // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
-  // no month bucket, because the placeholder month is not a fact about the world.
+  // Marker, submission, NIP-32 date buckets. The submission names the collection's notary —
+  // yours, minted at publish, when the slug has none yet (the signer is the pubkey then).
+  // Date buckets encode KNOWN precision: a year-only card emits no month bucket, because
+  // the placeholder month is not a fact about the world.
   tags.push(["t", MARKER]);
-  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
+  const ntry = notaryOf(c);
+  tags.push(["a", ntry ? coordOf(ntry) : `${NOTARY_KIND}:${signer ? signer.pubkey : ""}:${c}`]);
   tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
   if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
   if (summary) tags.push(["summary", summary]);
@@ -1399,12 +1422,12 @@ function buildTemplate(){
 }
 
 // A topic t (never the marker) or a location L/l rung — the tags a card carries that this
-// form does not build itself. Only the builder's own two namespaces are excluded;
+// form does not build itself. Only the builder's own namespace is excluded;
 // timeline.location is a ladder rung like the ISO ones and travels the same way.
 function topicOrLadder(t){
   const ns = t[0] === "L" ? (t[1] || "") : (t[2] || "");
   return (t[0] === "t" && t[1] !== MARKER) ||
-    ((t[0] === "L" || t[0] === "l") && ns !== NS_COLL && ns !== NS_DATE);
+    ((t[0] === "L" || t[0] === "l") && ns !== NS_DATE);
 }
 
 // What a collection's cards AGREE on — the exact tags present on every one of them. A
@@ -1558,8 +1581,18 @@ async function publish(){
   let signed;
   $("b-pub").disabled = true;
   pubMsg("signing…");
+  // A new slug is a new notary: minted under your key, open (`passes auto`), sent BEFORE the
+  // card so the submission never points at nothing. Two signatures, same click.
+  let ntry = null;
   try {
-    signed = await signer.sign(buildTemplate());
+    const tmpl = buildTemplate();
+    const c = collOf({ tags: tmpl.tags });
+    if (!notaryOf(c)){
+      ntry = await signer.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
+        tags: [["d", c], ["title", c.replaceAll("-", " ")], ["t", MARKER], ["passes", "auto"]] });
+      if (!ntry || !ntry.sig) throw new Error("the signer returned nothing for the new collection's notary — was the request approved?");
+    }
+    signed = await signer.sign(tmpl);
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
   } catch(e){
     pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
@@ -1568,8 +1601,9 @@ async function publish(){
   if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
 
   tallies.set(signed.id, { ok: 0, no: 0, why: "" });
-  const msg = JSON.stringify(["EVENT", signed]);
-  open.forEach(ws => { try { ws.send(msg); } catch {} });
+  const send = ev => { const msg = JSON.stringify(["EVENT", ev]); open.forEach(ws => { try { ws.send(msg); } catch {} }); };
+  if (ntry){ send(ntry); ingestNotary(ntry); }
+  send(signed);
 
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];

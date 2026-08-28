@@ -836,8 +836,7 @@ tags:
   title       Short entry name            (no leading year — the rail already shows the date)
   event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail)
   t           wikitimechain               (the discovery marker — every card carries it)
-  L           timeline.collection
-  l           &lt;collection-slug&gt;   timeline.collection   (which timeline)
+  a           30829:&lt;notary-pubkey&gt;:&lt;collection-slug&gt;   (which timeline — the notary it submits to)
   L           timeline.date
   l           2026                timeline.date
   l           2026-07             timeline.date
@@ -848,18 +847,17 @@ content:
 </pre>
       <p>Keep the content to verifiable facts with a primary source. The timeline shows
         who published every card — your entry stands on your signature. There is no
-        registration step for a timeline: a collection <em>is</em> its slug, so publishing
-        the first card carrying a new <code>timeline.collection</code> value is all it
-        takes to start one, and it appears here beside the rest.</p>
+        registration step for a timeline beyond the notary itself (kind 30829, one event):
+        composing here under a slug no notary holds mints one under your key.</p>
       <p>The label namespaces are <code>timeline.*</code>. The <code>t</code> marker is not
         part of that naming — it names this timeline, not a version, and every card carries
         it.</p>
 
       <h3>Build your own reader</h3>
       <p>This page is one client, not the record. One request boots another:
-        <code>{"kinds":[30828],"#t":["wikitimechain"],"limit":500}</code> — group what
-        comes back by its collection label, sort by <code>event_date</code>, draw. Exact
-        membership for one timeline is <code>{"kinds":[30828],"#l":["&lt;slug&gt;"]}</code>.
+        <code>{"kinds":[30829],"#t":["wikitimechain"]}</code> — the notaries; then
+        <code>{"kinds":[30828],"#a":["30829:&lt;pubkey&gt;:&lt;d&gt;"]}</code> — the cards
+        submitted to each, sorted by <code>event_date</code>, drawn.
         No manifest to fetch, no index to register with. Keep the newest event per
         <code>pubkey:d</code> — that pair is a card's identity, and an author republishing one
         replaces their own. The full tag scheme is in
@@ -1110,25 +1108,11 @@ const areaEl   = document.getElementById("timeline-area");
 // ═══════════════ helpers ═══════════════
 function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t[1] : ""; }
 
-// NIP-32 self-label read: value of the `l` tag whose namespace (3rd element) matches.
-// Relays index `l` by VALUE only — the namespace is not filterable — so this pairing
-// check is client-side and is the truth the membership gate leans on (CONVENTION.md, "the #l value-only caveat").
-function labelVal(ev, ns){
-  const t = ev.tags.find(t => t[0] === "l" && t[2] === ns);
-  return t ? t[1] : "";
-}
-// ONE label namespace: `timeline.*`. The spec renamed it from `wikitimechain.*` (a project
-// name in a public standard is what reviewers reject) and the republish is done, so the old
-// arm and the v1 `c` fallback are both gone. The `t` MARKER did NOT get renamed
-// (NIP-DRAFT: it names the first deployed timeline, not a version) — discovery is untouched.
-const nsVal = (ev, name) => labelVal(ev, "timeline." + name);
-// a card's collection slug. One place decides membership. DUAL READ during the notary
-// migration: a submission `a` (NOTARY_KIND coordinate) wins, its d is the slug — notaries were
-// minted with d = the old collection slug, so both forms of a card land in one timeline.
-// The label arm goes once every card carries an `a`.
+// a card's collection slug = the d of the notary it submits to (`a` NOTARY_KIND coordinate).
+// One place decides membership; a card with no submission belongs to no timeline.
 function collectionSlug(ev){
   const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
-  return a ? a[1].split(":").slice(2).join(":") : nsVal(ev, "collection");
+  return a ? a[1].split(":").slice(2).join(":") : "";
 }
 // the notary a slug names, if one has arrived (several keys may mint the same d; newest wins)
 function notaryOf(c){
@@ -1438,22 +1422,8 @@ function creditRow(ev){
 }
 
 // ═══════════════ ingest ═══════════════
-// Discovery sieve: membership = a parseable event_date + a collection slug from the
-// `timeline.collection` label (see collectionSlug).
-// Cards passing it are kept AND their slug becomes a known timeline; anything else
-// from the open pull (wild wiki articles) is dropped, not stored. Strictness is
-// discovery-only — membership fetches stay lenient via dateOf()'s fallbacks. The
-// gate stays client-side because relays index `l` by value only (CONVENTION.md, "the #l value-only caveat").
-function sieve(ev){
-  if (!ev || ev.kind !== KIND) return;
-  const c = collectionSlug(ev);
-  if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(tag(ev,"event_date"))) return;
-  if (!slugs.has(c)){ slugs.add(c); scheduleMemberFetch(); }
-  ingest(ev);
-}
-
-// (re)subscribe membership on every open socket whenever the slug set grows —
-// the exact per-slug query has no discovery-window problem
+// Discovery = the notaries (see ingestNotary); cards arrive only by submission to one.
+// (re)subscribe membership on every open socket whenever a notary arrives
 function scheduleMemberFetch(){
   if (memberTimer) return;
   memberTimer = setTimeout(() => {
@@ -1466,14 +1436,9 @@ function scheduleMemberFetch(){
     });
   }, 400);
 }
-// membership = both wire forms: cards labelled with a known slug, cards submitted to a known
-// notary. #l is value-only-indexed, so a card wearing our slug as some other label value could
-// sneak in — our slugs are distinct kebab names that won't collide with date/location values.
+// membership = cards submitted to a known notary
 function memberFilters(){
-  const f = [];
-  if (slugs.size)    f.push({ kinds:[KIND], "#l": [...slugs] });
-  if (notaries.size) f.push({ kinds:[KIND], "#a": [...notaries.keys()] });
-  return f;
+  return notaries.size ? [{ kinds:[KIND], "#a": [...notaries.keys()] }] : [];
 }
 
 function ingestNotary(ev){
@@ -1792,7 +1757,7 @@ function entriesOf(f){
 }
 
 // ═══════════════ render: status + tabs ═══════════════
-// a notary names its timeline; a label-only slug still reads kebab→words
+// a notary names its timeline; a slug whose notary hasn't arrived reads kebab→words
 function slugName(c){ const n = notaryOf(c); return n ? tag(n,"title") || c : c.replaceAll("-"," "); }
 
 // plumbing only. The timeline count lives on the "timelines" axis chip and the entry
@@ -2920,7 +2885,6 @@ function rememberPk(pk){
 // ═══════════════ authoring core — ported from add.html, so a draft composed here builds
 // the SAME event the writer would. Trimmed on purpose: no fork tags and no extra-tags box
 // (add.html stays the revision tool); d is minted under the collection, frozen at publish. ══
-const NS_COLL = "timeline.collection";
 const NS_DATE = "timeline.date";
 function wikiSlug(s){
   return String(s).toLowerCase()
@@ -2963,7 +2927,8 @@ function inheritedTags(c){
 
 // draft.date is the RAW precision string (YYYY | YYYY-MM | YYYY-MM-DD) — the padding to a
 // full event_date, the APPROXIMATE DATE line, and the date-bucket labels all happen here,
-// exactly as add.html's buildTemplate does them. Throws on anything the sieve would drop.
+// exactly as add.html's buildTemplate does them. Throws on anything membership would drop.
+// draft.pubkey = the signer: a slug no notary holds is submitted to one minted under that key.
 function buildDraftTemplate(draft){
   const now     = Math.floor(Date.now() / 1000);
   const title   = (draft.title || "").trim();
@@ -3010,7 +2975,7 @@ function buildDraftTemplate(draft){
   // placeholder day would be a lie
   if (wt && prec === "day") tags.push(["event_time", wt]);
   tags.push(["t", MARKER]);
-  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
+  tags.push(["a", NOTARY_KIND + ":" + (notaryOf(c) || draft).pubkey + ":" + c]);
   tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
   if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
   if (summary) tags.push(["summary", summary]);
@@ -3209,11 +3174,16 @@ async function publishDraft(btn){
   const err = areaEl.querySelector(".derr");
   err.classList.add("hid");
   try {
-    const tmpl = buildDraftTemplate({ ...draft, date: draftDate(), coll: activeF.slice(2) });
-    const s = await getSigner();
+    const s = await getSigner(), c = activeF.slice(2);
+    const tmpl = buildDraftTemplate({ ...draft, date: draftDate(), coll: c, pubkey: s.pubkey });
     // wtc:pk can be stale — the collision that matters is against the key that will sign
     const col = draftCollision(tmpl.tags[0][1], s.pubkey);
     if (col && col.block) throw new Error(col.text);
+    if (!notaryOf(c)){                           // first card of a new timeline: mint its notary, open to all
+      const n = await s.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
+                               tags: [["d", c], ["title", c.replaceAll("-"," ")], ["t", MARKER], ["passes", "auto"]] });
+      ingestNotary(n); publish(n);
+    }
     const ev = await s.sign(tmpl);
     rememberPk(ev.pubkey);
     justPub = { d: tmpl.tags[0][1], id: ev.id };
@@ -3411,12 +3381,8 @@ function connect(url){
   ws.onopen = () => {
     relayState.set(url,"up");
     renderStatus();
-    // discovery pull (convention v2, post-legacy-drop): one narrow
-    // #t=wikitimechain sub, relay-indexed, no author filter; the sieve decides.
-    // Kept open so a brand-new timeline appears live. Window-limited (newest
-    // first), which is why known slugs also get the exact membership query.
-    ws.send(JSON.stringify(["REQ","tsieve",{ kinds:[KIND], limit:500 }])); // markerless while 30828 is ours alone — the sieve gates shape; restore "#t":[MARKER] when strangers arrive
-    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }])); // the corpus's notaries: the marker lives here now
+    // discovery = the corpus's notaries, kept open so a brand-new timeline appears live
+    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }]));
     const mf = memberFilters();
     if (mf.length)
       ws.send(JSON.stringify(["REQ","wtc", ...mf]));
@@ -3428,7 +3394,6 @@ function connect(url){
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT"){
       // every path goes through admit() — there is no unchecked way in
-      if (data[1] === "tsieve") admit(data[2], sieve);
       if (data[1] === "wtc")    admit(data[2], ingest);
       if (data[1] === "ntry")   admit(data[2], ingestNotary);
       if (data[1] === "prof")   admit(data[2], ingestProfile);

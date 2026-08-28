@@ -11,12 +11,12 @@ build step.
 
 One timeline entry is one **kind-30828** addressable event
 ([NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)) carrying an
-`event_date` and a `timeline.collection` label
-([NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)). A `t` marker
-(`wikitimechain`) names the corpus; clients may gate on it.
+`event_date` and an `a` submission to a **kind-30829** notary — the timeline as its own
+event ([NIP-DRAFT-NOTARY.md](NIP-DRAFT-NOTARY.md)). A `t` marker (`wikitimechain`) on
+the notary names the corpus.
 
-- Cards are found by kind. No author filter, no list of timelines.
-- A collection is its slug. The first card carrying a new one creates that timeline.
+- Notaries are found by marker, cards by the notary they submit to. No author filter.
+- A collection is a notary. Typing a new slug in the writer mints one under your key.
 - Same `d`, same author — edit. Same `d`, different author — both render.
 
 Tag scheme: [NIP-DRAFT.md](NIP-DRAFT.md). Prose style: [CONVENTION.md](CONVENTION.md).
