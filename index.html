@@ -1463,6 +1463,9 @@ function ingestNotary(ev){
 function ingest(ev){
   if (!ev || ev.kind !== KIND) return;
   const d = tag(ev,"d"); if (!d) return;
+  // the gate: a card is visible only through a notary we hold — relays are not trusted to filter
+  const sub = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
+  if (!sub || !notaries.has(sub[1])) return;
   const key = ev.pubkey + ":" + d;
   const cur = events.get(key);
   // ties keep the copy already held — with one namespace there is nothing left to prefer
