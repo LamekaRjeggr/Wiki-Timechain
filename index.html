@@ -1730,15 +1730,25 @@ function anyAcceptance(ev){
     return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
   });
 }
-function tierOf(ev, A){
+// NOTARY RULE (notary NIP, What passes) — a notary-backed collection ignores the derived
+// authority above entirely: `auto` passes every submission; `accept` (and no `passes` at all)
+// passes a card only while the notary's OWN key holds a content-live acceptance. A lapsed
+// acceptance = passed and waiting on a re-read → shelf 1. No other signal passes a card.
+function notaryTier(N, ev){
+  if (tag(N,"passes") === "auto") return 0;
+  const a = acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).find(a => a.pubkey === N.pubkey);
+  return !a ? 2 : actMoves(a, ev) ? 0 : 1;
+}
+function tierOf(ev, A, N){
+  if (N) return notaryTier(N, ev);
   if (!A || A.origins.has(ev.pubkey)) return 0;
   if (A.adopted.has(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"))) return 0;
   return A.stand.has(ev.pubkey) && anyAcceptance(ev) ? 1 : 2;
 }
 // what the fold is holding back — the count IS the information
 function foldOf(c){
-  const A = authorityOf(c);
-  const hid = matching("c:" + c).filter(ev => tierOf(ev, A) === 2);
+  const A = authorityOf(c), N = notaryOf(c);
+  const hid = matching("c:" + c).filter(ev => tierOf(ev, A, N) === 2);
   return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
 }
 
@@ -1746,7 +1756,7 @@ function foldOf(c){
 // entry can carry spine versions, proposed versions, or (a pure addition) only proposed ones.
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
-  const A = c ? authorityOf(c) : null;
+  const A = c ? authorityOf(c) : null, N = c ? notaryOf(c) : null;
   const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders shelf 3 as shelf 2
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
@@ -1767,11 +1777,11 @@ function entriesOf(f){
       acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
         .some(a => a.pubkey === myPk && actMoves(a, ev));
     const evs  = (youView() ? all.filter(backs)
-                            : all.filter(ev => tierOf(ev, A) === 0)).sort(ord);
+                            : all.filter(ev => tierOf(ev, A, N) === 0)).sort(ord);
     // the accepted lens overrides the fold — but only a CONTENT-live act moves a card onto
     // the page (draft NIP: only the content copy moves documents; title/summary is voice)
     const prop = (youView() ? all.filter(ev => !backs(ev))
-                : all.filter(ev => { const t = tierOf(ev, A); if (!t) return false;
+                : all.filter(ev => { const t = tierOf(ev, A, N); if (!t) return false;
       const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); })).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
@@ -1816,7 +1826,8 @@ const vocab = () => [...slugs].sort()
 // otherwise — what the title carries is curation, and never anyone's record.
 function renderRoster(){
   const c = activeF ? activeF.slice(2) : null;
-  const A = c ? authorityOf(c) : null;
+  const A = c ? authorityOf(c) : null, N = c ? notaryOf(c) : null;
+  const oc = pk => !N && A.origins.has(pk);   // ⌂ only means something without a notary
   // the spine-view toggle: your view is the default and needs your key; popular is the
   // derived authority everyone sees. An empty your-view is the honest starting state,
   // not a broken page — the note says so instead of leaving a bare spine unexplained.
@@ -1829,7 +1840,7 @@ function renderRoster(){
       `<button class="vbtn${spineView === "you" ? " on" : ""}" type="button" data-v="you"` +
       ` title="your spine — your cards and the versions you accepted sit on the line">your view</button>` +
       `<button class="vbtn${spineView === "popular" ? " on" : ""}" type="button" data-v="popular"` +
-      ` title="the derived spine — curators and what they adopted">popular view</button>` +
+      ` title="${N ? "the notary's spine — what its key passes" : "the derived spine — curators and what they adopted"}">popular view</button>` +
       (empty ? `<span class="viewnote">your view is empty here — you haven't accepted a version yet; every card waits one layer out</span>` : "");
   }
   const L = c ? actLenses(c) : new Map();
@@ -1841,11 +1852,12 @@ function renderRoster(){
   rosterEl.style.display = "";
   rosterEl.innerHTML = (many ? A.rank.map(pk =>
       `<button class="rchip${pk === lensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
-      ` title="${A.origins.has(pk) ? "curates this collection" : "contributor"} — tap to pick out their cards">` +
-      (A.origins.has(pk) ? `<span class="oc">⌂</span>` : "") +
+      ` title="${oc(pk) ? "curates this collection" : "contributor"} — tap to pick out their cards">` +
+      (oc(pk) ? `<span class="oc">⌂</span>` : "") +
       `${authorLabel(pk)}<span class="n">${A.n.get(pk)}</span></button>`
     ).join("") +
-    `<div class="rnote">${A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
+    `<div class="rnote">${N ? `notary ${authorLabel(N.pubkey)} ${tag(N,"passes") === "auto" ? "passes every submission" : "passes what its key accepted"}`
+                            : A.coheld ? "co-held — no single originator" : "⌂ curates what's proposed"}` +
     ` · every author keeps their own cards</div>` : "") +
     // the accepted lens row: only keys with live acts here appear, count = cards backed
     (L.size ? `<div class="lensrow"><span class="lenslab">accepted lens</span>` +
@@ -1869,7 +1881,7 @@ function renderTabs(V){
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
   // the notary's `passes` MUST be shown (notary NIP): open and curated look alike otherwise.
-  // Read only, not enforced yet — every live notary is `auto`; `accept` gating is port debt.
+  // Enforced in tierOf via notaryTier; every live notary is `auto` as of 2026-08-28.
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
   const passes = ntry ? (tag(ntry,"passes") === "auto" ? " · open notary" : " · curated notary") : "";
   metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}` : "";
@@ -2117,10 +2129,13 @@ function renderTimeline(entries){
   // else. The credit is the point of the rule (NIP-DRAFT "Taking a revision").
   const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
     .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
+  // under a notary, shelf 1 is a card the notary accepted and the author then revised: the
+  // notary NIP says show that it was passed and is waiting (pick the notary's lens for the diff)
+  const N = activeF ? notaryOf(activeF.slice(2)) : null;
   const propCard = (ev, d) =>
     `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
-    `<h4>${headTitle(ev, d)}<span class="ptag">proposed</span></h4>` +
+    `<h4>${headTitle(ev, d)}<span class="ptag">${N && notaryTier(N, ev) === 1 ? "accepted · revised since" : "proposed"}</span></h4>` +
     creditRow(ev) + cardBody(ev, d) + lensNote(ev) +
     (beyond(ev, d) ? actRow(ev, d) : "") + `</div>`;
 
