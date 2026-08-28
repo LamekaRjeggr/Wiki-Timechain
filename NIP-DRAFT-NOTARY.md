@@ -116,6 +116,10 @@ read by `#a` as before; they never pass a card.
   version are both on hand, and the difference is the thing to show.
 - A notary's `passes` value MUST be shown to the reader. An open notary and a curated one
   look the same otherwise.
+- A card submitted but not passed MUST NOT sit on the timeline. A client MAY show that
+  such cards exist — a count, a fold — and MAY open them on request.
+- The notary's key is the default lens. A client MAY read any key's acceptances as the
+  spine instead — the reader's own, or another's — since a notary is a lens and nothing more.
 
 ## Degradation
 
