@@ -83,9 +83,11 @@ reader's client is pointed at: its passed cards, in `event_date` order. A corpus
 designate a notary by publishing its coordinate; that is convention, and this NIP defines
 nothing for it.
 
-Trust is not transitive: a notary passes only what it has itself accepted (or, under
-`auto`, what is submitted to it). Following an upstream notary's decisions means signing
-its own acceptances.
+A notary's **candidates** are the cards submitted to it, plus the cards passed by the
+notaries submitted to it. A notary passes only candidates. An acceptance of any other card
+is voice: it shows on the card and moves nothing, until the author submits — an act on an
+unsubmitted card is an invitation, and the author's `a` is the answer. Trust is not
+transitive: following an upstream notary's decisions means signing its own acceptances.
 
 Cycles: `a` coordinates are names and can loop. A client walking a chain MUST stop at a
 coordinate it has already visited.
