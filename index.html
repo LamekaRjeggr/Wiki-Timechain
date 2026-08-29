@@ -51,7 +51,6 @@
     --warn:#ffb27a;          /* orange, never red — meaning also in the text */
     --glow:rgba(255,176,46,.07);      /* header wash */
     --rail-tint:rgba(255,176,46,.16); /* inserted text */
-    --rail-tint-2:rgba(255,176,46,.12);/* contested badge */
     --scrim:rgba(0,0,0,.62);          /* the page, backgrounded — read only by pick mode */
     --band:rgba(233,234,238,.035);    /* drum: ink-on-paper tints, so they invert */
     --hair:rgba(233,234,238,.07);
@@ -84,7 +83,7 @@
     --dim:#c9bca4; --faint:#91836e; --gutline:#a2947e;
     --ink:#2a1c06; --warn:#ffc492;
     --glow:rgba(255,194,102,.10);
-    --rail-tint:rgba(255,194,102,.22); --rail-tint-2:rgba(255,194,102,.16);
+    --rail-tint:rgba(255,194,102,.22); 
     --scrim:rgba(28,21,12,.62);
     --band:rgba(248,243,234,.05); --hair:rgba(248,243,234,.10);
     --hairline:rgba(248,243,234,.45);
@@ -111,7 +110,7 @@
     --dim:#61666f; --faint:#a8adb5; --gutline:#9aa0a9;
     --ink:#fffaf2; --warn:#9a4a00;
     --glow:rgba(163,92,0,.06);
-    --rail-tint:rgba(163,92,0,.16); --rail-tint-2:rgba(163,92,0,.10);
+    --rail-tint:rgba(163,92,0,.16); 
     --scrim:rgba(25,27,31,.42);
     --band:rgba(25,27,31,.035); --hair:rgba(25,27,31,.09);
     --hairline:rgba(25,27,31,.45);
@@ -291,6 +290,9 @@
   .mtl .dot{position:absolute;left:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
+  /* the vocabulary: BLUE = submitted (the author's signature, always), GOLD = accepted (the
+     notary's signature, manual notaries only). No gold without blue. Fill + hue, never hue alone. */
+  .mtl .node[data-acc] .dot,.mtl .node[data-acc] .cdot{background:var(--rail);border-color:var(--rail)}
   .mtl .card{grid-column:2;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
@@ -374,7 +376,6 @@
     font-family:var(--mono);font-size:10px;letter-spacing:.04em;
     color:var(--faint);text-decoration:none;line-height:1}
   .mtl a.rvz:hover{color:var(--text);text-decoration:underline}
-  .mtl .rvz.was{color:var(--dim);cursor:default}
   .mtl .dpb{display:block;height:5px;border-radius:2px;background:var(--dim);box-sizing:border-box}
   .mtl .dpb.t{width:10px}.mtl .dpb.s{width:17px}.mtl .dpb.b{width:24px}
   /* lit = the card ladder's rung colors, mirroring the floor glyph */
@@ -416,14 +417,14 @@
   .mtl .gap-c .lab{grid-column:2;padding:11px 0;color:var(--dim);
     font-family:var(--mono);font-size:12px}
   .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
-  /* contested: diamond node + amber brace + badge — shape+label carry it, never hue alone */
+  /* several submitted under one d: diamond node + blue brace + count — shape+label carry it */
   .mtl .cdot{position:absolute;left:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;background:var(--bg);
-    border:2px solid var(--rail);transform:rotate(45deg);z-index:2}
+    border:2px solid var(--accent);transform:rotate(45deg);z-index:2}
   .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
   .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
-    border:2px solid var(--rail);border-right:none;border-radius:6px 0 0 6px}
-  .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:var(--rail-tint-2);
-    border:1px solid var(--rail-dim);color:var(--rail);border-radius:20px;padding:4px 11px;
+    border:2px solid var(--accent);border-right:none;border-radius:6px 0 0 6px}
+  .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:color-mix(in srgb,var(--accent) 12%,transparent);
+    border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
   .mtl .vcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:12px 14px;margin-top:8px}
@@ -503,18 +504,19 @@
     border-top:4px solid transparent;border-bottom:4px solid transparent;
     border-left:6px solid var(--text)}
   /* tick vocabulary — size carries note length, shape carries kind, FILL answers "accepted?"
-     (a live field-copy from a key other than the author). Hollow = on the record, backed
-     by no one. Fill and shape, never hue alone. */
+     Hollow blue = submitted. Gold fill = the notary's own key holds a live acceptance
+     (manual notaries only — under auto every tick is hollow). Fill and shape, never hue alone. */
   #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;
-    background:transparent;border:1px solid var(--past-dim)}
-  #drum .tick.end{background:var(--past);border-color:var(--past)}
+    background:transparent;border:1px solid var(--accent)}
+  #drum .tick.end{background:var(--rail);border-color:var(--rail)}
   #drum .tick.face{box-shadow:0 0 7px var(--past-glow)}
-  #drum .tick.contested{width:9px!important;height:9px;border-radius:0}
+  #drum .tick.several{width:9px!important;height:9px;border-radius:0}
   #drum .tick.rev{height:6px;border-radius:2px}   /* ONE card wearing a visible layer — not two notes */
   #drum .tick.rev.end{
-    /* layered in LIGHTNESS, not a second hue — cyan on the drum now means "ahead" */
-    background:linear-gradient(180deg,var(--past) 0 62%,var(--past-dim) 62% 100%)}
-  #drum .tick.future{background:transparent;border:2px solid var(--future);border-radius:50%;
+    /* layered in LIGHTNESS, not a second hue */
+    background:linear-gradient(180deg,var(--rail) 0 62%,var(--rail-dim) 62% 100%)}
+  /* ahead of now: a dashed ring — shape says it, no cyan (blue is taken by "submitted") */
+  #drum .tick.future{background:transparent;border:2px dashed var(--dim);border-radius:50%;
     width:8px!important;height:8px}
   #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
     width:2px!important;height:14px;left:23px;border-radius:0;border:none}
@@ -990,7 +992,7 @@ copyBtn.addEventListener("click", async () => {
 // plain-text export of the selected timeline, AS SEEN: each card contributes the lines its
 // glyph has lit — title/event_date always, summary and content per the floor and any
 // per-card cycle (visOf, the same gate the page renders through). Spine order, head version
-// only (a contested d exports the version the spine shows). No field labels: date + title
+// only (a d with several submitted exports the version the spine shows). No field labels: date + title
 // on one line, then each lit paragraph — a reading copy, not a machine interchange.
 const exportBtn = document.getElementById("exportbtn");
 exportBtn.addEventListener("click", () => {
@@ -1217,24 +1219,10 @@ function carries(ev){ return { sum: !!tag(ev,"summary"), body: !!(ev.content || 
 // what this card actually shows: the floor, unless the card was cycled past it. No field
 // stands in for another — a lit line means that line is showing, and a card that carries
 // only a title shows only its title.
-// A card someone else has forked is SUPERSEDED: the revision carries the reading now, so the
-// parent falls back to its title alone until a reader opens it. Keyed pubkey:d — a replaceable
-// parent's id moves on every republish, its coordinate does not. A taken fork does not count:
-// assimilated, the parent's text IS the fork's, and there is nothing newer to defer to.
-let superseded = new Map();   // displaced coordinate → the key that revised it
-function markSuperseded(){
-  superseded = new Map();
-  for (const ev of events.values()){
-    const a = citeA(ev);
-    if (!a) continue;
-    const [, ppk, pd] = (a[1] || "").split(":");
-    if (ppk && pd && ppk !== ev.pubkey && !takenOf(ev, pd)) superseded.set(ppk + ":" + pd, ev.pubkey);
-  }
-}
-const sup     = (ev, d) => superseded.has(ev.pubkey + ":" + d);
-const floorOf = (ev, d) => sup(ev, d) ? "t" : showStr(floor);
-// a superseded card cycles on its OWN key: its twin holds the slot and must not move with it
-const okey    = (ev, d) => sup(ev, d) ? ev.pubkey.slice(0,8) + "." + d : d;
+// A fork does not displace its parent: both are submitted, and only the notary's acceptance
+// says which one carries the reading. The fork shows "revises"; the parent stays whole.
+const floorOf = () => showStr(floor);
+const okey    = (ev, d) => d;
 
 function visOf(ev, d, base){
   const c = carries(ev), v = parseShow(base || openCards.get(okey(ev, d)) || floorOf(ev, d));
@@ -1270,14 +1258,9 @@ function depthMark(ev, d){
   // revise rides beside the pyramid: the glyph shows what the card carries, the link is how
   // you change it. Same corner on every card — title-only cards have no foot row to hold it.
   // A plain href: add.html decides late whether you're the author (edit) or a visitor (propose).
-  // The word is the card's own state, past or present: a displaced version reads `revised`
-  // and does nothing — the revision holds the reading, so a correction aimed here lands behind it.
-  const rvz = sup(ev, d)
-    ? `<span class="rvz was" title="revised by ${esc(authorLabel(superseded.get(ev.pubkey + ":" + d)))}` +
-      ` — that version carries the reading now; revise it, not this one">revised</span>`
-    : `<a class="rvz" href="add.html?c=${encodeURIComponent(collectionSlug(ev) || "")}` +
+  const rvz = `<a class="rvz" href="add.html?c=${encodeURIComponent(collectionSlug(ev) || "")}` +
     `&d=${encodeURIComponent(tag(ev,"d") || d)}&e=${ev.id}&p=${ev.pubkey}"` +
-    ` title="revise this card — your own is edited, someone else's gets a proposed revision">revise</a>`;
+    ` title="revise this card — your own is edited, someone else's gets a submitted revision">revise</a>`;
   const ok = okey(ev, d);
   return rvz + `<button class="dmk${openCards.has(ok) ? " open" : ""}" type="button" data-open="${esc(ok)}"` +
     ` data-next="${nxt}" data-prev="${prv}" data-eff="${eff}"` +
@@ -1575,13 +1558,6 @@ function matching(f){
 }
 // where a card stands under the notary on screen: 0 = on the line (passed). 1 = passed, waiting
 // on the notary's re-read. 2 = submitted, not passed — behind the fold. Never deleted, only resisted.
-function anyAcceptance(ev){
-  return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).some(a => {
-    if (a.pubkey === ev.pubkey) return false;  // self-acceptance backs nothing
-    const sc = scopeOf(a);
-    return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
-  });
-}
 // NOTARY RULE (notary NIP, What passes) — a notary-backed collection ignores the derived
 // authority above entirely: `auto` passes every submission; `manual` (and no `passes` at all)
 // passes a card only while the notary's OWN key holds a content-live acceptance. A lapsed
@@ -1624,7 +1600,7 @@ function entriesOf(f){
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
     out.push({ d, evs, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
-               title: tag(head,"title") || d, contested: evs.length > 1 });
+               title: tag(head,"title") || d, several: evs.length > 1 });
   }
   return out.sort(byWhen);
 }
@@ -1708,7 +1684,6 @@ function renderTabs(V){
 
 // ═══════════════ render ═══════════════
 function render(){
-  markSuperseded();           // which cards a revision has displaced — recomputed each pass
   const V = vocab();
   // deep link wins until the visitor picks. ?c= is the shareable form; ?l=/?t=
   // land on the first timeline carrying that tag — never a merged spine.
@@ -1899,10 +1874,11 @@ function renderTimeline(entries){
   // a waiting card is one the notary accepted and the author then revised: the
   // notary NIP says show that it was passed and is waiting (pick the notary's lens for the diff)
   const N = activeF ? notaryOf(activeF.slice(2)) : null;
+  const manual = !!N && tag(N,"passes") !== "auto";
   const propCard = (ev, d) =>
     `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
-    `<h4>${headTitle(ev, d)}<span class="ptag">${N && notaryTier(N, ev) === 1 ? "accepted · revised since" : "proposed"}</span></h4>` +
+    `<h4>${headTitle(ev, d)}<span class="ptag">${N && notaryTier(N, ev) === 1 ? "accepted · revised since" : "submitted"}</span></h4>` +
     creditRow(ev) + cardBody(ev, d) +
     (beyond(ev, d) ? actRow(ev, d) : "") + `</div>`;
 
@@ -1947,8 +1923,9 @@ function renderTimeline(entries){
 
     const yr = String(e.date).slice(0,4);
     // the node carries its year, address, date-fraction, and acceptance as data: the drum
-    // reads them without scraping rendered text or holding act state of its own
-    const acc = e.evs.some(ev => anyAcceptance(ev));
+    // reads them without scraping rendered text or holding act state of its own.
+    // Gold = this notary's own signature: tier 0 under a manual notary. Auto never fills.
+    const acc = manual && e.evs.length > 0;
     const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"` +
       (acc ? ` data-acc="1"` : "");
 
@@ -1959,10 +1936,10 @@ function renderTimeline(entries){
       html += draftNodeHtml(e, future);
     } else if (!e.evs.length){   // a pure addition — a new `d` from a key that isn't on the spine
       html += `<div class="node"${nodeAttrs}>${propHtml}</div>`;
-    } else if (e.contested){
+    } else if (e.several){
       html += `<div class="node"${nodeAttrs}><span class="cdot"></span>` +
         `<div class="contest"><div class="cbrace"></div>` +
-        `<div class="cbadge">${esc(e.date)} · ◆ contested · ${e.evs.length} versions</div>` +
+        `<div class="cbadge">${esc(e.date)} · ◆ ${e.evs.length} submitted</div>` +
         e.evs.map((ev, vi) =>
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
@@ -2032,18 +2009,18 @@ function drumMeasure(){
   drumTicks = []; drumGaps = []; drumTabs = []; drumNowY = null;
 
   areaEl.querySelectorAll(".mtl .node").forEach(n => {
-    const contested = !!n.querySelector(".cdot");
+    const several   = !!n.querySelector(".cdot");           // more than one submitted under this d
     const future    = !!n.querySelector(".dot.future");
     const rev       = !!n.querySelector(".dbar");           // this card carries edit marks
     const chars = [...n.querySelectorAll(".cbody")].reduce((a, b) => a + b.textContent.length, 0);
     const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
     const isDraft = n.classList.contains("draft");   // claim-in-progress, not yet record
     const el = document.createElement("div");
-    el.className = "tick" + (isDraft ? " draft" : contested ? " contested" : rev ? " rev" : future ? " future" : "")
+    el.className = "tick" + (isDraft ? " draft" : several ? " several" : rev ? " rev" : future ? " future" : "")
                  + (!isDraft && !future && n.dataset.acc ? " end" : "");
-    if (!contested && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
+    if (!several && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
-    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, contested, yr: n.dataset.yr || "",
+    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, several, yr: n.dataset.yr || "",
                      frac: n.dataset.frac ? +n.dataset.frac : null, draft: isDraft });
   });
   areaEl.querySelectorAll(".mtl .gap-c").forEach(g => {
@@ -2104,13 +2081,13 @@ function drumFrame(){
     t.el.style.display = "";
     t.el.style.top = (p.y - 2) + "px";
     t.el.style.opacity = (.2 + .8 * p.a).toFixed(2);
-    t.el.style.transform = `scale(${(.55 + .45 * p.a).toFixed(2)})` + (t.contested ? " rotate(45deg)" : "");
+    t.el.style.transform = `scale(${(.55 + .45 * p.a).toFixed(2)})` + (t.several ? " rotate(45deg)" : "");
   }
   // the card facing you reads full-strength — information about where you are, not a control
   for (const t of drumTicks) t.el.classList.toggle("face", t === face);
   if (face){
     face.el.style.opacity = "1";
-    face.el.style.transform = "scale(1.15)" + (face.contested ? " rotate(45deg)" : "");
+    face.el.style.transform = "scale(1.15)" + (face.several ? " rotate(45deg)" : "");
   }
   for (const g of drumGaps){
     const p = project(g.y, D, headTh, R, cy);
@@ -2798,7 +2775,7 @@ function draftCollision(d, pk){
     return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Discard this draft and start another; the new one mints a different address.` };
   }
   const rival = [...events.values()].find(e => tag(e,"d") === d && e.pubkey !== pk);
-  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which shows as contested. That is allowed; just make sure you meant it.` };
+  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which shows as two submitted. That is allowed; just make sure you meant it.` };
   return null;
 }
 
@@ -2855,7 +2832,7 @@ function draftEntry(){
   const date = draftDate() || draft.seedYr;
   return { d: "__draft__", draft: true, evs: [], prop: [],
            date, time: TIME_RE.test(draft.time) ? draft.time : "",
-           frac: yearFrac(date), title: draft.title, contested: false };
+           frac: yearFrac(date), title: draft.title, several: false };
 }
 
 // the date tab shows the claim committed so far. It never has to speak mid-spin: the card

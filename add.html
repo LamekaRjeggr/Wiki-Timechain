@@ -1478,7 +1478,7 @@ function collisionCheck(d){
     return { block: true, text: `"${d}" is already your card "${tagOf(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Load it above to edit, or give this one its own d.` };
   }
   const rival = [...cards.values()].find(e => dOf(e) === d && e.pubkey !== signer.pubkey);
-  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which the viewer shows as contested. That is allowed; just make sure you meant it.` };
+  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which the viewer shows as two submitted. That is allowed; just make sure you meant it.` };
   return null;
 }
 
