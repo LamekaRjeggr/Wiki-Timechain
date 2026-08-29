@@ -1010,12 +1010,13 @@ const collOf  = ev => {
   const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
   return a ? a[1].split(":").slice(2).join(":") : "";
 };
-// the notary a slug names, if one has arrived (several keys may mint the same d; newest wins)
+// the notary a slug names: the viewer's ?k= pick when it carries one, else the oldest —
+// the same default the viewer shows first, so "add to this timeline" lands on the same line
+const qk = new URLSearchParams(location.search).get("k") || "";
 function notaryOf(c){
-  let best = null;
-  for (const n of notaries.values())
-    if (dOf(n) === c && (!best || n.created_at > best.created_at)) best = n;
-  return best;
+  const L = [...notaries.values()].filter(n => dOf(n) === c)
+    .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
+  return L.find(n => qk && n.pubkey.startsWith(qk)) || L[0] || null;
 }
 const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + dOf(n);
 
@@ -1608,7 +1609,7 @@ async function publish(){
   pubMsg("signing…");
   // A new slug is a new notary: minted under your key, open (`passes auto`), sent BEFORE the
   // card so the submission never points at nothing. Two signatures, same click.
-  let ntry = null;
+  let ntry = null, act = null;
   try {
     const tmpl = buildTemplate();
     const c = collOf({ tags: tmpl.tags });
@@ -1619,6 +1620,14 @@ async function publish(){
     }
     signed = await signer.sign(tmpl);
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
+    // your own curated notary: the acceptance rides with the card, same click. No owner
+    // special case in the rule — the act is still what passes it — just no second trip.
+    const N = notaryOf(c);
+    if (N && N.pubkey === signed.pubkey && tagOf(N, "passes") !== "auto"){
+      const tags = [["a", KIND + ":" + signed.pubkey + ":" + dOf(signed)], ["e", signed.id], ["p", signed.pubkey]];
+      for (const f of ["title", "summary"]) if (tagOf(signed, f)) tags.push([f, tagOf(signed, f)]);
+      act = await signer.sign({ kind: ACT_KIND, created_at: signed.created_at + 1, content: signed.content, tags });
+    }
   } catch(e){
     pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
   }
@@ -1629,6 +1638,7 @@ async function publish(){
   const send = ev => { const msg = JSON.stringify(["EVENT", ev]); open.forEach(ws => { try { ws.send(msg); } catch {} }); };
   if (ntry){ send(ntry); ingestNotary(ntry); }
   send(signed);
+  if (act) send(act);
 
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];

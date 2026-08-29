@@ -166,29 +166,15 @@
   .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
     color:var(--faint)}
 
-  /* who else has published under this collection. A LENS, not a filter: tapping a chip steps
-     the other authors' cards back, it never changes which cards are on the page — filtering
-     here would break one spine, one story. Hidden entirely while a collection has one author. */
+  /* the notaries holding this name — one chip each, the lit one is the timeline on screen.
+     Hidden while one key holds the name: then there is nothing to switch between. */
   .roster{margin:11px auto 0;max-width:640px;display:flex;flex-wrap:wrap;
     justify-content:center;align-items:center;gap:5px}
-  .rchip,.lchip,.vbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
+  .rchip{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:4px 9px;font-size:11.5px;font-family:var(--mono);
     cursor:pointer;line-height:1.4}
-  .rchip:hover,.lchip:hover,.vbtn:hover{color:var(--text)}
-  .rchip.on,.lchip.on,.vbtn.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
-  .rchip .n,.lchip .n{color:var(--faint);margin-left:5px;font-variant-numeric:tabular-nums}
-  /* the accepted lens picker: one chip per key holding live acts here. ✓ is the mark of an
-     act — shape carries it, the amber is chrome */
-  .lensrow{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:center;
-    align-items:center;gap:5px;margin-top:6px}
-  .lenslab{font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:2px}
-  .lchip .ck{color:var(--rail);margin-right:5px}
-  /* the spine view: whose acceptances hold the line. A stance on reading, so it sits
-     with the roster, not the verbs. Hidden without a key — popular is then the only view. */
-  .viewrow{margin:11px auto 0;display:flex;flex-wrap:wrap;justify-content:center;
-    align-items:center;gap:5px}
-  .viewnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
-    color:var(--faint);margin-top:4px}
+  .rchip:hover{color:var(--text)}
+  .rchip.on{background:var(--panel);border-color:var(--rail-dim);color:var(--text)}
   .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
     color:var(--faint);margin-top:2px}
 
@@ -465,15 +451,6 @@
   .mtl .foldrow .lab{grid-column:2;padding:13px 0 2px;color:var(--dim);
     font-family:var(--mono);font-size:11.5px;cursor:pointer}
   .mtl .foldrow .go{color:var(--accent);margin-left:7px}
-  /* the roster lens: everything not by the lit author steps back. Lightness only. */
-  .mtl .lensoff{opacity:.32}
-  /* the accepted lens: lit = the key stands behind THIS exact version (border + the ✓ note,
-     never hue alone); lapsed = they signed an earlier form — the note carries their copy,
-     because the act's bytes are the only place that text still exists after replacement */
-  .mtl .lenson{border-color:var(--rail-dim)}
-  .mtl .lnote{margin-top:9px;font-family:var(--mono);font-size:11px;color:var(--rail)}
-  .mtl .lcopy{margin-top:5px;border-left:2px solid var(--border);padding:2px 0 2px 10px;
-    color:var(--dim);font-size:13px}
 
   /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
      every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
@@ -732,7 +709,6 @@
       <!-- band 2: the subject — what you're reading, with its own facts under it -->
       <h2 class="collnow" id="collnow"></h2>
       <div class="collmeta" id="collmeta"></div>
-      <div class="viewrow" id="viewrow" style="display:none"></div>
       <div class="roster" id="roster" style="display:none"></div>
       <!-- band 3: choosing — read something else -->
       <div class="tabs" id="tabs"></div>
@@ -968,20 +944,10 @@ const wanted = new Set();                // slugs whose cards were asked for —
 let actTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const showFold     = new Set();          // slugs whose "proposed" fold the visitor opened
-// the roster lens — whose cards to pick out. Transient like the two sets above and NOT in the
-// URL: it's a way of looking, not a view worth 64 hex characters of link.
-let lensPk = null;
-// the accepted lens — read the collection as the versions ONE key's live acts stand behind.
-// Same nature as the roster lens (transient, not in the URL), and exclusive with it: two
-// dims at once would read as a broken page, not two questions.
-let actLensPk = null;
-// the spine view — whose acceptances put a card on the line. "you" (the default): your own
-// cards plus the versions your live acts stand behind, everything else waits one layer out.
-// "popular": what the notary passes. Your view needs a key;
-// without one popular is the only honest reading, and the toggle stays hidden.
-let spineView = "you";
-try { if (localStorage.getItem("wtc:spineview") === "popular") spineView = "popular"; } catch {}
-const youView = () => spineView === "you" && !!myPk;
+// A timeline is ONE notary. Several keys may hold the same name; the chips switch between
+// them, and `?k=<pubkey prefix>` carries the choice in the link when it isn't the default.
+let activeN = null;                       // chosen notary coord, or null = the default for the name
+const wantedK = _q.get("k") || "";
 
 const tabsEl   = document.getElementById("tabs");
 const statusEl = document.getElementById("status");
@@ -989,28 +955,21 @@ const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
 const addLink  = document.getElementById("addlink");   // → add.html, the write side
-const rosterEl = document.getElementById("roster");    // its authors — see renderRoster
-const viewEl   = document.getElementById("viewrow");   // the spine-view toggle — see renderRoster
-viewEl.addEventListener("click", e => {
-  const vb = e.target.closest(".vbtn"); if (!vb || vb.dataset.v === spineView) return;
-  spineView = vb.dataset.v;
-  try { localStorage.setItem("wtc:spineview", spineView); } catch {}
-  render();
-});
+const rosterEl = document.getElementById("roster");    // the name's notaries — see renderNotaries
 rosterEl.addEventListener("click", e => {
-  const lb = e.target.closest(".lchip");
-  if (lb){ actLensPk = actLensPk === lb.dataset.pk ? null : lb.dataset.pk; lensPk = null; render(); return; }
-  const b = e.target.closest(".rchip"); if (!b) return;
-  lensPk = lensPk === b.dataset.pk ? null : b.dataset.pk;
-  actLensPk = null;
+  const b = e.target.closest(".rchip"); if (!b || b.dataset.n === activeN) return;
+  activeN = b.dataset.n;
+  history.replaceState(null, "", timelineUrl());
   render();
 });
 
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","l","t","plain","sum","depth","show","open"].forEach(a => u.searchParams.delete(a));
+  ["c","k","l","t","plain","sum","depth","show","open"].forEach(a => u.searchParams.delete(a));
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
+  const N = activeF && notaryOf(activeF.slice(2));
+  if (N && N !== notariesOf(activeF.slice(2))[0]) u.searchParams.set("k", N.pubkey.slice(0, 12));
   if (plainCards.size) u.searchParams.set("plain", [...plainCards].join(","));
   if (showStr(floor) !== "c") u.searchParams.set("show", showStr(floor));
   if (openCards.size) u.searchParams.set("open", [...openCards].map(([d,v]) => `${d}~${v}`).join(","));
@@ -1113,12 +1072,18 @@ function collectionSlug(ev){
   const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
   return a ? a[1].split(":").slice(2).join(":") : "";
 }
-// the notary a slug names, if one has arrived (several keys may mint the same d; newest wins)
+const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d");
+const submitsTo = (ev, coord) => ev.tags.some(t => t[0] === "a" && t[1] === coord);
+// every notary holding a name, oldest first. That order is only a DEFAULT — the chips show
+// all of them and one tap switches — so a backdated notary can steal a first look, never a line.
+function notariesOf(c){
+  return [...notaries.values()].filter(n => tag(n,"d") === c)
+    .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
+}
+// the timeline on screen for a name: the chip picked, else the link's ?k=, else the default
 function notaryOf(c){
-  let best = null;
-  for (const n of notaries.values())
-    if (tag(n,"d") === c && (!best || n.created_at > best.created_at)) best = n;
-  return best;
+  const L = notariesOf(c);
+  return L.find(n => coordOf(n) === activeN) || L.find(n => wantedK && n.pubkey.startsWith(wantedK)) || L[0] || null;
 }
 
 // ── the filter, "axis:value" ──
@@ -1576,53 +1541,8 @@ function scopeOf(a){
 // override — anything that gives a card a place — requires content in scope and LIVE.
 // Title/summary acceptance is voice: it counts and renders, never carries custody.
 const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
-// the accepted lens, derived: every key holding a live acceptance on a card of this
-// collection, with its count. Any such key IS a lens — no role, no permission; reading
-// one is following that key's editorial judgment, rebuilt purely from its signatures.
-function actLenses(c){
-  const n = new Map();
-  for (const ev of matching("c:" + c))
-    for (const a of acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id))
-      n.set(a.pubkey, (n.get(a.pubkey) || 0) + 1);
-  return n;
-}
-// the lens key's current act on one card — whatever version it names
-function lensActOn(ev){
-  if (!actLensPk) return null;
-  return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
-    .find(a => a.pubkey === actLensPk) || null;
-}
-function scheduleActFetch(){
-  if (actTimer) return;
-  actTimer = setTimeout(() => {
-    actTimer = null;
-    const f = actFilters();
-    if (!f.length) return;
-    sockets.forEach(ws => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify(["CLOSE","act"]));
-      ws.send(JSON.stringify(["REQ","act", ...f]));
-    });
-  }, 250);
-}
-
-function scheduleRender(){
-  if (renderTimer) return;
-  renderTimer = setTimeout(() => {
-    renderTimer = null;
-    // a live event mid-composition would rebuild the draft card and eat the caret —
-    // hold the repaint while an editable has focus; focusout flushes it (write side)
-    if (draftFocused){ pendingRender = true; return; }
-    render();
-  }, 120);
-}
-
-// ═══════════════ data views ═══════════════
-function matching(f){
-  return [...events.values()].filter(ev => matchesF(ev, f));
-}
-// three shelves. 0 = on the spine (what the notary passes). 1 = passed, waiting on the
-// notary's re-read. 2 = behind the fold. Never deleted, only resisted.
+// where a card stands under the notary on screen: 0 = on the line (passed). 1 = passed, waiting
+// on the notary's re-read. 2 = submitted, not passed — behind the fold. Never deleted, only resisted.
 function anyAcceptance(ev){
   return acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).some(a => {
     if (a.pubkey === ev.pubkey) return false;  // self-acceptance backs nothing
@@ -1643,19 +1563,21 @@ const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 // what the fold is holding back — the count IS the information
 function foldOf(c){
   const N = notaryOf(c);
-  const hid = matching("c:" + c).filter(ev => tierOf(ev, N) === 2);
+  const hid = N ? matching("c:" + c).filter(ev => submitsTo(ev, coordOf(N)) && tierOf(ev, N) === 2) : [];
   return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
 }
 
-// group a filter's events by d-tag: one entry per d, versions within — split by shelf, so an
-// entry can carry spine versions, proposed versions, or (a pure addition) only proposed ones.
+// group a timeline's cards by d-tag: one entry per d, versions within — split by where they
+// stand, so an entry can carry passed versions, waiting ones, or (a pure addition) only waiting ones.
+// Candidates (notary NIP) = cards submitted to THIS notary; a same-name notary's cards are not.
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
   const N = c ? notaryOf(c) : null;
-  const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders shelf 3 as shelf 2
+  const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders the unpassed too
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of matching(f)){
+    if (N && !submitsTo(ev, coordOf(N))) continue;
     const d = tag(ev,"d");
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
@@ -1665,19 +1587,8 @@ function entriesOf(f){
     // parent's words now, and the parent card carries the credit instead.
     const taken = all0.filter(ev => takenOf(ev, d));
     const all   = all0.filter(ev => !taken.includes(ev));
-    // your view: your signature is the sole spine authority — your own cards, and the
-    // versions your live acts stand behind (content copy, the same custody bar as
-    // adoption). Everything else waits one layer out; the popular fold never applies.
-    const backs = ev => ev.pubkey === myPk ||
-      acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id)
-        .some(a => a.pubkey === myPk && actMoves(a, ev));
-    const evs  = (youView() ? all.filter(backs)
-                            : all.filter(ev => tierOf(ev, N) === 0)).sort(ord);
-    // the accepted lens overrides the fold — but only a CONTENT-live act moves a card onto
-    // the page (draft NIP: only the content copy moves documents; title/summary is voice)
-    const prop = (youView() ? all.filter(ev => !backs(ev))
-                : all.filter(ev => { const t = tierOf(ev, N); if (!t) return false;
-      const a = lensActOn(ev); return t <= cut || !!(a && actMoves(a, ev)); })).sort(ord);
+    const evs  = all.filter(ev => tierOf(ev, N) === 0).sort(ord);
+    const prop = all.filter(ev => { const t = tierOf(ev, N); return t && t <= cut; }).sort(ord);
     if (!evs.length && !prop.length) continue;
     const head = evs[0] || prop[0];
     out.push({ d, evs, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
@@ -1704,7 +1615,7 @@ function renderStatus(){
 // NOT derived from the selection — it is its own state, "how you're browsing".
 function selectF(f){
   if (activeF === f) return;
-  activeF = f; userPicked = true;
+  activeF = f; activeN = null; userPicked = true;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
@@ -1713,53 +1624,19 @@ function selectF(f){
 // [filter, label] pairs — cards not needed, so an unopened timeline still lists.
 const vocab = () => [...slugs].sort().map(c => ["c:" + c, slugName(c)]);
 
-// Who else has published here. A LENS, not a filter — it never changes which cards are on the
-// page. Hidden at one author, so it stays invisible until a second key publishes: that is the
-// expected state on today's data, not a broken build.
-function renderRoster(){
+// the name's notaries, one chip each, when more than one key holds it. Switching chips
+// switches timelines: a notary IS the timeline, the name is only what it is called.
+function renderNotaries(){
   const c = activeF ? activeF.slice(2) : null;
-  const N = c ? notaryOf(c) : null;
-  const n = new Map();                        // cards per key — a count, never a rank of authority
-  if (c) for (const ev of matching("c:" + c)) n.set(ev.pubkey, (n.get(ev.pubkey) || 0) + 1);
-  const rank = [...n.keys()].sort((a,b) => (n.get(b) - n.get(a)) || (a < b ? -1 : 1));
-  // the spine-view toggle: your view is the default and needs your key; popular is the
-  // notary's spine everyone sees. An empty your-view is the honest starting state,
-  // not a broken page — the note says so instead of leaving a bare spine unexplained.
-  if (!myPk || !c){ viewEl.style.display = "none"; }
-  else {
-    viewEl.style.display = "";
-    const ents = youView() ? entriesOf(activeF) : [];
-    const empty = !!ents.length && ents.every(e => !e.evs.length);
-    viewEl.innerHTML =
-      `<button class="vbtn${spineView === "you" ? " on" : ""}" type="button" data-v="you"` +
-      ` title="your spine — your cards and the versions you accepted sit on the line">your view</button>` +
-      `<button class="vbtn${spineView === "popular" ? " on" : ""}" type="button" data-v="popular"` +
-      ` title="the notary's spine — what its key passes">popular view</button>` +
-      (empty ? `<span class="viewnote">your view is empty here — you haven't accepted a version yet; every card waits one layer out</span>` : "");
-  }
-  const L = c ? actLenses(c) : new Map();
-  if (actLensPk && !L.has(actLensPk)) actLensPk = null;   // no live acts here — lens drops
-  const many = rank.length >= 2;
-  if (!many) lensPk = null;
-  else if (lensPk && !n.has(lensPk)) lensPk = null;     // switched to a timeline they aren't in
-  if (!many && !L.size){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; return; }
+  const L = c ? notariesOf(c) : [], N = c ? notaryOf(c) : null;
+  if (L.length < 2){ rosterEl.innerHTML = ""; rosterEl.style.display = "none"; return; }
   rosterEl.style.display = "";
-  rosterEl.innerHTML = (many ? rank.map(pk =>
-      `<button class="rchip${pk === lensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
-      ` title="contributor — tap to pick out their cards">` +
-      `${authorLabel(pk)}<span class="n">${n.get(pk)}</span></button>`
+  rosterEl.innerHTML = L.map(n =>
+      `<button class="rchip${n === N ? " on" : ""}" type="button" data-n="${esc(coordOf(n))}"` +
+      ` title="${tag(n,"passes") === "auto" ? "open — passes every submission" : "curated — passes what this key accepted"}">` +
+      `${authorLabel(n.pubkey)}${n.pubkey === myPk ? " · you" : ""}</button>`
     ).join("") +
-    `<div class="rnote">notary ${authorLabel(N.pubkey)} ${tag(N,"passes") === "auto" ? "passes every submission" : "passes what its key accepted"}` +
-    ` · every author keeps their own cards</div>` : "") +
-    // the accepted lens row: only keys with live acts here appear, count = cards backed
-    (L.size ? `<div class="lensrow"><span class="lenslab">accepted lens</span>` +
-      [...L.keys()].sort((a,b) => (L.get(b) - L.get(a)) || (a < b ? -1 : 1)).map(pk =>
-        `<button class="lchip${pk === actLensPk ? " on" : ""}" type="button" data-pk="${esc(pk)}"` +
-        ` title="show the collection as the versions this key accepted">` +
-        `<span class="ck">✓</span>${authorLabel(pk)}<span class="n">${L.get(pk)}</span></button>`
-      ).join("") +
-      (actLensPk ? `<span class="rnote">what ${authorLabel(actLensPk)} stands behind — everything else steps back</span>` : "") +
-      `</div>` : "");
+    `<div class="rnote">${L.length} notaries hold this name — each is its own timeline</div>`;
 }
 
 function renderTabs(V){
@@ -1780,8 +1657,8 @@ function renderTabs(V){
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
-  addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) : "add.html";
-  renderRoster();
+  addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
+  renderNotaries();
   if (!slugs.size) return;                       // status line shows "connecting…"
 
   const sel = document.createElement("select");
@@ -1980,41 +1857,6 @@ function renderTimeline(entries){
     }).length;
     return n ? `<span class="abadge" title="keys with at least one field-copy live on this card">✓ ${n} accepted</span>` : "";
   };
-  // the roster lens steps every other author's card back — lightness, so it survives all three
-  // fields and reads for a colourblind eye. It dims; it never removes.
-  const lens = ev => (lensPk && ev.pubkey !== lensPk) ? " lensoff" : "";
-  // the accepted lens, per card: lit border = every field the key's act copied is still
-  // live on this card, bytes deciding; part lapsed = the note carries the per-field split;
-  // unaccepted steps back like the roster lens
-  const isCurrent = (a, ev) => {
-    const sc = scopeOf(a);
-    const fs = Object.keys(sc);
-    return !!fs.length && fs.every(f => sc[f] === fieldOf(ev, f));
-  };
-  const alens = ev => {
-    const a = lensActOn(ev);
-    if (!a) return actLensPk ? " lensoff" : "";
-    return isCurrent(a, ev) ? " lenson" : "";
-  };
-  // words under the card carry the lens verdict, scope said out loud ("title only" is a
-  // different claim from "this card"); each lapsed field's byte copy is shown — after a
-  // replacement, that copy is the only place the accepted text still exists
-  const lensNote = ev => {
-    const a = lensActOn(ev);
-    if (!a) return "";
-    const sc = scopeOf(a);
-    const fs = AFIELDS.filter(f => sc[f] != null);
-    if (!fs.length) return "";
-    const scopeWords = fs.length === 3 ? "" : ` · ${fs.join(" + ")} only`;
-    if (isCurrent(a, ev))
-      return `<div class="lnote">✓ ${authorLabel(actLensPk)} stands behind this version${scopeWords} · signed ${signedAt(a)}</div>`;
-    const live = fs.filter(f => sc[f] === fieldOf(ev, f));
-    const gone = fs.filter(f => sc[f] !== fieldOf(ev, f));
-    return `<div class="lnote">◉ ${authorLabel(actLensPk)} · ` +
-      (live.length ? `${live.join(" + ")} ✓ · ` : "") +
-      `${gone.join(" + ")} changed since · signed ${signedAt(a)} — their copy:</div>` +
-      gone.map(f => `<div class="lcopy">${renderContent(clip(sc[f]))}</div>`).join("");
-  };
   // a proposed card is the SAME card — same tab, same body, same acts row. What differs is
   // where it sits (inset, dashed) and that it says so.
   // the inbound credit: this card's text absorbed a fork. Named from the fork's own key
@@ -2022,14 +1864,14 @@ function renderTimeline(entries){
   // else. The credit is the point of the rule (NIP-DRAFT "Taking a revision").
   const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
     .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
-  // under a notary, shelf 1 is a card the notary accepted and the author then revised: the
+  // a waiting card is one the notary accepted and the author then revised: the
   // notary NIP says show that it was passed and is waiting (pick the notary's lens for the diff)
   const N = activeF ? notaryOf(activeF.slice(2)) : null;
   const propCard = (ev, d) =>
-    `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+    `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
     `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
     `<h4>${headTitle(ev, d)}<span class="ptag">${N && notaryTier(N, ev) === 1 ? "accepted · revised since" : "proposed"}</span></h4>` +
-    creditRow(ev) + cardBody(ev, d) + lensNote(ev) +
+    creditRow(ev) + cardBody(ev, d) +
     (beyond(ev, d) ? actRow(ev, d) : "") + `</div>`;
 
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline.
@@ -2090,22 +1932,22 @@ function renderTimeline(entries){
         `<div class="contest"><div class="cbrace"></div>` +
         `<div class="cbadge">${esc(e.date)} · ◆ contested · ${e.evs.length} versions</div>` +
         e.evs.map((ev, vi) =>
-          `<div class="vcard${lens(ev)}${alens(ev)}"><div class="byline">` +
+          `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + lensNote(ev) +
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) +
           (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>`
         ).join("") +
         `</div>` + propHtml + `</div>`;
     } else {
       const ev = e.evs[0];
       html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card${lens(ev)}${alens(ev)}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + lensNote(ev) +
+        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) +
         (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>` +
         propHtml + `</div>`;
     }
@@ -3107,11 +2949,14 @@ async function publishDraft(btn){
     // wtc:pk can be stale — the collision that matters is against the key that will sign
     const col = draftCollision(tmpl.tags[0][1], s.pubkey);
     if (col && col.block) throw new Error(col.text);
-    if (!notaryOf(c)){                           // first card of a new timeline: mint its notary, open to all
+    // a NEW name has no notary yet, and a card needs one to be seen — so the first card mints
+    // it, open to all. The only automatic notary; a deliberate one is minted elsewhere.
+    if (!notaryOf(c)){
       const n = await s.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
                                tags: [["d", c], ["title", c.replaceAll("-"," ")], ["t", MARKER], ["passes", "auto"]] });
       ingestNotary(n); publish(n);
     }
+    const N = notaryOf(c);
     const ev = await s.sign(tmpl);
     rememberPk(ev.pubkey);
     justPub = { d: tmpl.tags[0][1], id: ev.id };
@@ -3120,6 +2965,9 @@ async function publishDraft(btn){
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
     publish(ev);
+    // your own curated notary: the act rides with the card, same click — no owner special
+    // case in the rule, just no chore. Under `auto` nothing is needed.
+    if (N.pubkey === ev.pubkey && tag(N,"passes") !== "auto") acceptCard(ev.pubkey, tmpl.tags[0][1]);
   } catch (ex){
     err.textContent = (ex && ex.message) || "signer declined — try again";
     err.classList.remove("hid");
