@@ -286,10 +286,10 @@
      footprint. Every row and gap draws its own segment: `.acc` on a node / `.l` on a gap or
      seam = line left; a gap that changes side (`.x.rl` / `.x.lr`) draws the crossing. */
   .mtl .node::before,.mtl .gap::before,.mtl .nowdiv::before{content:"";position:absolute;top:0;bottom:0;width:2px;
-    right:var(--gut);background:var(--border)}
+    right:var(--gut);background:var(--past-dim);opacity:.6}   /* the drum axle's color, dimmed the same */
   .mtl .node.acc::before,.mtl .gap.l::before,.mtl .nowdiv.l::before{right:auto;left:var(--gut)}
   .mtl .gap.x::before,.mtl .gap.x::after{content:"";position:absolute;left:var(--gut);right:var(--gut);width:auto;
-    background:none;border:0 solid var(--border)}
+    background:none;border:0 solid var(--past-dim);opacity:.6}
   .mtl .gap.x::before{top:0;height:50%;border-bottom-width:2px}
   .mtl .gap.x::after{top:50%;bottom:0;border-top-width:2px}
   /* two quarter-ellipses, each half the width and the full half-height: one S, no straight run */
