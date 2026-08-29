@@ -1736,7 +1736,10 @@ function render(){
   // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
   if (draft && !pickStage){ entries.push(draftEntry()); entries.sort(byWhen); }
 
-  if (!entries.length){
+  // a manual notary with nothing accepted yet is a timeline of folded cards, not silence —
+  // the fold must paint (and renderTimeline is where acts get subscribed), so only a truly
+  // empty pool shows the spinner
+  if (!entries.length && !(activeF && foldOf(activeF.slice(2)).n)){
     const allDown = [...relayState.values()].every(v => v === "down");
     const anyUp   = [...relayState.values()].some(v => v === "up");
     areaEl.innerHTML = allDown
