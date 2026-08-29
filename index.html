@@ -164,6 +164,10 @@
   /* the subject's own facts, right under its name — where "N entries" lives now */
   .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
     color:var(--faint)}
+  /* the gate switch: only the notary's own key sees it — one word, flips on tap */
+  .collmeta .gate{background:transparent;border:1px solid var(--border);color:var(--dim);
+    font:inherit;border-radius:20px;padding:1px 8px;margin-left:6px;cursor:pointer}
+  .collmeta .gate:hover{color:var(--text);border-color:var(--rail-dim)}
 
   /* the notaries holding this name — one chip each, the lit one is the timeline on screen.
      Hidden while one key holds the name: then there is nothing to switch between. */
@@ -965,6 +969,22 @@ rosterEl.addEventListener("click", e => {
   render();
 });
 
+// flip the gate: republish the notary, same d and tags, `passes` swapped. Replaceable, so
+// strictly newer than the one on screen. Cards do not move — the gate reads live.
+metaEl.addEventListener("click", async e => {
+  const b = e.target.closest(".gate"); if (!b) return;
+  const N = notaryOf(activeF.slice(2)); if (!N) return;
+  b.disabled = true;
+  try {
+    const s = await getSigner();
+    const next = tag(N,"passes") === "auto" ? "manual" : "auto";
+    const tags = N.tags.filter(t => t[0] !== "passes").concat([["passes", next]]);
+    const n = await s.sign({ kind: NOTARY_KIND, content: N.content,
+      created_at: Math.max(Math.floor(Date.now() / 1000), N.created_at + 1), tags });
+    ingestNotary(n); publish(n);
+  } catch { b.disabled = false; b.textContent = "signer declined"; }
+});
+
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
@@ -1660,8 +1680,12 @@ function renderTabs(V){
   // the notary's `passes` MUST be shown (notary NIP): automatic and manual look alike otherwise.
   // Enforced in tierOf via notaryTier; every live notary is `auto` as of 2026-08-28.
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
-  const passes = ntry ? (tag(ntry,"passes") === "auto" ? " · automatic" : " · manual") : "";
-  metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}` : "";
+  const auto = ntry && tag(ntry,"passes") === "auto";
+  const passes = ntry ? (auto ? " · automatic" : " · manual") : "";
+  // the notary's own key can flip the gate here; anyone else only reads it
+  const gate = ntry && hasSigner && ntry.pubkey === myPk
+    ? `<button class="gate" type="button" title="${auto ? "switch to manual — only what you accept passes" : "switch to automatic — every submission passes"}">→ ${auto ? "manual" : "automatic"}</button>` : "";
+  metaEl.innerHTML = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}${gate}` : "";
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
