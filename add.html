@@ -1015,7 +1015,7 @@ const collOf  = ev => {
 };
 // the notary a slug names: the viewer's ?k= pick when it carries one, else the oldest —
 // the same default the viewer shows first, so "add to this timeline" lands on the same line
-const qk = new URLSearchParams(location.search).get("k") || "";
+let qk = new URLSearchParams(location.search).get("k") || "";
 function notaryOf(c){
   const L = [...notaries.values()].filter(n => dOf(n) === c)
     .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
@@ -1597,7 +1597,7 @@ function renderPubTally(){
   pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
   // an act was the tab's one job — first relay OK, route back to the timeline it came from
   if (actSent && t.ok && !backTimer){
-    const url = "index.html" + (qact.c ? "?c=" + encodeURIComponent(qact.c) : "");
+    const url = "index.html" + (qact.c ? "?c=" + encodeURIComponent(qact.c) + (qk ? "&k=" + qk : "") : "");
     $("pub-msg").innerHTML += ` — <a href="${url}">back to the timeline</a> (going in 3s…)`;
     backTimer = setTimeout(() => { location.href = url; }, 3000);
   }
@@ -1777,7 +1777,7 @@ async function publishAct(){
   if (!signer || !qact) return;
   $("b-pub").disabled = true;
   pubMsg("signing…");
-  let signed;
+  let signed, ntry = null;
   try {
     // dead = acts a SAME-KEY act of mine already revoked or superseded (the reader-side
     // rule, applied here so the pointer never lands on a corpse)
@@ -1807,6 +1807,15 @@ async function publishAct(){
       if (mine) tags.push(["e", mine.id, "", "supersede"]);
       content = qact.content;
     }
+    // CURATE (same rule as the viewer's acceptCard): accepting on someone else's timeline
+    // coins your own notary for the name — manual, chained to theirs — the first time.
+    const N = !qact.w && qact.n ? notaries.get(qact.n) : null;
+    if (N && N.pubkey !== signer.pubkey &&
+        ![...notaries.values()].some(n => n.pubkey === signer.pubkey && dOf(n) === dOf(N))){
+      ntry = await signer.sign({ kind: NOTARY_KIND, created_at: Math.floor(Date.now() / 1000), content: "",
+        tags: [["d", dOf(N)], ["title", tagOf(N,"title") || dOf(N)], ["t", MARKER], ["passes", "manual"], ["a", qact.n]] });
+      if (!ntry || !ntry.sig) throw new Error("the signer returned nothing for your notary — was the request approved?");
+    }
     // strictly newer than the superseded/revoked act, so newest-per-key derivation can't tie
     signed = await signer.sign({
       kind: ACT_KIND,
@@ -1822,8 +1831,11 @@ async function publishAct(){
   if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
   actSent = true;
   tallies.set(signed.id, { ok: 0, no: 0, why: "" });
-  const out = JSON.stringify(["EVENT", signed]);
-  open.forEach(ws => { try { ws.send(out); } catch {} });
+  if (ntry){ ingestNotary(ntry); qk = signer.pubkey.slice(0, 12); }   // your notary first; the way back lands on it
+  for (const ev of ntry ? [ntry, signed] : [signed]){
+    const out = JSON.stringify(["EVENT", ev]);
+    open.forEach(ws => { try { ws.send(out); } catch {} });
+  }
   priorActs.push(signed);                 // an immediate re-accept supersedes THIS one
   $("pub-json").style.display = "";
   $("pub-json").textContent = JSON.stringify(signed, null, 2);
