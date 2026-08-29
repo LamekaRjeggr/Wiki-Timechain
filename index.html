@@ -1071,12 +1071,12 @@ paintSum();
 // reading direction. A device preference like the theme, not part of the shared address —
 // the spine is the same spine either way round, so the URL doesn't carry it.
 let readDesc = true;                                   // newest first unless the device says otherwise
-try { readDesc = localStorage.getItem("wtc:order") !== "old→new"; } catch {}
+try { readDesc = localStorage.getItem("wtc:read") !== "old→new"; } catch {}
 const ordBtn = document.getElementById("ordbtn");
 const paintOrd = () => { ordBtn.textContent = readDesc ? "new→old" : "old→new"; };
 ordBtn.addEventListener("click", () => {
   readDesc = !readDesc;
-  try { localStorage.setItem("wtc:order", readDesc ? "new→old" : "old→new"); } catch {}
+  try { localStorage.setItem("wtc:read", readDesc ? "new→old" : "old→new"); } catch {}
   paintOrd();
   render();
 });
