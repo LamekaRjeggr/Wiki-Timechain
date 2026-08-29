@@ -1104,8 +1104,11 @@ function matchesF(ev, f){
   return false;
 }
 
+// Invisible characters (zero-width, bidi overrides, BOM) are stripped HERE, on the way to the
+// page, never in the store: acts copy and compare card bytes as the relay sent them.
+const INVIS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 function esc(s){
-  return String(s ?? "")
+  return String(s ?? "").replace(INVIS, "")
     .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
     .replaceAll('"',"&quot;").replaceAll("'","&#39;");
 }
@@ -3132,20 +3135,6 @@ const vOK = new Set(), vBad = new Set();
 const vQ = [];
 let vBusy = false, vDropped = 0;
 
-// Invisible characters are not text. A bidi override or a zero-width joiner lets a title read
-// as one thing and say another, and every card here comes from a key nobody vouched for — so
-// they come out at the gate, in the three fields a reader actually reads. Deliberately NOT the
-// other tags: `d`, `l` and the coords are KEYS, matched against relay filters and Map entries,
-// and a key that has been quietly rewritten stops matching. Runs after the id check, on a copy,
-// so the signature still verifies against the bytes the relay sent.
-const INVIS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
-const deInvis = s => typeof s === "string" ? s.replace(INVIS, "") : s;
-const SHOWN = new Set(["title", "summary"]);
-function scrub(ev){
-  return { ...ev, content: deInvis(ev.content),
-    tags: (ev.tags || []).map(t => SHOWN.has(t[0]) ? [t[0], deInvis(t[1]), ...t.slice(2)] : t) };
-}
-
 function admit(ev, fn){
   if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id))) return;
   if (vBad.has(ev.id)) return;
@@ -3164,7 +3153,7 @@ async function drainGate(){
       if (hashOK && vOK.has(ev.id)) ok = true;
       else if (hashOK){ spent = true; ok = await schnorrVerify(ev.id, ev.pubkey, ev.sig); }
     } catch { ok = false; }
-    if (ok) { vOK.add(ev.id); fn(scrub(ev)); }
+    if (ok) { vOK.add(ev.id); fn(ev); }
     else {
       if (hashOK) vBad.add(ev.id);         // that id can never be signed for; never ask again
       console.warn("wiki-timechain: dropped an event —",
