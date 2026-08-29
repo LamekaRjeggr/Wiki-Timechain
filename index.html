@@ -281,22 +281,54 @@
      one word to the layout, and one such word used to set the card's width (see the track
      below). The tab is `nowrap` and unaffected — a date still never breaks. */
   .mtl .track{position:relative;padding:6px 6px 6px 0;overflow-wrap:anywhere}
-  .mtl .spine{position:absolute;left:var(--gut);top:8px;bottom:8px;width:2px;background:var(--border)}
+  /* THE SNAKE. The line runs down the RIGHT of a submitted card and down the LEFT of an
+     accepted one — position carries the same bit as the hue, and a bend is the notary's
+     footprint. Every row and gap draws its own segment: `.acc` on a node / `.l` on a gap or
+     seam = line left; a gap that changes side (`.x.rl` / `.x.lr`) draws the crossing. */
+  .mtl .node::before,.mtl .gap::before,.mtl .nowdiv::before{content:"";position:absolute;top:0;bottom:0;width:2px;
+    right:var(--gut);background:var(--border)}
+  .mtl .node.acc::before,.mtl .gap.l::before,.mtl .nowdiv.l::before{right:auto;left:var(--gut)}
+  .mtl .gap.x::before,.mtl .gap.x::after{content:"";position:absolute;left:var(--gut);right:var(--gut);width:auto;
+    background:none;border:0 solid var(--border)}
+  .mtl .gap.x::before{top:0;height:50%;border-bottom-width:2px}
+  .mtl .gap.x::after{top:50%;bottom:0;border-top-width:2px}
+  .mtl .gap.x.rl::before{border-right-width:2px;border-bottom-right-radius:14px}
+  .mtl .gap.x.rl::after{border-left-width:2px;border-top-left-radius:14px}
+  .mtl .gap.x.lr::before{border-left-width:2px;border-bottom-left-radius:14px}
+  .mtl .gap.x.lr::after{border-right-width:2px;border-top-right-radius:14px}
   /* minmax(0,·) is the card's width cap, in all three of these grids. A bare `1fr` track's
      automatic minimum is MIN-CONTENT, so the longest unbreakable word in a card sized the
      card — past the viewport, which handed the page a horizontal scroll and slid the fixed
      drum over the cards. The 0 floor says the column is the column, whatever the content wants. */
-  .mtl .node{position:relative;display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
+  .mtl .node,.mtl .gap-c{position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--gut);column-gap:var(--cgap)}
+  .mtl .node.acc,.mtl .gap-c.l{grid-template-columns:var(--gut) minmax(0,1fr)}
+  .mtl .node.acc>.card,.mtl .node.acc>.contest,.mtl .gap-c.l .lab{grid-column:2}   /* not the dot: grid placement would move an absolute child's containing block */
   /* the first column is deliberately EMPTY. The date used to live here and is now on the
      card's own tab; the column stays because the spine, the dots, the gap dashline and the
      now-chip are all keyed to it — and because the empty gutter is where the drum goes. */
-  .mtl .dot{position:absolute;left:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
+  .mtl .node.acc .dot,.mtl .node.acc .cdot{right:auto;left:calc(var(--gut) - 5px)}
+  .mtl .dot{position:absolute;right:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
   /* the vocabulary: BLUE = submitted (the author's signature, always), GOLD = accepted (the
      notary's signature, manual notaries only). No gold without blue. Fill + hue, never hue alone. */
-  .mtl .node[data-acc] .dot,.mtl .node[data-acc] .cdot{background:var(--rail);border-color:var(--rail)}
-  .mtl .card{grid-column:2;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  .mtl .node.acc .dot,.mtl .node.acc .cdot{background:var(--rail);border-color:var(--rail)}
+  .mtl .node.acc .cbrace,.mtl .node.acc .cbadge{border-color:var(--rail);color:var(--rail);
+    background:color-mix(in srgb,var(--rail) 12%,transparent)}
+  /* the two boxes. Across the line = another key: a rival submission, folded to a blue box
+     in the gutter beside the accepted card; tap and it takes a row of its own below (the
+     line bends round it). Inside the card = the same key: the author revised after the
+     notary signed, so the card shows the act's byte copy and the box names the fact. */
+  .mtl .rivals{position:absolute;left:0;top:40px;width:calc(var(--gut) - 8px);display:grid;gap:5px}
+  .mtl .rival{cursor:pointer;text-align:center;padding:4px 2px;border-radius:7px;border:1px solid var(--accent);
+    color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);font-family:var(--mono);
+    font-size:8px;line-height:1.3;overflow:hidden}
+  .mtl .rival i{display:block;font-style:normal;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mtl .revbox{cursor:pointer;display:inline-block;margin:8px 0 0;padding:3px 8px;border-radius:7px;
+    border:1px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
+    font-family:var(--mono);font-size:10px;letter-spacing:.03em}
+  .mtl .card.unpassed,.mtl .vcard.unpassed{border-style:dashed}
+  .mtl .card{grid-column:1;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:13px 15px;margin:8px 0}
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
      part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
@@ -394,18 +426,18 @@
   .mtl .upcoming{margin-left:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--future);vertical-align:1px;font-weight:400}
   /* gaps: proportional spacer, or a collapsed marker for long silences */
-  .mtl .gap{width:100%}
-  .mtl .gap-c{position:relative;display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap);
-     align-items:center;cursor:pointer}
+  .mtl .gap{position:relative;width:100%}
+  .mtl .gap-c{align-items:center;cursor:pointer}
   /* present threshold: the SEAM. A zero-height box, so its two borders stack into one
      3px rule whose upper half is the ocher past and lower half the cyan ahead — the
      colour change is the information; the chip only names it. 1.5px a side, up from 1px,
      to pay for the chip no longer sitting on the spine to point at the rule.
      The chip starts just LEFT of the node dots and runs right — it used to be centred on
      the spine, which walked it into the drum's column on a narrow screen. */
-  .mtl .nowdiv{position:relative;height:0;margin:16px 0 34px;
+  .mtl .nowdiv{position:relative;height:0;padding:16px 0 34px}
+  .mtl .nowdiv::after{content:"";position:absolute;left:0;right:0;top:16px;height:0;
     border-top:1.5px solid var(--past);border-bottom:1.5px solid var(--future)}
-  .mtl .nowchip{position:absolute;left:calc(var(--gut) - 12px);top:0;transform:translateY(-50%);
+  .mtl .nowchip{position:absolute;left:calc(var(--gut) - 12px);top:16px;z-index:1;transform:translateY(-50%);
     white-space:nowrap;background:var(--bg);border:1px solid var(--future-dim);color:var(--future);
     font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
     padding:4px 12px;border-radius:20px}
@@ -413,19 +445,23 @@
   .mtl .futurezone .card,
   .mtl .futurezone .vcard{border-color:var(--future-dim)}
   .mtl .futurezone .ctab .td{color:var(--future)}   /* an unhappened date reads ahead, not behind */
-  .mtl .gap-c .dashline{position:absolute;left:var(--gut);top:0;bottom:0;width:2px;
+  .mtl .gap-c.l .dashline{left:var(--gut);right:auto}
+  .mtl .gap-c.l .gdot{left:calc(var(--gut) - 4px);right:auto}
+  .mtl .gap-c .dashline{position:absolute;right:var(--gut);top:0;bottom:0;width:2px;
     background:repeating-linear-gradient(var(--faint) 0 4px,transparent 4px 9px)}
-  .mtl .gap-c .gdot{position:absolute;left:calc(var(--gut) - 4px);top:calc(50% - 5px);width:10px;height:10px;
+  .mtl .gap-c .gdot{position:absolute;right:calc(var(--gut) - 4px);top:calc(50% - 5px);width:10px;height:10px;
     border-radius:50%;background:var(--bg);border:2px solid var(--faint);z-index:2}
-  .mtl .gap-c .lab{grid-column:2;padding:11px 0;color:var(--dim);
+  .mtl .gap-c .lab{grid-column:1;padding:11px 0;color:var(--dim);
     font-family:var(--mono);font-size:12px}
   .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
   /* several submitted under one d: diamond node + blue brace + count — shape+label carry it */
-  .mtl .cdot{position:absolute;left:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;background:var(--bg);
+  .mtl .cdot{position:absolute;right:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;background:var(--bg);
     border:2px solid var(--accent);transform:rotate(45deg);z-index:2}
-  .mtl .contest{position:relative;grid-column:2;margin:8px 0 8px 6px}
-  .mtl .cbrace{position:absolute;left:-16px;top:6px;bottom:6px;width:8px;
-    border:2px solid var(--accent);border-right:none;border-radius:6px 0 0 6px}
+  .mtl .contest{position:relative;grid-column:1;margin:8px 6px 8px 0}
+  .mtl .node.acc .contest{margin:8px 0 8px 6px}
+  .mtl .cbrace{position:absolute;right:-16px;top:6px;bottom:6px;width:8px;
+    border:2px solid var(--accent);border-left:none;border-radius:0 6px 6px 0}
+  .mtl .node.acc .cbrace{right:auto;left:-16px;border-left:2px solid;border-right:none;border-radius:6px 0 0 6px}
   .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:color-mix(in srgb,var(--accent) 12%,transparent);
     border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
@@ -440,12 +476,6 @@
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:var(--dim)}
 
-  /* ── cards the notary has NOT passed. Three channels and no hue: they sit
-     INSET from the spine, their rule and border are DASHED, and they say "proposed" in words.
-     (The ocher/cyan axis only ever means time; amber only ever means the app's own chrome.) */
-  .mtl .prop{grid-column:2;margin:7px 0 0 20px;padding-left:14px;
-    border-left:1px dashed var(--gutline)}
-  .mtl .prop .card{border-style:dashed}
   .mtl .ptag{margin-left:8px;padding:1px 6px;vertical-align:2px;font-family:var(--mono);
     font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
     border:1px dashed var(--gutline);border-radius:5px}
@@ -512,6 +542,7 @@
   #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;
     background:transparent;border:1px solid var(--accent)}
   #drum .tick.end{background:var(--rail);border-color:var(--rail)}
+  #drum .tick.sub{left:auto;right:calc(100% - 22px)}   /* submitted: left of the axle, like the page */
   #drum .tick.face{box-shadow:0 0 7px var(--past-glow)}
   #drum .tick.several{width:9px!important;height:9px;border-radius:0}
   #drum .tick.rev{height:6px;border-radius:2px}   /* ONE card wearing a visible layer — not two notes */
@@ -557,7 +588,7 @@
     #drum .band{right:0}
     #drum .axle{left:3px}
     #drum .head .ln{width:26px;left:3px}
-    #drum .tick{left:8px}
+    #drum .tick,#drum .tick.sub{left:8px;right:auto}   /* no room left of the axle: fill carries it */
     #drum .tick.gapmark{left:3px}
     #drum .tab{display:none}
     #drum .now{left:2px;width:34px}
@@ -567,6 +598,13 @@
     /* the drum is only 40px here, so the empty column gives 12px back to the cards —
        the chip stops 2px clear of the drum and still leads the dots */
     .mtl{--gut:52px;--cgap:12px}
+    /* the drum overlays the left 40px. An accepted row keeps its empty gutter there; a
+       submitted row has its card there, so only that side pays — and the rival box, whose
+       gutter the drum now covers, stands up as a tab along the line instead */
+    .mtl .node:not(.acc)>.card,.mtl .node:not(.acc)>.contest,.mtl .gap-c:not(.l) .lab{margin-left:40px}
+    .mtl .rivals{left:calc(var(--gut) - 24px);width:16px}
+    .mtl .rival{writing-mode:vertical-rl;padding:6px 1px;border-radius:5px}
+    .mtl .rival i{display:none}
     .mtl .nowchip{left:calc(var(--gut) - 10px)}
   }
 
@@ -609,7 +647,7 @@
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
      costs no layout at all. Amber because it's the app acting, not yet a note. */
-  .mtl .pghost{position:absolute;left:calc(var(--gut) - 5px);width:12px;height:12px;
+  .mtl .pghost{position:absolute;right:calc(var(--gut) - 5px);width:12px;height:12px;
     border-radius:50%;background:transparent;border:2px solid var(--rail);margin-top:-6px;
     box-shadow:0 0 0 5px var(--rail-tint-2);pointer-events:none;z-index:3}
   /* pick mode: the ONE exception to "a gauge, not a control" — scoped to .pick, so gauge
@@ -860,8 +898,15 @@ content:
       <h3>Dispute a card</h3>
       <p>Disagree with an entry? Publish your own kind-30828 with the <b>same
         <code>d</code> tag</b> and your correction. Nothing is overwritten — both
-        versions appear side by side on the rail, each signed by its author, and readers
-        judge for themselves. Disputes are additions, not deletions.</p>
+        versions stay, each signed by its author, and readers judge for themselves.
+        Disputes are additions, not deletions.</p>
+      <p><b>Reading the line.</b> The line runs down the <b>right</b> of a card that is only
+        submitted (blue — the author's signature) and down the <b>left</b> of a card the
+        timeline's notary accepted (gold — the notary's signature on those exact bytes).
+        A bend is where that changes. Beside an accepted card, a blue box across the line
+        is another key's submission under the same <code>d</code>; a box inside the card
+        says the author revised it after the notary signed — the card shows the accepted
+        bytes, the box opens the revision.</p>
       </details>
     </section>
   </main>
@@ -948,6 +993,8 @@ let memberTimer = null;
 const wanted = new Set();                // slugs whose cards were asked for — the only ones fetched
 let actTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
+const openRivals   = new Set();          // card coords: a rival submission opened out of its box
+const showLive     = new Set();          // card coords: a lapsed gold card showing the live revision
 const showFold     = new Set();          // slugs whose "proposed" fold the visitor opened
 // A timeline is ONE notary. Several keys may hold the same name; the chips switch between
 // them, and `?k=<pubkey prefix>` carries the choice in the link when it isn't the default.
@@ -1017,7 +1064,7 @@ const exportBtn = document.getElementById("exportbtn");
 exportBtn.addEventListener("click", () => {
   if (!activeF) return;
   const blocks = entriesOf(activeF).map(en => {
-    const ev = en.evs[0] || en.prop[0], v = visOf(ev, en.d);
+    const ev = en.evs[0] || en.lapsed[0] || en.prop[0], v = visOf(ev, en.d);
     const parts = [];
     const t  = tag(ev,"title"), ed = tag(ev,"event_date");
     if (t || ed) parts.push([ed, t].filter(Boolean).join("  "));
@@ -1603,7 +1650,12 @@ const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 // what the fold is holding back — the count IS the information
 function foldOf(c){
   const N = notaryOf(c);
-  const hid = N ? matching("c:" + c).filter(ev => candidate(ev, N) && tierOf(ev, N) === 2) : [];
+  const byD = new Map();
+  if (N) for (const ev of matching("c:" + c)) if (candidate(ev, N)){
+    const d = tag(ev,"d"); (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
+  }
+  // a rival — unpassed under a d the notary passed — stands beside the accepted card, not in the fold
+  const hid = [...byD.values()].filter(g => g.every(ev => tierOf(ev, N) === 2)).flat();
   return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
 }
 
@@ -1627,11 +1679,13 @@ function entriesOf(f){
     // parent's words now, and the parent card carries the credit instead.
     const taken = all0.filter(ev => takenOf(ev, d));
     const all   = all0.filter(ev => !taken.includes(ev));
-    const evs  = all.filter(ev => tierOf(ev, N) === 0).sort(ord);
-    const prop = all.filter(ev => { const t = tierOf(ev, N); return t && t <= cut; }).sort(ord);
-    if (!evs.length && !prop.length) continue;
-    const head = evs[0] || prop[0];
-    out.push({ d, evs, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
+    const evs    = all.filter(ev => tierOf(ev, N) === 0).sort(ord);
+    const lapsed = all.filter(ev => tierOf(ev, N) === 1).sort(ord);   // accepted, then revised: gold from the act's copy
+    // unpassed: beside a passed sibling always (a rival, boxed); on their own only once the fold is open
+    const prop   = all.filter(ev => tierOf(ev, N) === 2 && (evs.length + lapsed.length || cut === 2)).sort(ord);
+    if (!evs.length && !lapsed.length && !prop.length) continue;
+    const head = evs[0] || lapsed[0] || prop[0];
+    out.push({ d, evs, lapsed, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
                title: tag(head,"title") || d, several: evs.length > 1 });
   }
   return out.sort(byWhen);
@@ -1817,6 +1871,12 @@ function bindTaps(){                                      // gap expanders + acc
     }
     const dm = e.target.closest(".dmk");
     if (dm){ stepOpen(dm, true); return; }
+    const rv = e.target.closest(".rival,.rclose,.revbox");   // the two boxes: toggle, repaint
+    if (rv){
+      const set = rv.classList.contains("revbox") ? showLive : openRivals, c = rv.dataset.c;
+      set.has(c) ? set.delete(c) : set.add(c);
+      render(); return;
+    }
     const dv = e.target.closest(".ds");
     if (dv){                                              // diff view switch, per card, in the URL
       dv.dataset.v === "p" ? plainCards.add(dv.dataset.d) : plainCards.delete(dv.dataset.d);
@@ -1912,16 +1972,27 @@ function renderTimeline(entries){
   // else. The credit is the point of the rule (NIP-DRAFT "Taking a revision").
   const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
     .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
-  // a waiting card is one the notary accepted and the author then revised: the
-  // notary NIP says show that it was passed and is waiting (pick the notary's lens for the diff)
   const N = activeF ? notaryOf(activeF.slice(2)) : null;
   const manual = !!N && tag(N,"passes") !== "auto";
-  const propCard = (ev, d) =>
-    `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
-    `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, d)}</div>${depthMark(ev, d)}` +
-    `<h4>${headTitle(ev, d)}<span class="ptag">${N && notaryTier(N, ev) === 1 ? "accepted · revised since" : "submitted"}</span></h4>` +
-    creditRow(ev) + cardBody(ev, d) +
-    (beyond(ev, d) ? actRow(ev, d) : "") + `</div>`;
+  const coordOfC = (ev, d) => KIND + ":" + ev.pubkey + ":" + d;
+  const dayOf = ev => new Date(ev.created_at * 1000).toISOString().slice(0,10);
+  // a lapsed acceptance (tier 1): the author revised after the notary signed. Relays keep
+  // only the revision, so the accepted bytes live in the act's copy alone — that copy IS the
+  // gold card. The box inside names the fact — "revised", never a number: nobody holds
+  // v1..vN — and swaps the body to the live version, where "accept this version" waits.
+  const goldOf = (ev, d) => {
+    if (!N || notaryTier(N, ev) !== 1) return { show: ev, box: "" };
+    const coord = coordOfC(ev, d), live = showLive.has(coord);
+    const a = acceptances(coord, ev.id).find(a => a.pubkey === N.pubkey), sc = scopeOf(a);
+    const pin = (a.tags.find(t => t[0] === "e" && !t[3]) || [])[1];   // the id the notary read = the copy's id
+    const copy = { ...ev, id: pin || ev.id, content: sc.content || "",
+      tags: ev.tags.filter(t => t[0] !== "title" && t[0] !== "summary")
+        .concat([["title", sc.title || tag(ev,"title") || d]], sc.summary ? [["summary", sc.summary]] : []) };
+    const box = `<div class="revbox" data-c="${esc(coord)}" title="${live
+      ? "back to the bytes the notary signed" : "the author republished after the notary signed — see the live version"}">` +
+      (live ? "◂ accepted version" : `revised · ${esc(dayOf(ev))} ▸`) + `</div>`;
+    return { show: live ? ev : copy, box };
+  };
 
   // gap sizing is relative to the collection's OWN rhythm, so "long" scales per timeline.
   // abs: a gap is a span of silence whichever way the spine is read
@@ -1930,9 +2001,18 @@ function renderTimeline(entries){
   const UNIT = 42, FLOOR = 14, COLLAPSE_H = 240;           // px per median gap · min · collapse threshold
   const pxOf = g => (g/med) * UNIT;
 
-  const nowDiv = () => `<div class="nowdiv"><span class="nowchip">now · ${esc(new Date().toISOString().slice(0,10))}</span></div>`;
+  const nowDiv = () => `<div class="nowdiv${prevSide === "l" ? " l" : ""}"><span class="nowchip">now · ${esc(new Date().toISOString().slice(0,10))}</span></div>`;
   let nowShown = false;                                    // = the future zone is open
-  let html = `<div class="mtl"><div class="track"><div class="spine"></div>`;
+  // the snake: "r" = line right of the row (submitted), "l" = line left (accepted). Every
+  // row and gap draws its own segment; a gap between sides draws the bend, and needs room.
+  const CROSS = 36;
+  let prevSide = null;
+  const gapHtml = (h, side) => {
+    const x = prevSide && side !== prevSide;
+    return `<div class="gap${x ? ` x ${prevSide}${side}` : side === "l" ? " l" : ""}"` +
+           ` style="height:${Math.round(Math.max(x ? CROSS : FLOOR, h))}px"></div>`;
+  };
+  let html = `<div class="mtl"><div class="track">`;
   // reading new→old, the walk STARTS in the future — the zone opens before any card,
   // and the seam falls where the walk leaves it (see the crossing below)
   if (readDesc && entries.length && entries[0].frac > nowFrac){
@@ -1940,17 +2020,22 @@ function renderTimeline(entries){
   }
 
   entries.forEach((e, i) => {
+    // held = the notary passed something here (or once did). Gold only under manual: auto
+    // never crowns, so its rows all sit on the submitted side and the line runs straight.
+    const held = !e.draft && e.evs.length + e.lapsed.length > 0;
+    const acc  = manual && held;
+    const side = acc ? "l" : "r";
     if (i > 0){                                            // the gap that precedes this entry
       const g = Math.abs(e.frac - entries[i-1].frac), h = pxOf(g);
       const k = entries[i-1].d + "→" + e.d;
       if (h > COLLAPSE_H){                                 // long silence → collapsible marker
         const exp = expandedGaps.has(k);
-        html += `<div class="gap-c" data-k="${esc(k)}"><div class="dashline"></div>` +
+        html += `<div class="gap-c${prevSide === "l" ? " l" : ""}" data-k="${esc(k)}"><div class="dashline"></div>` +
                 `<span class="gdot"></span><div class="lab">⋯ ${esc(humanSpan(g))}` +
                 `<span class="go">${exp ? "collapse ↑" : "expand ↓"}</span></div></div>`;
-        if (exp) html += `<div class="gap" style="height:${Math.round(h)}px"></div>`;
+        if (exp || side !== prevSide) html += gapHtml(exp ? h : 0, side);
       } else {
-        html += `<div class="gap" style="height:${Math.round(Math.max(FLOOR, h))}px"></div>`;
+        html += gapHtml(h, side);
       }
     }
     const future = e.frac > nowFrac;
@@ -1963,44 +2048,54 @@ function renderTimeline(entries){
     }
 
     const yr = String(e.date).slice(0,4);
-    // the node carries its year, address, date-fraction, and acceptance as data: the drum
-    // reads them without scraping rendered text or holding act state of its own.
-    // Gold = this notary's own signature: tier 0 under a manual notary. Auto never fills.
-    const acc = manual && e.evs.length > 0;
-    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"` +
-      (acc ? ` data-acc="1"` : "");
-
-    const propHtml = e.prop.length
-      ? `<div class="prop">` + e.prop.map(ev => propCard(ev, e.d)).join("") + `</div>` : "";
-
+    // the node carries its year, address and date-fraction as data, and its side as the
+    // class: the drum reads them without scraping text or holding act state of its own.
+    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"`;
+    const cls = "node" + (acc ? " acc" : "");
     if (e.draft){                // the card being composed — markup lives in the write side
-      html += draftNodeHtml(e, future);
-    } else if (!e.evs.length){   // a pure addition — a new `d` from a key that isn't on the spine
-      html += `<div class="node"${nodeAttrs}>${propHtml}</div>`;
-    } else if (e.several){
-      html += `<div class="node"${nodeAttrs}><span class="cdot"></span>` +
+      html += draftNodeHtml(e, future); prevSide = side; return;
+    }
+    // the faces on this row: what the notary passed (live, or the act's copy) — else the
+    // submitted cards themselves, dashed when they are unpassed cards shown by the open fold
+    const main   = held ? [...e.evs, ...e.lapsed] : e.prop;
+    const dashed = held ? "" : " unpassed";
+    // rivals: other keys' submissions under a d the notary passed. Folded = a blue box
+    // across the line; opened = a row of their own on the submitted side, below
+    const rivals = held ? e.prop : [];
+    const boxes  = rivals.filter(ev => !openRivals.has(coordOfC(ev, e.d))).map(ev =>
+      `<div class="rival" data-c="${esc(coordOfC(ev, e.d))}" title="another key submitted this d — open it"><b>submitted</b><i>${esc(authorLabel(ev.pubkey))}</i></div>`);
+    const rivalsHtml = boxes.length ? `<div class="rivals">${boxes.join("")}</div>` : "";
+    const tail = ev => (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>`;
+    if (main.length > 1){
+      html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${rivalsHtml}` +
         `<div class="contest"><div class="cbrace"></div>` +
-        `<div class="cbadge">${esc(e.date)} · ◆ ${e.evs.length} submitted</div>` +
-        e.evs.map((ev, vi) =>
-          `<div class="vcard"><div class="byline">` +
+        `<div class="cbadge">${esc(e.date)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
+        main.map((ev0, vi) => { const { show: ev, box } = goldOf(ev0, e.d); return
+          `<div class="vcard${dashed}"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) +
-          (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>`
-        ).join("") +
-        `</div>` + propHtml + `</div>`;
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
+        ).join("") + `</div></div>`;
     } else {
-      const ev = e.evs[0];
-      html += `<div class="node"${nodeAttrs}><span class="dot${future?" future":""}"></span>` +
-        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+      const { show: ev, box } = goldOf(main[0], e.d);
+      html += `<div class="${cls}"${nodeAttrs}><span class="dot${future?" future":""}"></span>${rivalsHtml}` +
+        `<div class="card${dashed}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) +
-        (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>` +
-        propHtml + `</div>`;
+        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `</div>`;
     }
+    prevSide = side;
+    // an opened rival takes a row of its own on the submitted side — the line bends round it
+    rivals.filter(ev => openRivals.has(coordOfC(ev, e.d))).forEach(ev => {
+      html += gapHtml(0, "r") + `<div class="node"${nodeAttrs}><span class="dot"></span>` +
+        `<div class="card unpassed"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+        `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
+        `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(coordOfC(ev, e.d))}" title="back into its box beside the accepted card">submitted · hide</span></h4>` +
+        creditRow(ev) + cardBody(ev, e.d) + tail(ev) + `</div>`;
+      prevSide = "r";
+    });
   });
 
   // still open past the last card: old→new just closes it; new→old means every card was
@@ -2012,7 +2107,7 @@ function renderTimeline(entries){
   const fold = fc ? foldOf(fc) : { n: 0, keys: 0 };
   if (fold.n)
     html += `<div class="foldrow" data-c="${esc(fc)}"><div class="lab">` +
-      `${fold.n} proposed · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
+      `${fold.n} submitted · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
       `<span class="go">${showFold.has(fc) ? "hide" : "show"}</span></div></div>`;
   html += `</div></div>`;
   areaEl.innerHTML = html;
@@ -2056,9 +2151,10 @@ function drumMeasure(){
     const chars = [...n.querySelectorAll(".cbody")].reduce((a, b) => a + b.textContent.length, 0);
     const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
     const isDraft = n.classList.contains("draft");   // claim-in-progress, not yet record
+    const acc = n.classList.contains("acc");         // the page's side is the drum's side
     const el = document.createElement("div");
     el.className = "tick" + (isDraft ? " draft" : several ? " several" : rev ? " rev" : future ? " future" : "")
-                 + (!isDraft && !future && n.dataset.acc ? " end" : "");
+                 + (!isDraft && !future && acc ? " end" : "") + (acc || isDraft ? "" : " sub");
     if (!several && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
     drumEl.appendChild(el);
     drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, several, yr: n.dataset.yr || "",
