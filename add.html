@@ -736,7 +736,10 @@ async function connectBunker(uri, clientKey, quiet){
     // re-prompt your signer for approval on every page load.
     remember({ via:"bunker", uri, ck: bytesToHex(clientKey), pk });
     setSigner({ via:"bunker", pubkey: pk, sign: t => b.signEvent(t) });
-  } catch(e){ say(msgOf(e), "bad"); }
+  } catch(e){
+    // a remembered session that does not answer must say so — silence reads as "forgotten"
+    signMsg(quiet ? "this browser remembers your signer, but it did not answer — open the signer app on your phone and reload, or paste the bunker:// again" : msgOf(e), "bad");
+  }
 }
 
 // ── nostrconnect:// — the same rung entered from the other end ───────────────────────
