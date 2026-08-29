@@ -1541,6 +1541,35 @@ function scopeOf(a){
 // override — anything that gives a card a place — requires content in scope and LIVE.
 // Title/summary acceptance is voice: it counts and renders, never carries custody.
 const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
+function scheduleActFetch(){
+  if (actTimer) return;
+  actTimer = setTimeout(() => {
+    actTimer = null;
+    const f = actFilters();
+    if (!f.length) return;
+    sockets.forEach(ws => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(["CLOSE","act"]));
+      ws.send(JSON.stringify(["REQ","act", ...f]));
+    });
+  }, 250);
+}
+
+function scheduleRender(){
+  if (renderTimer) return;
+  renderTimer = setTimeout(() => {
+    renderTimer = null;
+    // a live event mid-composition would rebuild the draft card and eat the caret —
+    // hold the repaint while an editable has focus; focusout flushes it (write side)
+    if (draftFocused){ pendingRender = true; return; }
+    render();
+  }, 120);
+}
+
+// ═══════════════ data views ═══════════════
+function matching(f){
+  return [...events.values()].filter(ev => matchesF(ev, f));
+}
 // where a card stands under the notary on screen: 0 = on the line (passed). 1 = passed, waiting
 // on the notary's re-read. 2 = submitted, not passed — behind the fold. Never deleted, only resisted.
 function anyAcceptance(ev){
