@@ -325,6 +325,17 @@
     color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);font-family:var(--mono);
     font-size:8px;line-height:1.3;overflow:hidden}
   .mtl .rival i{display:block;font-style:normal;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* the parent: the card the accepted one revises, another key's. No word — a wordless blue
+     stub BEFORE the child in reading order (above old→new, below new→old, `.dn`), tucked to
+     the line, with a blue elbow into the gold dot: this became that. Tap opens it. */
+  .mtl .rival.par{position:absolute;left:8px;top:-6px;width:calc(var(--gut) - 30px);height:18px;padding:0;overflow:visible;
+    border-width:1.25px;z-index:1}   /* under the dot, so the elbow ends behind it */
+  .mtl .rival.par::after{content:"";position:absolute;left:100%;top:50%;width:22px;height:16px;
+    border:0 solid var(--accent);border-top-width:2px;border-right-width:2px;border-top-right-radius:9px}
+  .mtl .rival.par.dn{top:34px}
+  .mtl .rival.par.dn::after{top:auto;bottom:50%;border-top-width:0;border-bottom-width:2px;
+    border-top-right-radius:0;border-bottom-right-radius:9px}
+  .mtl .node:has(.par.dn) .rivals{top:60px}
   .mtl .revbox{cursor:pointer;display:inline-block;margin:8px 0 0;padding:3px 8px;border-radius:7px;
     border:1px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
     font-family:var(--mono);font-size:10px;letter-spacing:.03em}
@@ -1445,8 +1456,8 @@ function creditsOf(ev){
   }
   return [...out];
 }
-function creditRow(ev){
-  const cr = creditsOf(ev);
+function creditRow(ev, skip){
+  const cr = creditsOf(ev).filter(([pk]) => pk !== skip);
   return cr.length ? `<div class="via">` + cr.map(([pk, mk]) =>
     `via ${authorLink(pk)}<span class="mk"> · ${mk}</span>`).join(" ") + `</div>` : "";
 }
@@ -2069,29 +2080,33 @@ function renderTimeline(entries){
     // rivals: other keys' submissions under a d the notary passed. Folded = a blue box
     // across the line; opened = a row of their own on the submitted side, below
     const rivals = held ? e.prop : [];
-    const boxes  = rivals.filter(ev => !openRivals.has(coordOfC(ev, e.d))).map(ev =>
+    // the parent: a rival the shown card cites — lineage, not competition; a stub, not a box
+    const cited  = new Set(main.flatMap(ev => creditsOf(ev).map(([pk]) => pk)));
+    const par    = rivals.find(ev => cited.has(ev.pubkey) && !openRivals.has(coordOfC(ev, e.d)));
+    const parHtml = par ? `<div class="rival par${readDesc ? " dn" : ""}" data-c="${esc(coordOfC(par, e.d))}" title="the card this one revises — open it"></div>` : "";
+    const boxes  = rivals.filter(ev => ev !== par && !openRivals.has(coordOfC(ev, e.d))).map(ev =>
       `<div class="rival" data-c="${esc(coordOfC(ev, e.d))}" title="another key submitted this d — open it"><b>submitted</b><i>${esc(authorLabel(ev.pubkey))}</i></div>`);
     const rivalsHtml = boxes.length ? `<div class="rivals">${boxes.join("")}</div>` : "";
     const tail = ev => (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>`;
     if (main.length > 1){
-      html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${rivalsHtml}` +
+      html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${parHtml}${rivalsHtml}` +
         `<div class="contest"><div class="cbrace"></div>` +
         `<div class="cbadge">${esc(e.date)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
         main.map((ev0, vi) => { const { show: ev, box } = goldOf(ev0, e.d); return
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
+          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
         ).join("") + `</div></div>`;
     } else {
       const { show: ev, box } = goldOf(main[0], e.d);
-      html += `<div class="${cls}"${nodeAttrs}><span class="dot${future?" future":""}"></span>${rivalsHtml}` +
+      html += `<div class="${cls}"${nodeAttrs}><span class="dot${future?" future":""}"></span>${parHtml}${rivalsHtml}` +
         `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `</div>`;
+        creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `</div>`;
     }
     prevSide = side;
     // an opened rival takes a row of its own on the submitted side — the line bends round it
