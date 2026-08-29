@@ -214,8 +214,8 @@
      mark's edge is about 24° off vertical and these widths land within a degree or two.
      They can't taper as hard as the bare bars do: the words set the floor, and "records"
      needs its 130px. */
-  .fglyph .fs.t{cursor:default;width:76px;background:transparent;
-    border-color:var(--dim);color:var(--text)}
+  .fglyph .fs.t{cursor:default;width:76px;background:var(--panel);   /* dressed as a card: titles are the card */
+    border-color:var(--border);color:var(--text)}
   .fglyph .fs.s{width:104px}
   .fglyph .fs.c{width:130px}
   /* lit courses wear the card ladder's own rung colors — the glyph is the ladder's key */
@@ -1071,8 +1071,8 @@ paintSum();
 
 // reading direction. A device preference like the theme, not part of the shared address —
 // the spine is the same spine either way round, so the URL doesn't carry it.
-let readDesc = false;
-try { readDesc = localStorage.getItem("wtc:order") === "new→old"; } catch {}
+let readDesc = true;                                   // newest first unless the device says otherwise
+try { readDesc = localStorage.getItem("wtc:order") !== "old→new"; } catch {}
 const ordBtn = document.getElementById("ordbtn");
 const paintOrd = () => { ordBtn.textContent = readDesc ? "new→old" : "old→new"; };
 ordBtn.addEventListener("click", () => {
