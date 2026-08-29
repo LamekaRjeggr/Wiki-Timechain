@@ -234,8 +234,8 @@
      11px labels never reads as a button. */
   .linkbtn.go{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
   .linkbtn.go:hover{color:var(--ink);filter:brightness(1.08)}
-  .linkbtn.ord{font-family:var(--mono);font-size:11.5px}   /* a state word, not a verb —
-    mono like the byline, so it reads as fact before it reads as button */
+  .linkbtn.ord{font-family:var(--mono);font-size:11.5px;line-height:1.15;padding:3px 10px;
+    text-align:center}   /* two stacked words, mono like the byline: a state, not a verb */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
@@ -1073,7 +1073,8 @@ paintSum();
 let readDesc = true;                                   // newest first unless the device says otherwise
 try { readDesc = localStorage.getItem("wtc:read") !== "old→new"; } catch {}
 const ordBtn = document.getElementById("ordbtn");
-const paintOrd = () => { ordBtn.textContent = readDesc ? "new→old" : "old→new"; };
+// the button is the spine in miniature: the top word is what sits at the top of the page
+const paintOrd = () => { ordBtn.innerHTML = readDesc ? "new<br>old" : "old<br>new"; };
 ordBtn.addEventListener("click", () => {
   readDesc = !readDesc;
   try { localStorage.setItem("wtc:read", readDesc ? "new→old" : "old→new"); } catch {}
