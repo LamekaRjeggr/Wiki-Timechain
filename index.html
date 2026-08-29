@@ -1096,6 +1096,18 @@ function collectionSlug(ev){
 }
 const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d");
 const submitsTo = (ev, coord) => ev.tags.some(t => t[0] === "a" && t[1] === coord);
+// CANDIDATES (notary NIP, Chaining): a card submitted here, or passed by a notary this one
+// submits to — each link checks the bytes for itself. Coordinates are names and can loop;
+// the walk stops at any it has seen.
+function candidate(ev, N, seen = new Set([coordOf(N)])){
+  if (submitsTo(ev, coordOf(N))) return true;
+  return N.tags.some(t => {
+    if (t[0] !== "a" || seen.has(t[1])) return false;
+    const U = notaries.get(t[1]); if (!U) return false;
+    seen.add(t[1]);
+    return candidate(ev, U, seen) && tierOf(ev, U) === 0;
+  });
+}
 // every notary holding a name, oldest first. That order is only a DEFAULT — the chips show
 // all of them and one tap switches — so a backdated notary can steal a first look, never a line.
 function notariesOf(c){
@@ -1591,7 +1603,7 @@ const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 // what the fold is holding back — the count IS the information
 function foldOf(c){
   const N = notaryOf(c);
-  const hid = N ? matching("c:" + c).filter(ev => submitsTo(ev, coordOf(N)) && tierOf(ev, N) === 2) : [];
+  const hid = N ? matching("c:" + c).filter(ev => candidate(ev, N) && tierOf(ev, N) === 2) : [];
   return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
 }
 
@@ -1605,7 +1617,7 @@ function entriesOf(f){
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of matching(f)){
-    if (N && !submitsTo(ev, coordOf(N))) continue;
+    if (N && !candidate(ev, N)) continue;
     const d = tag(ev,"d");
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
@@ -3030,6 +3042,21 @@ async function acceptCard(pk, d, btn){
   actErr.delete(coord);
   try {
     const s = await getSigner();
+    // CURATE: accepting on someone else's timeline coins your own notary for the name —
+    // manual, submitted to theirs (notary NIP, Chaining) — so their passed cards are your
+    // candidates and your acceptances are your timeline. The first act mints it; the
+    // screen follows the act to the notary it lands on.
+    const c = activeF ? activeF.slice(2) : null, N = c ? notaryOf(c) : null;
+    if (N && N.pubkey !== s.pubkey){
+      let mine = notariesOf(c).find(n => n.pubkey === s.pubkey);
+      if (!mine){
+        mine = await s.sign({ kind: NOTARY_KIND, created_at: Math.floor(Date.now() / 1000), content: "",
+          tags: [["d", c], ["title", tag(N,"title") || c], ["t", MARKER], ["passes", "manual"], ["a", coordOf(N)]] });
+        ingestNotary(mine); publish(mine);
+      }
+      activeN = coordOf(mine);
+      history.replaceState(null, "", timelineUrl());
+    }
     const tags = [["a", coord], ["e", ev.id], ["p", ev.pubkey]];
     // field scope: copy each field the card carries, the way it carries it — presence =
     // scope. The button accepts the whole card; narrower scopes are the lab's chips still.
