@@ -1607,7 +1607,7 @@ async function publish(){
   let signed;
   $("b-pub").disabled = true;
   pubMsg("signing…");
-  // A new slug is a new notary: minted under your key, open (`passes auto`), sent BEFORE the
+  // A new slug is a new notary: minted under your key, automatic (`passes auto`), sent BEFORE the
   // card so the submission never points at nothing. Two signatures, same click.
   let ntry = null, act = null;
   try {
@@ -1620,7 +1620,7 @@ async function publish(){
     }
     signed = await signer.sign(tmpl);
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
-    // your own curated notary: the acceptance rides with the card, same click. No owner
+    // your own manual notary: the acceptance rides with the card, same click. No owner
     // special case in the rule — the act is still what passes it — just no second trip.
     const N = notaryOf(c);
     if (N && N.pubkey === signed.pubkey && tagOf(N, "passes") !== "auto"){

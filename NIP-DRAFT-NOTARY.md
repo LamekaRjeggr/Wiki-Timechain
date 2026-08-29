@@ -26,7 +26,7 @@ check runs again on every revision by construction. The acceptance is the listin
 | `d` | `["d","hcr2001"]` | REQUIRED. addressable identifier; opaque |
 | `title` | `["title","HCR 2001 election results"]` | REQUIRED. the notary's name |
 | `t` | `["t","wikitimechain"]` | REQUIRED. the corpus marker; see *Discovery*. Also freeform topics |
-| `passes` | `["passes","accept"]` | REQUIRED. `accept` or `auto`; see *What passes* |
+| `passes` | `["passes","manual"]` | REQUIRED. `manual` or `auto`; see *What passes* |
 | `description` | `["description","…"]` | OPTIONAL. plain text |
 | `g` | `["g","9tbq"]` | OPTIONAL. geohash prefix rungs, as on a card. A card submitted here inherits it when it carries none |
 | `a` | `["a","30829:<pubkey>:<d>"]` | OPTIONAL. the notary this one submits to; see *Chaining* |
@@ -46,12 +46,12 @@ A notary **passes** a card — makes it visible to whoever reads the notary — 
 two rules, chosen by `passes`:
 
 - **`auto`** — every card submitted here passes, in its current version. No act is
-  involved. An open notary.
-- **`accept`** — a card passes while the notary's key holds a current acceptance of it
+  involved. Automatic.
+- **`manual`** — a card passes while the notary's key holds a current acceptance of it
   whose `content` copy is live: the copy byte-equals the card's current `content`, per
-  *Derivation* in the acts NIP. Nothing else passes. A curated notary.
+  *Derivation* in the acts NIP. Nothing else passes. Manual: the notary key signs each one.
 
-Under `accept`, the check is the acts NIP's existing consent rule, applied with one key
+Under `manual`, the check is the acts NIP's existing consent rule, applied with one key
 — the notary's — as the lens. Every consequence follows from there and none is new:
 
 - An author's revision changes the bytes. Consent lapses. The card stops passing until
@@ -67,7 +67,7 @@ Under `accept`, the check is the acts NIP's existing consent rule, applied with 
 A client MUST NOT let a notary pass a card by any other signal — not a reaction, a
 mention, or an `a` tag on the notary itself.
 
-`passes` is read from the notary's current version. Switching `auto` → `accept` makes
+`passes` is read from the notary's current version. Switching `auto` → `manual` makes
 existing acceptances count; switching back makes them idle. Acts are not affected.
 
 ## Chaining
@@ -113,10 +113,10 @@ read by `#a` as before; they never pass a card.
 - A card belongs to the notary named by its `a` tag. Its `g`, if absent, is the notary's.
 - Rival versions (same `d`, different keys, cards NIP) are unchanged: each is submitted,
   accepted, and passed on its own.
-- Where a notary under `accept` holds an acceptance whose consent has lapsed, a client
+- Where a notary under `manual` holds an acceptance whose consent has lapsed, a client
   SHOULD show that the card was passed and is waiting — the accepted copy and the current
   version are both on hand, and the difference is the thing to show.
-- A notary's `passes` value MUST be shown to the reader. An open notary and a curated one
+- A notary's `passes` value MUST be shown to the reader. An automatic notary and a manual one
   look the same otherwise.
 - A card submitted but not passed MUST NOT sit on the timeline. A client MAY show that
   such cards exist — a count, a fold — and MAY open them on request.
@@ -127,7 +127,7 @@ read by `#a` as before; they never pass a card.
 
 | dropped | an ignorant client sees | worst effect |
 |---|---|---|
-| `passes` | — | a client MUST treat a notary with no `passes` as `accept`; an open notary reads as empty, never as leaky |
+| `passes` | — | a client MUST treat a notary with no `passes` as `manual`; an automatic notary reads as empty, never as leaky |
 | a card's `a` | a card with no notary | invisible through notaries, still found by kind |
 | whole kind | nothing | cards intact, acts intact, timelines unassembled |
 
@@ -140,11 +140,11 @@ wear any marker. Accepting or refusing a card says nothing about the card, only 
 what that key passes on. A reader chooses which notary to read; that choice is the whole
 trust decision, and this NIP moves it nowhere else.
 
-**`auto` is a leak by design.** An open notary passes whatever is submitted to it,
+**`auto` is a leak by design.** An automatic notary passes whatever is submitted to it,
 including junk wearing its coordinate. Clients SHOULD show `passes` for this reason.
 
 **Submission is self-asserted.** A card may name any notary. That costs the notary
-nothing under `accept` and is the point under `auto`.
+nothing under `manual` and is the point under `auto`.
 
 **A notary is its key.** Acceptances are found by `authors`, so a notary that rotates
 keys loses every acceptance it has signed; the new key starts empty and must sign again.
@@ -160,7 +160,7 @@ There is no delegation and no successor tag. Keep the key.
     ["d", "hcr2001"],
     ["title", "HCR 2001 election results"],
     ["t", "wikitimechain"],
-    ["passes", "accept"],
+    ["passes", "manual"],
     ["g", "9tbq"],
     ["a", "30829:<main-pubkey>:main"]
   ]

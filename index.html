@@ -1583,7 +1583,7 @@ function anyAcceptance(ev){
   });
 }
 // NOTARY RULE (notary NIP, What passes) — a notary-backed collection ignores the derived
-// authority above entirely: `auto` passes every submission; `accept` (and no `passes` at all)
+// authority above entirely: `auto` passes every submission; `manual` (and no `passes` at all)
 // passes a card only while the notary's OWN key holds a content-live acceptance. A lapsed
 // acceptance = passed and waiting on a re-read → shelf 1. No other signal passes a card.
 function notaryTier(N, ev){
@@ -1665,7 +1665,7 @@ function renderNotaries(){
   rosterEl.style.display = "";
   rosterEl.innerHTML = L.map(n =>
       `<button class="rchip${n === N ? " on" : ""}" type="button" data-n="${esc(coordOf(n))}"` +
-      ` title="${tag(n,"passes") === "auto" ? "open — passes every submission" : "curated — passes what this key accepted"}">` +
+      ` title="${tag(n,"passes") === "auto" ? "automatic — passes every submission" : "manual — passes what this key accepted"}">` +
       `${authorLabel(n.pubkey)}${n.pubkey === myPk ? " · you" : ""}</button>`
     ).join("") +
     `<div class="rnote">${L.length} notaries hold this name — each is its own timeline</div>`;
@@ -1681,10 +1681,10 @@ function renderTabs(V){
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
-  // the notary's `passes` MUST be shown (notary NIP): open and curated look alike otherwise.
+  // the notary's `passes` MUST be shown (notary NIP): automatic and manual look alike otherwise.
   // Enforced in tierOf via notaryTier; every live notary is `auto` as of 2026-08-28.
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
-  const passes = ntry ? (tag(ntry,"passes") === "auto" ? " · open notary" : " · curated notary") : "";
+  const passes = ntry ? (tag(ntry,"passes") === "auto" ? " · automatic" : " · manual") : "";
   metaEl.textContent = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}` : "";
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
@@ -2997,7 +2997,7 @@ async function publishDraft(btn){
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
     publish(ev);
-    // your own curated notary: the act rides with the card, same click — no owner special
+    // your own manual notary: the act rides with the card, same click — no owner special
     // case in the rule, just no chore. Under `auto` nothing is needed.
     if (N.pubkey === ev.pubkey && tag(N,"passes") !== "auto") acceptCard(ev.pubkey, tmpl.tags[0][1]);
   } catch (ex){
