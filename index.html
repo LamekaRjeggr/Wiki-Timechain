@@ -292,10 +292,11 @@
     background:none;border:0 solid var(--border)}
   .mtl .gap.x::before{top:0;height:50%;border-bottom-width:2px}
   .mtl .gap.x::after{top:50%;bottom:0;border-top-width:2px}
-  .mtl .gap.x.rl::before{border-right-width:2px;border-bottom-right-radius:14px}
-  .mtl .gap.x.rl::after{border-left-width:2px;border-top-left-radius:14px}
-  .mtl .gap.x.lr::before{border-left-width:2px;border-bottom-left-radius:14px}
-  .mtl .gap.x.lr::after{border-right-width:2px;border-top-right-radius:14px}
+  /* two quarter-ellipses, each half the width and the full half-height: one S, no straight run */
+  .mtl .gap.x.rl::before{border-right-width:2px;border-bottom-right-radius:50% 100%}
+  .mtl .gap.x.rl::after{border-left-width:2px;border-top-left-radius:50% 100%}
+  .mtl .gap.x.lr::before{border-left-width:2px;border-bottom-left-radius:50% 100%}
+  .mtl .gap.x.lr::after{border-right-width:2px;border-top-right-radius:50% 100%}
   /* minmax(0,·) is the card's width cap, in all three of these grids. A bare `1fr` track's
      automatic minimum is MIN-CONTENT, so the longest unbreakable word in a card sized the
      card — past the viewport, which handed the page a horizontal scroll and slid the fixed
@@ -327,9 +328,9 @@
   .mtl .revbox{cursor:pointer;display:inline-block;margin:8px 0 0;padding:3px 8px;border-radius:7px;
     border:1px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
     font-family:var(--mono);font-size:10px;letter-spacing:.03em}
-  .mtl .card.unpassed,.mtl .vcard.unpassed{border-style:dashed}
-  .mtl .card{grid-column:1;position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  .mtl .card{grid-column:1;position:relative;background:var(--panel);border:1px solid var(--accent);border-radius:12px;
     padding:13px 15px;margin:8px 0}
+  .mtl .node.acc>.card{border-color:var(--rail)}   /* the border says the side: blue left of the line, gold right */
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
      part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
      card's own padding edge so it reads as cut from the card rather than sat inside it.
@@ -482,7 +483,7 @@
   /* the fold — cards the notary has not passed. Nothing is deleted, only resisted, and
      the count IS the information. */
   .mtl .foldrow{display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
-  .mtl .foldrow .lab{grid-column:2;padding:13px 0 2px;color:var(--dim);
+  .mtl .foldrow .lab{grid-column:2;padding:2px 0 13px;color:var(--dim);
     font-family:var(--mono);font-size:11.5px;cursor:pointer}
   .mtl .foldrow .go{color:var(--accent);margin-left:7px}
 
@@ -995,7 +996,7 @@ let actTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const openRivals   = new Set();          // card coords: a rival submission opened out of its box
 const showLive     = new Set();          // card coords: a lapsed gold card showing the live revision
-const showFold     = new Set();          // slugs whose "proposed" fold the visitor opened
+const hideFold     = new Set();          // slugs whose fold the visitor shut (open by default)
 // A timeline is ONE notary. Several keys may hold the same name; the chips switch between
 // them, and `?k=<pubkey prefix>` carries the choice in the link when it isn't the default.
 let activeN = null;                       // chosen notary coord, or null = the default for the name
@@ -1665,7 +1666,7 @@ function foldOf(c){
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
   const N = c ? notaryOf(c) : null;
-  const cut = c && showFold.has(c) ? 2 : 1;                // opening the fold renders the unpassed too
+  const cut = c && hideFold.has(c) ? 1 : 2;                // a shut fold drops the unpassed
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of matching(f)){
@@ -1887,7 +1888,7 @@ function bindTaps(){                                      // gap expanders + acc
     const fr = e.target.closest(".foldrow");
     if (fr && fr.dataset.c){
       const c = fr.dataset.c;
-      showFold.has(c) ? showFold.delete(c) : showFold.add(c);
+      hideFold.has(c) ? hideFold.delete(c) : hideFold.add(c);
       render();
       return;
     }
@@ -2005,7 +2006,7 @@ function renderTimeline(entries){
   let nowShown = false;                                    // = the future zone is open
   // the snake: "r" = line right of the row (submitted), "l" = line left (accepted). Every
   // row and gap draws its own segment; a gap between sides draws the bend, and needs room.
-  const CROSS = 36;
+  const CROSS = 56;
   let prevSide = null;
   const gapHtml = (h, side) => {
     const x = prevSide && side !== prevSide;
@@ -2013,6 +2014,14 @@ function renderTimeline(entries){
            ` style="height:${Math.round(Math.max(x ? CROSS : FLOOR, h))}px"></div>`;
   };
   let html = `<div class="mtl"><div class="track">`;
+  // the fold heads the spine, outside the future zone: it isn't a moment in the record,
+  // it's what the record hasn't taken in — shown by default, the blue border says which.
+  const fc = activeF ? activeF.slice(2) : "";
+  const fold = fc ? foldOf(fc) : { n: 0, keys: 0 };
+  if (fold.n)
+    html += `<div class="foldrow" data-c="${esc(fc)}"><div class="lab">` +
+      `${fold.n} submitted · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
+      `<span class="go">${hideFold.has(fc) ? "show" : "hide"}</span></div></div>`;
   // reading new→old, the walk STARTS in the future — the zone opens before any card,
   // and the seam falls where the walk leaves it (see the crossing below)
   if (readDesc && entries.length && entries[0].frac > nowFrac){
@@ -2055,10 +2064,8 @@ function renderTimeline(entries){
     if (e.draft){                // the card being composed — markup lives in the write side
       html += draftNodeHtml(e, future); prevSide = side; return;
     }
-    // the faces on this row: what the notary passed (live, or the act's copy) — else the
-    // submitted cards themselves, dashed when they are unpassed cards shown by the open fold
+    // the faces on this row: what the notary passed (live, or the act's copy) — else the submitted cards themselves
     const main   = held ? [...e.evs, ...e.lapsed] : e.prop;
-    const dashed = held ? "" : " unpassed";
     // rivals: other keys' submissions under a d the notary passed. Folded = a blue box
     // across the line; opened = a row of their own on the submitted side, below
     const rivals = held ? e.prop : [];
@@ -2071,7 +2078,7 @@ function renderTimeline(entries){
         `<div class="contest"><div class="cbrace"></div>` +
         `<div class="cbadge">${esc(e.date)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
         main.map((ev0, vi) => { const { show: ev, box } = goldOf(ev0, e.d); return
-          `<div class="vcard${dashed}"><div class="byline">` +
+          `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
           `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
           `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
@@ -2079,7 +2086,7 @@ function renderTimeline(entries){
     } else {
       const { show: ev, box } = goldOf(main[0], e.d);
       html += `<div class="${cls}"${nodeAttrs}><span class="dot${future?" future":""}"></span>${rivalsHtml}` +
-        `<div class="card${dashed}"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
@@ -2090,7 +2097,7 @@ function renderTimeline(entries){
     // an opened rival takes a row of its own on the submitted side — the line bends round it
     rivals.filter(ev => openRivals.has(coordOfC(ev, e.d))).forEach(ev => {
       html += gapHtml(0, "r") + `<div class="node"${nodeAttrs}><span class="dot"></span>` +
-        `<div class="card unpassed"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(coordOfC(ev, e.d))}" title="back into its box beside the accepted card">submitted · hide</span></h4>` +
         creditRow(ev) + cardBody(ev, e.d) + tail(ev) + `</div>`;
@@ -2101,14 +2108,6 @@ function renderTimeline(entries){
   // still open past the last card: old→new just closes it; new→old means every card was
   // future, so the seam lands at the foot — now is below the whole spine
   if (nowShown) html += readDesc ? `</div>` + nowDiv() : `</div>`;
-  // the fold sits at the foot of the spine, outside the future zone: it isn't a moment in the
-  // record, it's what the record hasn't taken in.
-  const fc = activeF ? activeF.slice(2) : "";
-  const fold = fc ? foldOf(fc) : { n: 0, keys: 0 };
-  if (fold.n)
-    html += `<div class="foldrow" data-c="${esc(fc)}"><div class="lab">` +
-      `${fold.n} submitted · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
-      `<span class="go">${showFold.has(fc) ? "hide" : "show"}</span></div></div>`;
   html += `</div></div>`;
   areaEl.innerHTML = html;
   bindTaps();
