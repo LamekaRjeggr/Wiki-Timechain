@@ -311,6 +311,12 @@
   .mtl .dot{position:absolute;right:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
+  /* export range picker: the spine dims to the axle's 60%, the chosen run stays bright,
+     an endpoint doubles its dot with a ring. Brightness + ring — no new colour. */
+  .picking .mtl .node,.picking .mtl .gap-c{opacity:.6}
+  .picking .mtl .node.lit{opacity:1}
+  .picking .mtl .node.endp .dot,.picking .mtl .node.endp .cdot{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--past)}
+  .picking .mtl .node.acc.endp .dot,.picking .mtl .node.acc.endp .cdot{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--rail)}
   /* the vocabulary: BLUE = submitted (the author's signature, always), GOLD = accepted (the
      notary's signature, manual notaries only). No gold without blue. Fill + hue, never hue alone. */
   .mtl .node.acc .dot,.mtl .node.acc .cdot{background:var(--rail);border-color:var(--rail)}
@@ -1072,10 +1078,47 @@ copyBtn.addEventListener("click", async () => {
 // per-card cycle (visOf, the same gate the page renders through). Spine order, head version
 // only (a d with several submitted exports the version the spine shows). No field labels: date + title
 // on one line, then each lit paragraph — a reading copy, not a machine interchange.
+const EXPORT_LABEL = "⤓ Export";
 const exportBtn = document.getElementById("exportbtn");
+// the range picker: Export arms it, two taps on the spine bound it, Export again downloads.
+// pick = null (off) | {a, b}: endpoint d's in tap order, either may be null. Nothing picked
+// on the second press = the whole timeline, as before.
+let pick = null;
+const pickDs = () => entriesOf(activeF).map(en => en.d);               // spine order
+function pickRun(){                                                     // [lo, hi] indices or null
+  if (!pick || !pick.a) return null;
+  const ds = pickDs(), ia = ds.indexOf(pick.a), ib = pick.b ? ds.indexOf(pick.b) : ia;
+  return [Math.min(ia, ib), Math.max(ia, ib)];
+}
+function paintPick(){
+  areaEl.classList.toggle("picking", !!pick);
+  const run = pickRun(), ds = run ? pickDs() : [];
+  for (const n of areaEl.querySelectorAll(".node[data-d]")){
+    const i = ds.indexOf(n.dataset.d);
+    n.classList.toggle("lit",  !!run && i >= run[0] && i <= run[1]);
+    n.classList.toggle("endp", !!pick && (n.dataset.d === pick.a || n.dataset.d === pick.b));
+  }
+  const n = run ? run[1] - run[0] + 1 : 0;
+  exportBtn.textContent = !pick ? EXPORT_LABEL : !pick.a ? "from…" : !pick.b ? "to…" : `⤓ ${n} card${n === 1 ? "" : "s"}`;
+}
+function pickTap(d){
+  if (d === pick.a || d === pick.b){ pick = { a: d === pick.a ? pick.b : pick.a, b: null }; }   // tap an end: unset it
+  else if (!pick.a) pick.a = d;
+  else if (!pick.b) pick.b = d;
+  else {                                                                // the nearer end moves to the tap
+    const ds = pickDs(), i = ds.indexOf(d);
+    const near = Math.abs(i - ds.indexOf(pick.a)) <= Math.abs(i - ds.indexOf(pick.b)) ? "a" : "b";
+    pick[near] = d;
+  }
+  paintPick();
+}
+function endPick(){ pick = null; paintPick(); }
 exportBtn.addEventListener("click", () => {
   if (!activeF) return;
-  const blocks = entriesOf(activeF).map(en => {
+  if (!pick){ pick = { a: null, b: null }; paintPick(); return; }
+  const run = pickRun(); endPick();
+  const all = entriesOf(activeF), ents = run ? all.slice(run[0], run[1] + 1) : all;
+  const blocks = ents.map(en => {
     const ev = en.evs[0] || en.lapsed[0] || en.prop[0], v = visOf(ev, en.d);
     const parts = [];
     const t  = tag(ev,"title"), ed = tag(ev,"event_date");
@@ -1084,9 +1127,12 @@ exportBtn.addEventListener("click", () => {
     const c  = (ev.content || "").trim(); if (v.body && c) parts.push(c);
     return parts.join("\n\n") + "\n";
   });
+  // a cut says so on its first line, so it is never mistaken for the whole
+  const span = run ? [ents[0].date, ents[ents.length - 1].date].sort() : null;
+  if (span) blocks.unshift(`${valOf(activeF)} · ${span[0]} → ${span[1]} · ${ents.length} of ${all.length}\n`);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([blocks.join("\n---\n\n")], {type:"text/markdown;charset=utf-8"}));
-  a.download = valOf(activeF) + ".md";
+  a.download = valOf(activeF) + (span ? `_${span[0]}_${span[1]}` : "") + ".md";
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);   // Safari needs the URL alive past the click
 });
@@ -1749,6 +1795,8 @@ function renderTabs(V){
   tabsEl.innerHTML = "";
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
   exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
+  if (pick && pick.f !== activeF) pick = null;     // a range belongs to one timeline
+  if (pick) pick.f = activeF;
   // every option in every axis is a collection, so activeF is always "c:<slug>"
   const name = activeF ? slugName(activeF.slice(2)) : "";
   nowEl.textContent = name;
@@ -1873,6 +1921,8 @@ function bindTaps(){                                      // gap expanders + acc
     stepOpen(s.dm, dx > 0);
   }, { passive: true });
   areaEl.addEventListener("click", e => {                 // areaEl is stable across re-renders
+    const pn = pick && !e.target.closest("button,a") && e.target.closest(".node[data-d]");
+    if (pn){ pickTap(pn.dataset.d); return; }
     const ab = e.target.closest(".abtn");                 // accept / withdraw (kind 8828)
     if (ab && !ab.disabled){
       const wpk = ab.dataset.wpk;
@@ -2126,6 +2176,7 @@ function renderTimeline(entries){
   html += `</div></div>`;
   areaEl.innerHTML = html;
   bindTaps();
+  if (pick) paintPick();          // a rebuild drops the classes — relight the run
   drumMeasure();
   // a rebuild resets the draft card to its markup defaults — re-derive counters,
   // collision line, and the publish gate from the state that survived it
@@ -3085,6 +3136,7 @@ areaEl.addEventListener("click", e => {
   if (b) b.classList.contains("dhand") ? handoffDraft() : publishDraft(b);
 });
 addEventListener("keydown", e => {
+  if (e.key === "Escape" && pick && !draft) return endPick();
   if (e.key !== "Escape" || !draft) return;
   const ed = e.target.closest && e.target.closest(".ded");
   if (ed) return ed.blur();     // first Esc only leaves the text — the next one discards
