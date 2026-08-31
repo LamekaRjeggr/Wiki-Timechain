@@ -7,6 +7,8 @@ build step.
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
 **Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html)
 
+![The viewer showing a timeline pulled live from relays](screenshot.png)
+
 ## The convention
 
 One timeline entry is one **kind-30828** addressable event
