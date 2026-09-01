@@ -25,6 +25,7 @@ h1{font-size:22px;margin:0 0 5px}h2{font-size:13px;text-transform:uppercase;lett
 .empty{color:var(--muted);padding:15px 0}.section-actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0}
 .signal{border-left:3px solid var(--cyan)}.cluster{display:grid;grid-template-columns:92px 1fr auto;gap:8px;padding:5px 0;border-bottom:1px solid #20232a}.count{color:var(--cyan);font:12px ui-monospace,monospace}
 .note{font-size:12px;color:var(--muted);margin-top:8px}.warning{color:#ffc09d}.source{font-size:11px;color:var(--muted);margin-top:3px}
+.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 10px 16px}.step{border:1px solid var(--line);background:var(--panel);padding:9px}.step b{color:var(--blue);margin-right:5px}.synth{border:1px solid var(--cyan);background:#0e171a;padding:10px;margin:9px 0}.synth .field{grid-template-columns:92px minmax(0,1fr) auto}
 footer{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:20px}.tape,.wire{border:1px solid var(--line);background:var(--panel);padding:11px;min-height:180px}
 .tape-head{display:flex;justify-content:space-between;align-items:center}.ticks{display:flex;gap:3px;align-items:end;margin:9px 0;min-height:25px}.tick{width:12px;height:15px;border:1px solid var(--gold);cursor:pointer}.tick.card{border-color:var(--blue)}.tick.cfg{border-color:var(--muted)}.tick.at{height:25px;background:var(--text);border-color:var(--text)}.tick.future{opacity:.25}
 .event{font:11px/1.55 ui-monospace,monospace;white-space:pre-wrap;margin:7px 0}.event strong{font-family:system-ui,sans-serif;font-size:12px}.legend{display:flex;gap:13px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:15px}.legend b{color:var(--text)}
@@ -40,6 +41,12 @@ footer{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:20px}.t
   </div>
   <div class="toolbar"><button data-action="back">◀</button><span id="cursor" class="mono sub"></span><button data-action="forward">▶</button><button data-action="reset">Reset</button></div>
 </header>
+
+<div class="guide">
+  <div class="step"><b>1</b> Pick exact field values for Notary A. Mix cards if that reads best.</div>
+  <div class="step"><b>2</b> Publish A’s assembled projection as one optional 30828 snapshot.</div>
+  <div class="step"><b>3</b> Main inspects that card and signs its own independent field choices.</div>
+</div>
 
 <div class="grid">
   <section class="col">
@@ -87,7 +94,7 @@ const FIELDS=[
   {key:'g',label:'g · geohash'}
 ];
 const initial={
-  nextCard:4,nextEvent:4,nextAct:1,linked:true,
+  nextCard:4,nextEvent:4,nextAct:1,nextSynth:1,linked:true,synths:[],
   cards:[
     {id:'c1',event:'e1',d:'bridge-vote',author:'Alice',pk:'pk_alice',credit:true,available:true,
       title:'Council approves river bridge',summary:'The council approved construction of a new river bridge.',
@@ -120,30 +127,41 @@ function wireSelect(notary,card,field,value,sourceAct){
   const ctx=notary==='community'?'30829:pk_a:bridge-record':'30829:pk_main:main';
   const scope=field==='content'?'content':'tag:'+field;
   const payload=field==='content'?'content: '+JSON.stringify(value):'  value: '+JSON.stringify(field==='g'?(value||[]).map(function(x){return['g',x]}):value===''?[]:[[field,value]]);
-  const source=sourceAct?'  e: '+sourceAct+' · source (upstream 8828)':'  a: 30828:'+card.pk+':'+card.d+' · source\\n  e: '+card.event+' · source';
-  const credit=!sourceAct&&card.credit?'\\n  p: '+card.pk+' · optional credit':'';
-  return 'kind 8828 · pk '+(notary==='community'?'pk_a':'pk_main')+'\\n  a: '+ctx+' · context\\n  slot: '+card.d+'\\n  scope: '+scope+'\\n'+payload+'\\n'+source+credit+'\\nOne field. The copied bytes are the decision.';
+  const source=sourceAct?'  e: '+sourceAct+' · source (upstream 8828)':'  a: 30828:'+card.pk+':'+card.d+' · source\n  e: '+card.event+' · source';
+  const credit=!sourceAct&&card.credit?'\n  p: '+card.pk+' · optional credit':'';
+  return 'kind 8828 · pk '+(notary==='community'?'pk_a':'pk_main')+'\n  a: '+ctx+' · context\n  slot: '+card.d+'\n  scope: '+scope+'\n'+payload+'\n'+source+credit+'\nOne field. The copied bytes are the decision.';
 }
 function selectCommunity(cardId,field){
   const s=clone(state()),c=s.cards.find(function(x){return x.id===cardId}),old=s.community[field],act='act'+s.nextAct++;
   s.community[field]={value:clone(c[field]),act:act,sourceEvent:c.event,sourceCard:c.id,sourceAuthor:c.author,credit:c.credit,status:c.available?'verified':'unavailable'};
-  const wire=wireSelect('community',c,field,c[field],null)+(old?'\\n  e: '+old.act+' · supersede':'');
+  const wire=wireSelect('community',c,field,c[field],null)+(old?'\n  e: '+old.act+' · supersede':'');
   push(s,'Curator A selects '+field+' from '+c.author,wire,'act');
 }
 function clearField(where,field){
   const s=clone(state()),old=s[where][field];if(!old)return;
   delete s[where][field];const act='act'+s.nextAct++;
   const who=where==='community'?'Curator A':'Main';
-  const wire='kind 8828 · id '+act+' · pk '+(where==='community'?'pk_a':'pk_main')+'\\n  e: '+old.act+' · revoke\\nThe prior bytes remain in history. No older selection resurrects.';
+  const wire='kind 8828 · id '+act+' · pk '+(where==='community'?'pk_a':'pk_main')+'\n  e: '+old.act+' · revoke\nThe prior bytes remain in history. No older selection resurrects.';
   push(s,who+' clears '+field,wire,'act');
 }
-function selectMain(field){
-  const s=clone(state()),src=s.community[field];if(!src)return;
-  const old=s.main[field],act='act'+s.nextAct++;
-  s.main[field]={value:clone(src.value),act:act,sourceAct:src.act,sourceAuthor:'Notary A',status:'verified upstream'};
-  const fake={pk:'pk_a',d:'bridge-vote',event:src.act,credit:false};
-  const wire=wireSelect('main',fake,field,src.value,src.act)+(old?'\\n  e: '+old.act+' · supersede':'');
-  push(s,'Main independently selects '+field+' from Notary A’s act',wire,'act');
+function selectMain(field,synthId){
+  const s=clone(state()),synth=synthId?s.synths.find(function(x){return x.id===synthId}):null,src=synth?synth.fields[field]:s.community[field];if(src===undefined||src===null)return;
+  const value=synth?src:src.value,old=s.main[field],act='act'+s.nextAct++;
+  s.main[field]={value:clone(value),act:act,sourceAct:synth?synth.event:src.act,sourceAuthor:'Notary A',status:synth?'verified 30828 snapshot':'verified upstream act'};
+  const fake=synth?{pk:'pk_a',d:synth.d,event:synth.event,credit:false}:{pk:'pk_a',d:'bridge-vote',event:src.act,credit:false};
+  const wire=wireSelect('main',fake,field,value,synth?null:src.act)+(old?'\n  e: '+old.act+' · supersede':'');
+  push(s,'Main independently selects '+field+' from '+(synth?'A’s assimilated card':'Notary A’s act'),wire,'act');
+}
+function assimilate(){
+  const s=clone(state()),keys=Object.keys(s.community);if(!keys.length)return;
+  const n=s.nextSynth++,eid='e'+(++s.nextEvent),fields={},sources={};
+  keys.forEach(function(k){fields[k]=clone(s.community[k].value);sources[k]=s.community[k].act});
+  const synth={id:'s'+n,event:eid,d:'bridge-vote',fields:fields,sources:sources,createdFrom:keys};
+  s.synths.push(synth);
+  const lines=['kind 30828 · id '+eid+' · pk pk_a','  d: bridge-vote','  a: 30829:pk_main:main   ← submitted to Main'];
+  keys.forEach(function(k){lines.push('  '+k+': '+JSON.stringify(fields[k]));lines.push('  e: '+sources[k]+' · source · '+k)});
+  lines.push('One signed candidate bundle. The source acts remain the field-by-field decision history.');
+  push(s,'Notary A assimilates '+keys.length+' selected fields into one 30828 → Main',lines.join('\n'),'card');
 }
 function revise(cardId,field){
   const s=clone(state()),c=s.cards.find(function(x){return x.id===cardId});s.nextEvent++;
@@ -151,17 +169,17 @@ function revise(cardId,field){
   else c.content=c.content+' Revised detail '+s.nextEvent+'.';
   c.event='e'+s.nextEvent;
   Object.keys(s.community).forEach(function(k){if(s.community[k].sourceCard===cardId)s.community[k].status='source replaced; selection preserved'});
-  push(s,c.author+' revises '+field+'; selected bytes do not move','kind 30828 · id '+c.event+' · pk '+c.pk+'\\n  d: '+c.d+'\\n  '+field+': '+JSON.stringify(c[field])+'\\nNo 8828 was signed, so neither notary projection changes.','card');
+  push(s,c.author+' revises '+field+'; selected bytes do not move','kind 30828 · id '+c.event+' · pk '+c.pk+'\n  d: '+c.d+'\n  '+field+': '+JSON.stringify(c[field])+'\nNo 8828 was signed, so neither notary projection changes.','card');
 }
 function removeCard(cardId){
   const s=clone(state()),c=s.cards.find(function(x){return x.id===cardId});c.available=false;
   Object.keys(s.community).forEach(function(k){if(s.community[k].sourceCard===cardId)s.community[k].status='source unavailable; selection preserved'});
-  push(s,c.author+' requests deletion; accepted copies survive','kind 5 · pk '+c.pk+'\\n  a: 30828:'+c.pk+':'+c.d+'\\nThe mock hides the candidate. Existing 8828 copies remain readable.','delete');
+  push(s,c.author+' requests deletion; accepted copies survive','kind 5 · pk '+c.pk+'\n  a: 30828:'+c.pk+':'+c.d+'\nThe mock hides the candidate. Existing 8828 copies remain readable.','delete');
 }
 function addMatch(){
   const s=clone(state()),base=s.cards[0],n=s.nextCard++,eid='e'+(++s.nextEvent);
   s.cards.push({id:'c'+n,event:eid,d:base.d,author:'Dana',pk:'pk_dana',credit:true,available:true,title:'Bridge vote recorded',summary:'A separate record reports approval of the bridge.',content:'An independently published account records approval.',event_date:base.event_date,event_time:'14:30-07:00',g:clone(base.g)});
-  push(s,'Dana submits matching date, time, and geohash values','kind 30828 · id '+eid+' · pk pk_dana\\n  d: '+base.d+'\\nExact matches increase the visible candidate clusters. They accept nothing.','card');
+  push(s,'Dana submits matching date, time, and geohash values','kind 30828 · id '+eid+' · pk pk_dana\n  d: '+base.d+'\nExact matches increase the visible candidate clusters. They accept nothing.','card');
 }
 function toggleCredit(cardId){
   const s=clone(state()),c=s.cards.find(function(x){return x.id===cardId});c.credit=!c.credit;
@@ -169,15 +187,20 @@ function toggleCredit(cardId){
 }
 function toggleLink(){
   const s=clone(state());s.linked=!s.linked;
-  push(s,(s.linked?'Notary A points to Main':'Notary A removes its Main pointer'),'kind 30829 · pk pk_a\\n  d: bridge-record'+(s.linked?'\\n  a: 30829:pk_main:main':'')+'\\nDiscovery changed. Existing downstream 8828 selections do not.','cfg');
+  push(s,(s.linked?'Notary A points to Main':'Notary A removes its Main pointer'),'kind 30829 · pk pk_a\n  d: bridge-record'+(s.linked?'\n  a: 30829:pk_main:main':'')+'\nDiscovery changed. Existing downstream 8828 selections do not.','cfg');
 }
 function clusters(cards,field){
   const map={};cards.filter(function(c){return c.available}).forEach(function(c){const k=JSON.stringify(c[field]);if(!map[k])map[k]={value:c[field],cards:[]};map[k].cards.push(c)});
   return Object.keys(map).map(function(k){return map[k]}).sort(function(a,b){return b.cards.length-a.cards.length});
 }
 function candidateHTML(c){
-  let fields=FIELDS.map(function(f){return '<div class="field"><div class="field-name">'+esc(f.label)+'</div><div class="value">'+esc(valText(c[f.key]))+'</div><div class="actions"><button class="primary" data-action="select" data-card="'+c.id+'" data-field="'+f.key+'">A · select</button></div></div>'}).join('');
+  const selected=state().community;
+  let fields=FIELDS.map(function(f){const used=selected[f.key]&&same(selected[f.key].value,c[f.key]);return '<div class="field"><div class="field-name">'+esc(f.label)+'</div><div class="value">'+esc(valText(c[f.key]))+'</div><div class="actions"><button class="'+(used?'gold':'primary')+'" data-action="select" data-card="'+c.id+'" data-field="'+f.key+'">'+(used?'✓ A uses this':'use for A')+'</button></div></div>'}).join('');
   return '<article class="candidate"><div class="name">'+esc(c.title)+' <span class="chip blue">'+esc(c.author)+'</span></div><div class="sub mono">30828:'+esc(c.pk)+':'+esc(c.d)+' · '+esc(c.event)+'</div><div class="chips"><span class="chip">'+(c.credit?'optional p credit':'no public p credit')+'</span></div><div class="fields">'+fields+'</div><div class="section-actions"><button data-action="revise" data-card="'+c.id+'" data-field="event_date">revise date</button><button data-action="revise" data-card="'+c.id+'" data-field="content">revise content</button><button data-action="credit" data-card="'+c.id+'">'+(c.credit?'request no credit':'allow credit')+'</button><button data-action="delete" data-card="'+c.id+'">delete source</button></div></article>';
+}
+function synthHTML(x){
+  const rows=FIELDS.filter(function(f){return Object.prototype.hasOwnProperty.call(x.fields,f.key)}).map(function(f){return '<div class="field"><div class="field-name">'+esc(f.label)+'</div><div><div class="value">'+esc(valText(x.fields[f.key]))+'</div><div class="source">copied from '+esc(x.sources[f.key])+'</div></div><div class="actions"><button class="gold" data-action="mainselect" data-field="'+f.key+'" data-synth="'+x.id+'">Main · use</button></div></div>'}).join('');
+  return '<div class="synth"><div class="name">Assimilated candidate <span class="chip cyan">30828 · '+esc(x.event)+'</span></div><div class="sub mono">30828:pk_a:'+esc(x.d)+' → 30829:pk_main:main</div><div class="fields">'+rows+'</div><div class="note">This is A’s signed composite snapshot. It is a candidate for Main, not an automatic downstream decision.</div></div>';
 }
 function projectionHTML(where){
   const s=state(),p=s[where],upstream=where==='main';
@@ -193,19 +216,21 @@ function render(){
   document.getElementById('cursor').textContent=cursor+' / '+(history.length-1);
   const live=s.cards.filter(function(c){return c.available});
   document.getElementById('candidates').innerHTML='<div class="notary"><div><div class="name">Event slot <code>bridge-vote</code></div><div class="sub">Same d inside Notary A’s context · '+live.length+' visible candidates</div></div><button class="primary" data-action="addmatch">add matching card</button></div>'+live.map(candidateHTML).join('');
-  document.getElementById('community').innerHTML='<div class="notary"><div><div class="name">Notary A <span class="chip gold">30829</span></div><div class="sub">No passes mode · acts are the ledger</div></div><button data-action="link">'+(s.linked?'withdraw pointer to Main':'point at Main')+'</button></div><div class="signal"><div class="name">Observable convergence · advisory only</div>'+signalsHTML()+'<div class="note">Counts group exact candidate blocks in this local view. Free keys can corrupt them. Nothing below changes until Curator A signs an 8828.</div></div>'+projectionHTML('community');
+  const chosen=Object.keys(s.community).length;
+  document.getElementById('community').innerHTML='<div class="notary"><div><div class="name">Notary A <span class="chip gold">30829</span></div><div class="sub">No passes mode · acts are the ledger</div></div><button data-action="link">'+(s.linked?'withdraw pointer to Main':'point at Main')+'</button></div><div class="signal"><div class="name">Observable convergence · advisory only</div>'+signalsHTML()+'<div class="note">Counts group exact candidate blocks in this local view. Free keys can corrupt them. Nothing below changes until Curator A signs an 8828.</div></div>'+projectionHTML('community')+'<div class="section-actions"><button class="primary" data-action="assimilate" '+(chosen?'':'disabled')+'>Publish '+chosen+' selected field'+(chosen===1?'':'s')+' as one 30828 → Main</button></div><div class="note">Optional materialization: this does not replace the 8828 field ledger.</div>';
   const compat=s.main.event_date&&s.main.event_time&&String(s.main.event_time.value).indexOf('-07:00')<0;
-  document.getElementById('main').innerHTML='<div class="notary"><div><div class="name">Main <span class="chip gold">30829</span></div><div class="sub">'+(s.linked?'Notary A is a discovery source':'No current pointer; prior choices remain')+'</div></div><span class="chip '+(s.linked?'cyan':'warn')+'">'+(s.linked?'linked':'unlinked')+'</span></div>'+projectionHTML('main')+(compat?'<div class="note warning">Compatibility warning: selected date/time blocks may not describe the same civil frame. The signed values remain visible.</div>':'')+'<div class="note">Main copies exact bytes from Notary A’s individual 8828 acts. If A later changes or withdraws a field, Main’s choice stays until Main signs again.</div>';
+  document.getElementById('main').innerHTML='<div class="notary"><div><div class="name">Main <span class="chip gold">30829</span></div><div class="sub">'+(s.linked?'Notary A is a discovery source':'No current pointer; prior choices remain')+'</div></div><span class="chip '+(s.linked?'cyan':'warn')+'">'+(s.linked?'linked':'unlinked')+'</span></div>'+(s.synths.length?synthHTML(s.synths[s.synths.length-1]):'<div class="empty">No assimilated 30828 yet. A can publish its selected blocks here as one candidate.</div>')+'<h2 style="margin-top:14px">Main’s selected projection</h2>'+projectionHTML('main')+(compat?'<div class="note warning">Compatibility warning: selected date/time blocks may not describe the same civil frame. The signed values remain visible.</div>':'')+'<div class="note">Main may select from A’s materialized 30828. Its choices remain independent if A later changes the source acts or publishes another snapshot.</div>';
   document.getElementById('ticks').innerHTML=history.map(function(h,i){const e=h.events[h.events.length-1],k=e?e.kind:'cfg';return '<div class="tick '+esc(k)+(i===cursor?' at':'')+(i>cursor?' future':'')+'" data-action="goto" data-index="'+i+'" title="'+esc(e?e.head:'start')+'"></div>'}).join('');
   const recent=s.events.slice(-6).reverse();
-  document.getElementById('events').innerHTML=recent.length?recent.map(function(e){return '<div class="event"><strong>'+esc(e.head)+'</strong>\\n'+esc(e.wire)+'</div>'}).join(''):'<div class="empty">Start by selecting one field. Every action appends a simulated signed event.</div>';
+  document.getElementById('events').innerHTML=recent.length?recent.map(function(e){return '<div class="event"><strong>'+esc(e.head)+'</strong>\n'+esc(e.wire)+'</div>'}).join(''):'<div class="empty">Start by selecting one field. Every action appends a simulated signed event.</div>';
   document.getElementById('wire').textContent=s.selectedWire||'Choose a field to publish an 8828.';
 }
 document.addEventListener('click',function(e){
   const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;
   if(a==='select')selectCommunity(b.dataset.card,b.dataset.field);
   else if(a==='clear')clearField(b.dataset.where,b.dataset.field);
-  else if(a==='mainselect')selectMain(b.dataset.field);
+  else if(a==='mainselect')selectMain(b.dataset.field,b.dataset.synth);
+  else if(a==='assimilate')assimilate();
   else if(a==='revise')revise(b.dataset.card,b.dataset.field);
   else if(a==='delete')removeCard(b.dataset.card);
   else if(a==='credit')toggleCredit(b.dataset.card);

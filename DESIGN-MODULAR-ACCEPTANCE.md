@@ -272,6 +272,24 @@ An event with no selected `event_date` cannot be placed on the present timeline.
 does not make content privileged: the requirements for displaying a projection belong
 to the timeline client or corpus, not to the generic acceptance operation.
 
+### Optional materialization as a card
+
+A notary may publish its current composite projection as a new `30828` submitted to a
+downstream notary. This is an optional snapshot, not an automatic consequence of field
+selection. It gives the composite one portable signed address that ordinary card tools
+can inspect and cite.
+
+The materialized card is authored by the notary key and should point back to the exact
+field acts from which it was assembled. It does not replace those acts as the decision
+ledger, and it does not claim that all selected fields came from one original author.
+The downstream notary still makes its own explicit selections; receiving the composite
+card passes nothing by itself.
+
+Publishing another snapshot after the projection changes is an ordinary `30828`
+replacement if the notary deliberately reuses its own snapshot `d`. Historical field
+acts preserve how each snapshot was assembled even if relays retain only its newest
+card version.
+
 ## Plurality and other emergent signals
 
 For display and analysis, a client can derive a value identity such as:
