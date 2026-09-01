@@ -4,151 +4,146 @@
 
 `draft` `optional`
 
-A notary is an addressable event that timeline cards ([Timeline Cards NIP], kind `30828`)
-are submitted to, and whose acceptances ([Timeline Acts NIP], kind `8828`) decide which of
-them pass on. A notary has a name, a key, and a setting. It holds no list: what a notary
-passes on is derived from the acts its key has signed, never declared on the notary.
+A **notary** is a named lens for discovering timeline cards and recording explicit
+decisions about them. A notary is kind `30829` (provisional), an addressable event per
+NIP-01.
 
-Kind `30829` (provisional), an **addressable** event per NIP-01.
+A notary does not declare truth, contain an acceptance ledger, or automatically inherit
+another notary's decisions. Its decisions are regular kind `8828` Timeline Acts.
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", "MAY" are as in RFC 2119.
+The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 2119.
 
-## Motivation
+## Vocabulary
 
-A list on the notary would name addresses, and an address is replaceable, so a revision
-would inherit every listing it never earned. An acceptance names an exact version, so the
-check runs again on every revision by construction. The acceptance is the listing.
+- **Card** — a kind `30828` authored account of an event.
+- **Notary coordinate** — `30829:<pubkey>:<d>`.
+- **Card address** — `(author pubkey, card d)`, the replaceable lineage of one author's
+  card.
+- **Event slot** — `(notary coordinate, card d)`, the subject within one notary lens for
+  which several cards may compete or contribute fields.
+- **Notary source** — another `30829` referenced as a place to discover candidate
+  material.
+- **Source set** — the zero or more notary sources named by a notary. It is unordered.
+- **Candidate** — a card available for a notary to inspect. Candidacy is not acceptance.
+- **Projection** — the client-derived current set of fields selected by a notary's
+  effective acts.
 
-## Event kind
+## Event
 
 | Tag | Example | Rule |
 |---|---|---|
-| `d` | `["d","hcr2001"]` | REQUIRED. addressable identifier; opaque |
-| `title` | `["title","HCR 2001 election results"]` | REQUIRED. the notary's name |
-| `t` | `["t","wikitimechain"]` | REQUIRED. the corpus marker; see *Discovery*. Also freeform topics |
-| `passes` | `["passes","manual"]` | REQUIRED. `manual` or `auto`; see *What passes* |
-| `description` | `["description","…"]` | OPTIONAL. plain text |
-| `g` | `["g","9tbq"]` | OPTIONAL. geohash prefix rungs, as on a card. A card submitted here inherits it when it carries none |
-| `a` | `["a","30829:<pubkey>:<d>"]` | OPTIONAL. the notary this one submits to; see *Chaining* |
+| `d` | `["d","hcr2001"]` | REQUIRED. Opaque addressable identifier |
+| `title` | `["title","HCR 2001 election results"]` | REQUIRED. Display name |
+| `t` | `["t","wikitimechain"]` | REQUIRED corpus marker; additional topics allowed |
+| `description` | `["description","…"]` | OPTIONAL plain text |
+| `g` | `["g","9tbq"]` | OPTIONAL default geohash rung |
+| `a` | `["a","30829:<pubkey>:<d>"]` | OPTIONAL and repeatable notary source |
 
-`content` is empty or a djot description. A notary carries **no `a` tag naming a card**.
-A client MUST ignore any it finds; the outbound direction is read from acts alone.
+`content` is empty or a plain-text/djot description.
 
-A card is **submitted** to a notary by carrying `["a","30829:<pubkey>:<d>"]`. The kind
-prefix of the coordinate is what distinguishes a submission from a citation
-(`30828:…` with a `cite` marker); no marker is needed and none is defined. A card MAY be
-submitted to two notaries. A card carrying no submission belongs to no notary and is
-found only by the whole-kind filter.
+A `30829` carries no card decisions. A client MUST NOT derive acceptance from a card
+address placed on the notary event. Replacing a `30829` changes current identity,
+description, and discovery configuration; it does not rewrite historical decisions.
 
-## What passes
+There is no `passes` mode. Absence of a decision always means absence of acceptance.
+A live client MAY inspect signals and sign decisions automatically, but the resulting
+wire event is the same explicit `8828` another client would ask a person to sign.
 
-A notary **passes** a card — makes it visible to whoever reads the notary — under one of
-two rules, chosen by `passes`:
+## Submission and event slots
 
-- **`auto`** — every card submitted here passes, in its current version. No act is
-  involved. Automatic.
-- **`manual`** — a card passes while the notary's key holds a current acceptance of it
-  whose `content` copy is live: the copy byte-equals the card's current `content`, per
-  *Derivation* in the acts NIP. Nothing else passes. Manual: the notary key signs each one.
+A card submits to a notary by carrying:
 
-Under `manual`, the check is the acts NIP's existing consent rule, applied with one key
-— the notary's — as the lens. Every consequence follows from there and none is new:
+```json
+["a", "30829:<notary-pubkey>:<notary-d>"]
+```
 
-- An author's revision changes the bytes. Consent lapses. The card stops passing until
-  the notary reads the new version and signs again. **Every version is checked, because
-  no version can inherit a check.**
-- A revert to accepted bytes restores consent; same bytes, same claim.
-- The acceptance carries the accepted copy, so what was passed remains readable after
-  the author moves on. The decision and the text it was about survive together.
-- Withdrawing a card is `revoke` on the acceptance. No second shape.
-- Title or summary acceptance alone does not pass a card: *Only the content copy moves
-  documents*, as the acts NIP already says.
+A card MAY submit to more than one notary. Each submission places it in a different
+event slot because a slot is `(notary coordinate, card d)`. The notaries may make
+different decisions about the same bytes.
 
-A client MUST NOT let a notary pass a card by any other signal — not a reaction, a
-mention, or an `a` tag on the notary itself.
+Cards with the same `d` under different author keys are rival or contributing candidates
+in the same slot when submitted to the same notary. A bare `d` has no global meaning.
 
-`passes` is read from the notary's current version. Switching `auto` → `manual` makes
-existing acceptances count; switching back makes them idle. Acts are not affected.
+Submission is self-asserted and creates no obligation for the named notary. A card with
+no notary submission is still a card, but is not discovered through a notary.
 
-## Chaining
+## Source graphs
 
-A notary MAY submit to another notary with an `a` tag, exactly as a card does. The
-receiving notary then sees the submitting notary's **passed** cards as candidates, and
-applies its own `passes` rule to each card individually — it accepts cards, never
-notaries. What one notary passes is the pool the next one draws from; each link checks
-the bytes for itself.
+A notary MAY carry any number of `a` references to other notaries. Each means only:
 
-There is no root kind and no special tier. A reader's timeline is whichever notary the
-reader's client is pointed at: its passed cards, in `event_date` order. A corpus MAY
-designate a notary by publishing its coordinate; that is convention, and this NIP defines
-nothing for it.
+> Look here for additional candidate material.
 
-A notary's **candidates** are the cards submitted to it, plus the cards passed by the
-notaries submitted to it. A notary passes only candidates. An acceptance of any other card
-is voice: it shows on the card and moves nothing, until the author submits — an act on an
-unsubmitted card is an invitation, and the author's `a` is the answer. Trust is not
-transitive: following an upstream notary's decisions means signing its own acceptances.
+The references form an unordered source set, not a hierarchy. Tag order, graph depth,
+the number of paths to a card, and position in a user interface MUST NOT imply rank,
+weight, delegation, or authority. Referenced notaries MAY use different `d` values.
 
-Cycles: `a` coordinates are names and can loop. A client walking a chain MUST stop at a
-coordinate it has already visited.
+A notary's candidate pool is the union of:
+
+1. cards submitted directly to it; and
+2. material discoverable through its source set, subject to client traversal budgets.
+
+Discovering a card or an upstream decision does not accept it. Every field in a notary's
+projection requires an effective `8828` signed by that notary's key. A client that
+follows another notary live does so by observing it and signing new local acts; there is
+no delegation mode on the wire.
+
+Source graphs may branch, converge, and loop. A client MUST keep a visited-coordinate
+set for each traversal branch and MUST stop a branch when it revisits a coordinate. It
+MAY impose depth, width, event, relay, and time budgets. Incomplete traversal SHOULD be
+shown. Convergent paths confer no extra weight and a duplicate coordinate is inspected
+once.
+
+Current graph reachability MUST NOT be required to validate an older decision. A
+`30829` is replaceable and old source links may disappear. Removing a source changes
+future discovery, not the validity of decisions already signed by this notary.
+
+## Decisions
+
+Only a valid Timeline Act signed by the pubkey in the notary coordinate changes that
+notary's projection. In particular, none of the following is a decision:
+
+- submission;
+- a notary-source link;
+- matching field bytes;
+- plurality or recency;
+- a reaction, mention, or count;
+- another notary's decision.
+
+A whole-card acceptance requires one card-scoped act. A modular projection uses
+field-scoped acts. Withdrawal and replacement are explicit acts. See Timeline Acts.
 
 ## Discovery
 
-Three filters, each on one indexed tag:
-
-```
-{"kinds":[30829], "#t":["<marker>"]}                 the corpus's notaries
-{"kinds":[30828], "#a":["30829:<pubkey>:<d>", …]}    cards submitted to them
-{"kinds":[8828],  "authors":["<notary pubkey>", …]}   the notaries' acceptances
+```json
+{"kinds":[30829], "#t":["<corpus-marker>"]}
+{"kinds":[30828], "#a":["30829:<pubkey>:<d>", "…"]}
+{"kinds":[8828],  "authors":["<notary-pubkey>", "…"]}
 ```
 
-The corpus marker lives on the notary. A card need not carry it; a card is found through
-the notary it is submitted to.
-
-Acceptances by keys other than notaries' are ordinary voice per the acts NIP and are
-read by `#a` as before; they never pass a card.
+Clients walking a source graph SHOULD add referenced notary coordinates to the card
+query and SHOULD validate all returned coordinates and signatures locally. Relay tag
+filters are discovery hints, not validation.
 
 ## Client behavior
 
-- A card belongs to the notary named by its `a` tag. Its `g`, if absent, is the notary's.
-- Rival versions (same `d`, different keys, cards NIP) are unchanged: each is submitted,
-  accepted, and passed on its own.
-- Where a notary under `manual` holds an acceptance whose consent has lapsed, a client
-  SHOULD show that the card was passed and is waiting — the accepted copy and the current
-  version are both on hand, and the difference is the thing to show.
-- A notary's `passes` value MUST be shown to the reader. An automatic notary and a manual one
-  look the same otherwise.
-- A card submitted but not passed MUST NOT sit on the timeline. A client MAY show that
-  such cards exist — a count, a fold — and MAY open them on request.
-- The notary's key is the default lens. A client MAY read any key's acceptances as the
-  spine instead — the reader's own, or another's — since a notary is a lens and nothing more.
-
-## Degradation
-
-| dropped | an ignorant client sees | worst effect |
-|---|---|---|
-| `passes` | — | a client MUST treat a notary with no `passes` as `manual`; an automatic notary reads as empty, never as leaky |
-| a card's `a` | a card with no notary | invisible through notaries, still found by kind |
-| whole kind | nothing | cards intact, acts intact, timelines unassembled |
-
-Nothing here is state a card's meaning depends on. A notary is a lens; cards are the record.
+- A client SHOULD distinguish submitted, candidate, and accepted material.
+- A source set SHOULD be presented as peer inputs, not a parent chain or ranked stack.
+- Conflicting cards and field values SHOULD remain inspectable.
+- A projection is derived state and MUST NOT be presented as if the `30829` declared it.
+- Plurality and exact-match convergence MAY be displayed as signals, never as a protocol
+  winner or automatic decision.
 
 ## Security considerations
 
-**A notary key is an authority only over its own reader.** Anyone may mint a notary and
-wear any marker. Accepting or refusing a card says nothing about the card, only about
-what that key passes on. A reader chooses which notary to read; that choice is the whole
-trust decision, and this NIP moves it nowhere else.
+A notary key is authority only for its own lens. Anyone may mint a notary, copy a title,
+or name arbitrary sources. The reader's choice of notary is the trust decision.
 
-**`auto` is a leak by design.** An automatic notary passes whatever is submitted to it,
-including junk wearing its coordinate. Clients SHOULD show `passes` for this reason.
+Notary-source graphs do not make Sybil resistance. Multiple keys, paths, or matching
+values may be controlled by one actor. Clients MUST NOT translate path count or
+plurality into truth.
 
-**Submission is self-asserted.** A card may name any notary. That costs the notary
-nothing under `manual` and is the point under `auto`.
-
-**A notary is its key.** Acceptances are found by `authors`, so a notary that rotates
-keys loses every acceptance it has signed; the new key starts empty and must sign again.
-There is no delegation and no successor tag. Keep the key.
+A notary is presently identified by its key and `d`. Key succession and delegation are
+not defined by this draft.
 
 ## Example
 
@@ -157,16 +152,15 @@ There is no delegation and no successor tag. Keep the key.
   "kind": 30829,
   "content": "",
   "tags": [
-    ["d", "hcr2001"],
-    ["title", "HCR 2001 election results"],
+    ["d", "regional-record"],
+    ["title", "Regional record"],
     ["t", "wikitimechain"],
-    ["passes", "manual"],
     ["g", "9tbq"],
-    ["a", "30829:<main-pubkey>:main"]
+    ["a", "30829:<source-one-pubkey>:local-record"],
+    ["a", "30829:<source-two-pubkey>:research-desk"]
   ]
 }
 ```
 
-A card submitted to it carries `["a", "30829:<this-pubkey>:hcr2001"]`. It reaches a
-reader of `main` once this key has accepted its current `content` and `main`'s key has
-done the same.
+The two `a` tags are unordered discovery inputs. Neither source can change this
+notary's projection without a new `8828` signed by this notary's key.

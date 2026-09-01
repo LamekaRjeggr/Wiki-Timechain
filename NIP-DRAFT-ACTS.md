@@ -4,153 +4,251 @@
 
 `draft` `optional`
 
-An act is a signed, permanent position toward a timeline card ([Timeline Cards NIP], kind `30828`).
-Cards are documents and may be replaced; acts are records and may not. A key changes its
-position by publishing a new act, never by removing an old one.
+A **decision** is an explicit signed choice made by a timeline notary about a card or
+one of its fields. Decisions are kind `8828` (provisional), a regular event per NIP-01:
+none replaces another and history is append-only.
 
-Kind `8828` (provisional), a **regular** event per NIP-01: relays store all of them, none replaces another.
+Cards are replaceable accounts. Decisions are records. A notary changes its projection
+by signing another act, never because a source card changed, disappeared, matched another
+card, became popular, or was linked by a `30829`.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 2119.
+
+## Vocabulary
+
+- **Card** — one signed kind `30828` account of an event.
+- **Card address** — `(author pubkey, card d)`, one author's replaceable card lineage.
+- **Event slot** — `(notary coordinate, card d)`, the subject being decided within one
+  notary lens.
+- **Field** — a modular block carried by a card, such as title, summary, content, date,
+  time, location, or geohash.
+- **Register** — `(event slot, field)`, equivalently `(notary coordinate, card d, field)`,
+  the place where one notary's current field selection is derived.
+- **Whole-card acceptance** — one decision accepting and preserving a complete exact
+  card version.
+- **Field selection** — one decision selecting exact bytes for one field in one slot.
+- **Supersession** — an explicit decision replacing an earlier decision.
+- **Revocation** — an explicit decision withdrawing an earlier decision without silently
+  restoring an older value.
+- **Projection** — the current field map derived from a notary's effective decisions.
+- **Provenance** — references showing where selected bytes were read.
+- **Credit** — optional public attribution, separate from provenance.
+
+## Invariants
+
+1. **Only a signed act decides.** Matching, plurality, recency, submission, notary
+   configuration, and other notaries' acts are signals or inputs only.
+2. **Selected bytes are self-contained.** An act MUST carry the exact bytes it selects.
+   A pointer alone is insufficient.
+3. **A decision is stable.** Source replacement, deletion, relay loss, or an upstream
+   withdrawal may change provenance status but MUST NOT silently change this notary's
+   projection.
+4. **Fields are independent.** Selecting one field implies nothing about another.
+5. **Source and credit are separate.** Provenance MAY disclose a source event without
+   requiring a public credit tag. Absence of credit does not erase disclosed provenance.
+6. **Reversion is explicit.** Revocation clears the affected register; it does not
+   resurrect an older superseded value.
+
+The central persistence rule is:
+
+> A notary's signed decision preserves the bytes it selected. Source replacement,
+> deletion, disappearance, or upstream withdrawal may change provenance status, but
+> cannot silently change the decision.
 
 ## Operations
 
-Exactly two. The operation is the presence of tags, not a declared field.
+There are three conceptual operations:
 
-### Accept
-
-An acceptance of one exact version of one card, scoped to one or more of the card's
-three fields: `title`, `summary`, `content`. REQUIRED tags:
-
-```
-["a", "30828:<pubkey>:<d>"]        the document
-["e", "<event id of the version>"]  the exact version
-["p", "<author pubkey>"]            credit routing
+```text
+accept card
+select field
+withdraw or replace decision
 ```
 
-**Scope is presence.** The act carries a byte-exact copy of each field it accepts, the
-way the card carries it:
+The final tag vocabulary below remains provisional. The semantics and validation
+requirements are normative for this draft.
 
-```
-["title", "<copy of the accepted version's title>"]      title in scope
-["summary", "<copy of the accepted version's summary>"]   summary in scope
-content = copy of the accepted version's content          content in scope, else ""
-```
+### Whole-card acceptance
 
-- A copy present = that field is accepted. Empty or absent = out of scope. A card's
-  absent field has nothing to accept, so empty is never ambiguous. An act carrying no
-  copy at all accepts nothing.
-- Copies are byte-exact — no normalization, no trimming. The copy is both the yardstick
-  consent is measured against and the permanent record of what was signed.
-- **Fields are independent.** Accepting one implies nothing about another; any
-  permutation is a position. Where consensus stops on a card is itself a reading.
-- What the fields *mean* is the client's business. This NIP defines three slots that
-  mirror the card's own fields, nothing more.
-- An act carrying a content copy and no field tags (the pre-scope form) reads as
-  content-scope.
+One act accepts one complete, exact `30828` without creating a new card.
 
-An acceptance MAY carry one supersede pointer:
-
-```
-["e", "<id of the signer's prior act>", "", "supersede"]
+```json
+{
+  "kind": 8828,
+  "content": "<exact source content>",
+  "tags": [
+    ["context", "30829:<notary-pubkey>:<notary-d>"],
+    ["slot", "<card-d>"],
+    ["scope", "card"],
+    ["a", "30828:<source-pubkey>:<card-d>", "", "source"],
+    ["e", "<source-event-id>", "", "source"],
+    ["snapshot", "<JSON serialization of the complete signed source event>"]
+  ]
+}
 ```
 
-meaning: this acceptance replaces that one in the signer's current position.
+The complete signed event envelope is the accepted value. The snapshot MUST include the
+source event's `id`, `pubkey`, `created_at`, `kind`, `tags`, `content`, and `sig`, and its
+id and signature MUST validate. A reader derives every accepted field from that exact
+snapshot.
 
-#### Taking a revision
+One whole-card acceptance creates one decision and zero new `30828` events. Later
+materialization is a separate optional operation.
 
-Requires no act: a fork is taken when the owner's card comes to read as the fork's newer
-document, byte for byte (cards NIP, *Taking a revision*). An acceptance of a fork is
-ordinary voice, and a client MUST NOT require one before treating a matching fork as
-taken. The owner replaces their card with the corrected text in clean words — not the
-fork's `content` verbatim, which drags the diff marks onto a card with no `cite` marker,
-where they render as nothing.
+### Field selection
 
-### Revoke
+One act selects one exact field block in one register.
 
-Withdraws one of the signer's own acts, backing nothing in its place. REQUIRED tag:
-
+```json
+{
+  "kind": 8828,
+  "content": "<selected bytes when scope is content; otherwise empty>",
+  "tags": [
+    ["context", "30829:<notary-pubkey>:<notary-d>"],
+    ["slot", "<card-d>"],
+    ["scope", "tag:<field-name>"],
+    ["value", "tag:<field-name>", "<exact serialized tag block>"],
+    ["a", "30828:<source-pubkey>:<card-d>", "", "source"],
+    ["e", "<source-event-id>", "", "source"]
+  ]
+}
 ```
-["e", "<id of the act withdrawn>", "", "revoke"]
+
+The `context`, `slot`, and `scope` identify the register. The selected value is carried
+inside the act. Tag-valued fields preserve the complete ordered tag block; content
+preserves the exact content string. Exact absence, if supported, MUST have an explicit
+encoding and MUST NOT be inferred from a missing value.
+
+This draft is intentionally not opinionated about the meaning of fields. Timeline
+clients may recognize title, summary, content, event date, event time, location, and
+geohash, while another corpus may define additional repeatable tag blocks. A scope names
+bytes, not truth.
+
+### Replace a decision
+
+A new selection MAY point to the earlier act it replaces:
+
+```json
+["e", "<prior-act-id>", "", "supersede"]
 ```
 
-`content` MAY carry a reason. A revoked act remains visible history.
+The target MUST be signed by the same notary key and MUST affect the same register. A
+whole-card decision may supersede another whole-card decision for the same slot. Where a
+whole-card act populates several field registers, a later field selection replaces only
+the named register; the remaining fields stay selected.
+
+### Withdraw a decision
+
+```json
+{
+  "kind": 8828,
+  "content": "<optional reason>",
+  "tags": [["e", "<prior-act-id>", "", "revoke"]]
+}
+```
+
+The target MUST be signed by the same key. Revocation clears only registers still sourced
+from the target act. A superseded value does not return. Returning to old bytes requires
+a new selection of those bytes.
+
+## Provenance and credit
+
+A source pointer states where the selected bytes were read. When the source is
+retrievable, the reader SHOULD compare the selected bytes against it exactly.
+
+- **verified provenance** — source retrieved and bytes match;
+- **unavailable provenance** — source cannot presently be retrieved;
+- **mismatched provenance** — source retrieved and bytes do not match.
+
+Unavailable or mismatched provenance does not alter what the notary signed. A client
+SHOULD flag the provenance and MAY judge the notary unreliable, but MUST represent the
+decision bytes accurately.
+
+An optional credit tag is separate:
+
+```json
+["p", "<credited-pubkey>", "", "credit"]
+```
+
+A publisher SHOULD omit public credit when the contributor requests anonymity. Gift
+wrapping, anonymous publication, and other privacy mechanisms occur before or around
+this protocol. This draft does not require a real-world identity.
 
 ## Validation
 
-A client MUST apply all of the following; an act failing any is ignored for derivation
-(the event itself remains an ordinary event):
+For an act to affect a notary projection:
 
-1. **Same-key.** A `revoke` or `supersede` target MUST be signed by the same pubkey as
-   the act carrying it. Relays cannot enforce this; clients MUST.
-2. **Replica check, per field.** When the accepted `e` event is retrievable, compare
-   each copy the act carries against that version's same field, byte-for-byte. Three
-   states:
-   - **verified** — target retrieved, every carried copy equals its field.
-   - **unverified** — target unavailable or replaced under its `d`. The act still counts
-     as a **record** — its copies are the surviving text — but not as **consent**; the
-     two are separated under *Derivation*. Clients SHOULD flag it.
-   - **invalid** — target retrieved, any carried copy differs from its field. The act
-     lied about what it read and MUST NOT count as an acceptance of anything.
-3. **Orphan tolerance.** A pointer to an event the client has not seen is not an error.
-   Hold the edge; resolve it if the target arrives.
-4. **The `e` id is the truth; the `a` coordinate is an index hint.** When the client
-   holds the `e` target, it MUST derive the document coordinate from the target itself
-   — the target's own kind, pubkey and `d` — and MUST NOT require the act's `a` tag to
-   match it. A missing, unparseable or mismatched `a` SHOULD be flagged, never dropped:
-   discovery runs on `#a`, so a bad coordinate costs the act findability, and it must
-   not also cost it validity.
+1. its event id and signature MUST validate;
+2. it MUST identify exactly one parseable notary context;
+3. its signer MUST equal the pubkey in that notary coordinate;
+4. a selection MUST identify one slot and one valid scope;
+5. it MUST carry a complete selected value for that scope;
+6. a whole-card snapshot MUST validate as the exact signed event named by its source `e`;
+7. a supersede or revoke target MUST be signed by the same key;
+8. a supersede target used to change a register MUST address the same context, slot, and
+   field, subject to the whole-card rule above.
 
-A publisher SHOULD parse the `a` value as `<kind>:<64-hex-pubkey>:<d>` before signing
-and refuse to publish on mismatch with the accepted target — recovery on the reading
-side must not depend on a hand-typed string.
+Source availability, current card replacement, present notary-graph reachability, credit,
+and observed plurality are not validity requirements.
 
-Cycles cannot occur: `supersede` and `revoke` point at event **ids**, which are hashes,
-so the reference graph is acyclic by construction. No traversal guard is required.
+Malformed index hints SHOULD be flagged. A reader holding the source event SHOULD derive
+its card address from the signed source rather than trust a hand-written `a` value.
 
 ## Derivation
 
-All state is computed by the reader; none is declared.
+All projection state is reader-derived. A field register is keyed by:
 
-**Current position** of a pubkey = its accept acts, minus revoked, minus superseded, minus
-invalid. Ties on `created_at` break by lowest id (NIP-01). A key MAY hold current
-acceptances on several cards; exclusivity is a rule of a tally, never of this kind.
-**Position is total:** one key's current act at a coordinate is its whole position there;
-a new act's scope replaces the prior act's entirely.
+```text
+(notary coordinate, slot d, field key)
+```
 
-**Consent is per field, and bytes decide it.** A copy grants consent exactly while it
-byte-equals that field on the event now current at the `a` coordinate. A rewritten field
-sheds its own consent — no act, no cooperation from the accepting key; a field reverted
-to accepted bytes regains it. **The `e` id never gates consent:** it records what version
-was read, and a client still holding a superseded version MUST NOT read consent from it.
-Consent surviving a rewrite would let an owner collect agreement on one text and serve
-another; the inverse edge — a narrow acceptance standing while other fields move — is
-open, and clients SHOULD render scope loudly ("title only · content changed since").
+It is not keyed merely by signer, source card, or source address. This distinction lets
+one notary hold simultaneous decisions for several fields taken from the same card and
+lets a field survive changes to unrelated fields.
 
-**Only the content copy moves documents.** Any derivation that gives a card a place
-REQUIRES content in scope and live. Title and summary acceptance is voice: it counts,
-renders and tallies, never custody.
+Apply valid decisions in deterministic event order, following same-key supersede and
+revoke edges. If several non-superseding selections remain effective for one register,
+the register is contested. A client MUST NOT silently choose plurality as the winner.
 
-Two uses, never conflated: **the record** — this key signed these bytes on this date,
-permanent, untouched by replacement — and **the permission** — this card may occupy that
-place, lapsing on replacement. A NIP-25 reaction is neither: it carries no copy, pins no
-version, and cannot lapse.
+The projection is the map of effective register values. It is not stored in `30829` and
+is not itself proof.
 
-**Tallies are views.** A client counts current acceptances through whatever lens it
-chooses; two honest clients MAY disagree. Counts are not authority — keys are free to mint.
+## Revision, synthesis, and materialization
 
-## Degradation
+A **revision** is a new `30828` derived mainly from one earlier card with changed fields.
+A **synthesis** is a new `30828` assembled from fields selected from multiple sources.
+Both are ordinary cards; these words describe provenance, not distinct event kinds.
 
-For a client that implements nothing here, every marker MUST fail harmless:
+A notary MAY **materialize** its projection as a new signed `30828` submitted to another
+notary. The card SHOULD identify, per field, the exact source event and selection act.
+Materialization is optional and does not happen merely because fields were selected.
+The receiving notary still needs its own explicit decision.
 
-| dropped | an ignorant client sees | worst effect |
-|---|---|---|
-| field scope | pre-scope replica check: content differs → invalid | a scoped act is dropped, never miscounted |
-| `supersede` | ordinary acceptance | a switcher is double-counted |
-| `revoke` marker | ordinary `e` reference | a withdrawal is missed |
-| whole kind | nothing (unknown kind) | acts invisible, cards intact |
+## Convergence and plurality
 
-Over-counting, never corruption.
+**Convergence** means several observed candidates contain the same exact field bytes.
+**Plurality** is the largest observed exact-match cluster for a field. Both are advisory
+client observations. Neither is acceptance, truth, authority, or a protocol winner.
+
+A displayed count SHOULD disclose its observation basis: relay set, time window, keys or
+notaries considered, and whether unavailable material was excluded. Keys are cheap and
+counts provide no built-in Sybil resistance.
 
 ## Discovery
 
-All acceptances of a card: `{"kinds":[8828], "#a":["30828:<pubkey>:<d>"]}` — or `#e`
-for one exact version, `#p` for one author's works. Results MUST pass Validation before
-counting.
+Readers may query acceptances by source card address, exact source event, notary author,
+or any finalized indexed context tag. Results MUST pass local validation before
+derivation. Relay filters are discovery hints only.
+
+## Degradation
+
+An ignorant client sees unknown kind `8828` events or unfamiliar tags and leaves the
+underlying `30828` cards intact. A partially implementing client SHOULD show an act it
+cannot derive as unsupported rather than reinterpret it using older live-consent rules.
+
+## Open wire questions
+
+Before promotion beyond draft, this document still needs final names and marker positions
+for `context`, `slot`, `scope`, `value`, `snapshot`, source, credit, field provenance,
+supersede, and revoke. The semantics above are intentionally named before those spellings
+are frozen.
