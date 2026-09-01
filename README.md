@@ -47,6 +47,22 @@ http://localhost:8000/shelf-model.html
 It uses simulated events only: nothing is signed or sent to a relay. The exact prior
 shelf mock is retained as `shelf-model-original.html` for comparison.
 
+### Signed protocol back-test
+
+The local-only harness in `.htest/protocol-lab/` replays a five-card closed dossier
+through sequential authors, whole-card acceptance, an editorial derivation, revocation,
+source replacement/loss, and two independent notary layers. It generates ephemeral keys
+and genuine signed Nostr events in a temporary directory; it uses no relay and commits no
+keys or generated pubkeys.
+
+```sh
+node .htest/protocol-lab/replay.mjs
+```
+
+The preserved agent artifacts and first findings live beside the harness. Each run also
+writes full, source-missing, and reverse-arrival event logs to the temporary output path
+printed at completion.
+
 To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 
 `MARKER` and `RELAYS` are the two knobs, set in **both** HTML files. The writer stamps
