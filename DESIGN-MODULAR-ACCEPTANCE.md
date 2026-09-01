@@ -79,16 +79,17 @@ An act is the notary's ledger entry. It has two useful scopes:
 
 - **card scope** accepts one complete `30828` unchanged and snapshots its signed field
   bytes in the act. This is the simple, default path;
-- **field scope** accepts one exact field block. This is the advanced path used to
-  revise a projection or assemble one from several sources.
+- **partial-card scope** accepts one or more exact field blocks from one exact source
+  card. This is the advanced path used to revise a projection or assemble one from
+  several sources.
 
 A card-scoped act atomically sets every field register represented by the card. A later
-field-scoped act may replace one of those registers without disturbing the others. If a
+partial-card act may replace any named subset of those registers without disturbing the others. If a
 card-scoped act is revoked, only registers still sourced from that act are cleared; a
 later explicit field decision is not rolled back.
 
 The full snapshot is important. A pointer alone would make the accepted history depend
-on the original card remaining available. Field scope costs more events, but keeps
+on the original card remaining available. One act per source card keeps
 selection, supersession, revocation, validation, and provenance unambiguous.
 
 In the user interface these form a progressive path: pass the whole card, revise when a
@@ -254,7 +255,8 @@ For an act to affect a notary projection:
 
 - it must name exactly one `30829` context and the act signer must be the pubkey in
   that coordinate;
-- it must name exactly one slot, one field scope, and one well-formed copied value;
+- it must name exactly one slot, one source event, and one or more non-duplicated field
+  scopes with well-formed copied values;
 - a `supersede` or `revoke` target must be signed by the same key;
 - a supersede used to change a register must point to an act for the same notary,
   slot, and field.
@@ -412,9 +414,10 @@ NIP rewrite:
 
 1. Final names and marker positions for context, slot, scope, value, source, and credit.
 2. Exact canonical encoding for content and ordered tag blocks.
-3. Whether one-field-per-act is accepted despite its event/signature cost.
-4. Whether a register may intentionally contain several accepted values, or whether
-   multiple current acts always mean malformed/contested history.
+3. Final encoding for field-to-predecessor edges when one act selects several fields
+   whose registers have different current heads.
+4. Whether a register may intentionally retain several heads after a fork, beyond
+   displaying them as contested until a resolving act cites them all.
 5. Whether selected absence is needed for every field and how clients display it.
 6. Which structural tags must be excluded from generic `tag:<name>` selection.
 7. How a source reference to an upstream `8828` is distinguished from a card source.
@@ -431,7 +434,7 @@ The smallest model that satisfies the project's first principles is:
 
 ```text
 30828 publishes candidate bundles.
-8828 selects and preserves one exact field block in one notary slot.
+8828 selects and preserves one or more exact field blocks from one source card in one notary slot.
 30829 names a lens and discovers other lenses; it stores no decisions.
 Clients derive composites and advisory convergence signals.
 Only another 8828 changes the selected projection.

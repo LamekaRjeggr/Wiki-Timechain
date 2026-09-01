@@ -109,8 +109,9 @@ notary's projection. In particular, none of the following is a decision:
 - a reaction, mention, or count;
 - another notary's decision.
 
-A whole-card acceptance requires one card-scoped act. A modular projection uses
-field-scoped acts. Withdrawal and replacement are explicit acts. See Timeline Acts.
+A whole-card acceptance requires one card-scoped act. A modular projection uses one or
+more partial-card acts, each selecting one or more fields from one exact source card.
+Withdrawal and replacement are explicit acts. See Timeline Acts.
 
 ## Discovery
 

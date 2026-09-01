@@ -26,7 +26,13 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
   the place where one notary's current field selection is derived.
 - **Whole-card acceptance** — one decision accepting and preserving a complete exact
   card version.
-- **Field selection** — one decision selecting exact bytes for one field in one slot.
+- **Partial-card selection** — one decision selecting an explicit set of field blocks
+  from one exact source-card version in one slot.
+- **Baseline** — a complete signed source envelope installed by a whole-card acceptance.
+- **Overlay** — a partial-card selection whose named registers take precedence over the
+  baseline or earlier selections.
+- **Register head** — a current, non-replaced selection for one register. More than one
+  head means the register is contested.
 - **Supersession** — an explicit decision replacing an earlier decision.
 - **Revocation** — an explicit decision withdrawing an earlier decision without silently
   restoring an older value.
@@ -48,6 +54,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
    requiring a public credit tag. Absence of credit does not erase disclosed provenance.
 6. **Reversion is explicit.** Revocation clears the affected register; it does not
    resurrect an older superseded value.
+7. **One source per selection.** One act MAY select several fields, but every selected
+   block MUST verify against the same exact source-card event.
 
 The central persistence rule is:
 
@@ -61,7 +69,7 @@ There are three conceptual operations:
 
 ```text
 accept card
-select field
+select fields from one card
 withdraw or replace decision
 ```
 
@@ -87,17 +95,23 @@ One act accepts one complete, exact `30828` without creating a new card.
 }
 ```
 
-The complete signed event envelope is the accepted value. The snapshot MUST include the
-source event's `id`, `pubkey`, `created_at`, `kind`, `tags`, `content`, and `sig`, and its
-id and signature MUST validate. A reader derives every accepted field from that exact
-snapshot.
+The complete signed event envelope is installed as the projection baseline. The snapshot
+MUST include the source event's `id`, `pubkey`, `created_at`, `kind`, `tags`, `content`,
+and `sig`, and its id and signature MUST validate. A reader derives the baseline fields
+from that exact snapshot. The baseline preserves fields and unfamiliar/custom tags
+without requiring this protocol to enumerate "all fields" in advance.
+
+Structural routing and identity are not projection fields. The card's `d`, notary
+context, and submission links do not silently migrate into a different slot or notary
+when the baseline is materialized. Context and slot come from the act.
 
 One whole-card acceptance creates one decision and zero new `30828` events. Later
 materialization is a separate optional operation.
 
-### Field selection
+### Partial-card selection
 
-One act selects one exact field block in one register.
+One act selects one or more exact field blocks from one exact source-card version. The
+selection is atomic as evidence, while each selected field updates its own register.
 
 ```json
 {
@@ -106,18 +120,28 @@ One act selects one exact field block in one register.
   "tags": [
     ["context", "30829:<notary-pubkey>:<notary-d>"],
     ["slot", "<card-d>"],
-    ["scope", "tag:<field-name>"],
-    ["value", "tag:<field-name>", "<exact serialized tag block>"],
+    ["scope", "tag:<first-field-name>"],
+    ["value", "tag:<first-field-name>", "<exact serialized tag block>"],
+    ["scope", "tag:<second-field-name>"],
+    ["value", "tag:<second-field-name>", "<exact serialized tag block>"],
     ["a", "30828:<source-pubkey>:<card-d>", "", "source"],
     ["e", "<source-event-id>", "", "source"]
   ]
 }
 ```
 
-The `context`, `slot`, and `scope` identify the register. The selected value is carried
-inside the act. Tag-valued fields preserve the complete ordered tag block; content
-preserves the exact content string. Exact absence, if supported, MUST have an explicit
-encoding and MUST NOT be inferred from a missing value.
+The `context` and `slot` identify the event slot. Each scope/value pair identifies one
+register and carries its selected bytes. A field name MUST occur at most once in an act.
+Tag-valued fields preserve the complete ordered list of every source tag with that name;
+content preserves the exact content string. The final compact encoding remains open.
+
+Exact absence, if supported, MUST have an explicit encoding. Selecting an empty block
+is distinct from leaving a register unset, and absence MUST NOT be inferred from a
+missing value.
+
+A partial-card selection overlays only its named registers. Registers not named by the
+act retain their current heads or baseline values. Multi-source synthesis therefore uses
+at least one act per source card, not one act per field.
 
 This draft is intentionally not opinionated about the meaning of fields. Timeline
 clients may recognize title, summary, content, event date, event time, location, and
@@ -126,16 +150,26 @@ bytes, not truth.
 
 ### Replace a decision
 
-A new selection MAY point to the earlier act it replaces:
+A new selection identifies, for every register it changes, the prior head or heads it
+replaces. Conceptually:
 
 ```json
-["e", "<prior-act-id>", "", "supersede"]
+["e", "<prior-act-id>", "<field-key>", "supersede"]
 ```
 
-The target MUST be signed by the same notary key and MUST affect the same register. A
-whole-card decision may supersede another whole-card decision for the same slot. Where a
-whole-card act populates several field registers, a later field selection replaces only
-the named register; the remaining fields stay selected.
+The final encoding for field-to-predecessor edges remains open. The target MUST be signed
+by the same notary key and MUST affect the same register.
+
+Replacement is causal, not inferred from `created_at`. No predecessor means a genesis
+selection for that register. If two valid acts replace the same head, both become current
+heads and the register is contested. A resolving act names every current head it intends
+to replace. Missing relays, equal timestamps, or deliberate backdating therefore cannot
+silently select a winner.
+
+A whole-card acceptance establishes a baseline across the source envelope. A later
+partial selection replaces only its named register heads; the remaining baseline and
+overlays stay selected. Replacing a baseline with another whole-card acceptance MUST
+causally address the current heads it intends to replace.
 
 ### Withdraw a decision
 
@@ -147,9 +181,10 @@ the named register; the remaining fields stay selected.
 }
 ```
 
-The target MUST be signed by the same key. Revocation clears only registers still sourced
-from the target act. A superseded value does not return. Returning to old bytes requires
-a new selection of those bytes.
+The target MUST be signed by the same key. Revocation clears all and only registers whose
+current head still comes from the target act. Registers subsequently selected by another
+act are unaffected. A superseded value or prior baseline value does not return. Returning
+to old bytes requires a new selection of those bytes.
 
 ## Provenance and credit
 
@@ -181,11 +216,13 @@ For an act to affect a notary projection:
 1. its event id and signature MUST validate;
 2. it MUST identify exactly one parseable notary context;
 3. its signer MUST equal the pubkey in that notary coordinate;
-4. a selection MUST identify one slot and one valid scope;
-5. it MUST carry a complete selected value for that scope;
-6. a whole-card snapshot MUST validate as the exact signed event named by its source `e`;
-7. a supersede or revoke target MUST be signed by the same key;
-8. a supersede target used to change a register MUST address the same context, slot, and
+4. a selection MUST identify one slot and at least one valid, non-duplicated scope;
+5. it MUST carry a complete selected value for every scope;
+6. all selected blocks in one partial-card act MUST verify against the same exact source
+   event;
+7. a whole-card snapshot MUST validate as the exact signed event named by its source `e`;
+8. a supersede or revoke target MUST be signed by the same key;
+9. a supersede target used to change a register MUST address the same context, slot, and
    field, subject to the whole-card rule above.
 
 Source availability, current card replacement, present notary-graph reachability, credit,
@@ -206,9 +243,15 @@ It is not keyed merely by signer, source card, or source address. This distincti
 one notary hold simultaneous decisions for several fields taken from the same card and
 lets a field survive changes to unrelated fields.
 
-Apply valid decisions in deterministic event order, following same-key supersede and
-revoke edges. If several non-superseding selections remain effective for one register,
-the register is contested. A client MUST NOT silently choose plurality as the winner.
+Derive current heads from the causal, same-key supersede and revoke edges, not timestamp
+order. If several non-superseding selections remain effective for one register, the
+register is contested. A client MUST NOT silently choose by timestamp, event id, arrival
+order, or plurality.
+
+The projection consists of a whole-card baseline, if any, overlaid by the current head
+for each field register. A contested register has no single protocol-selected value.
+Clients MAY collapse identical displayed bytes, but MUST retain the distinct provenance
+heads because matching values may carry different sources and credit histories.
 
 The projection is the map of effective register values. It is not stored in `30829` and
 is not itself proof.
@@ -250,5 +293,5 @@ cannot derive as unsupported rather than reinterpret it using older live-consent
 
 Before promotion beyond draft, this document still needs final names and marker positions
 for `context`, `slot`, `scope`, `value`, `snapshot`, source, credit, field provenance,
-supersede, and revoke. The semantics above are intentionally named before those spellings
-are frozen.
+field-scoped predecessor heads, supersede, and revoke. The semantics above are intentionally
+named before those spellings are frozen.
