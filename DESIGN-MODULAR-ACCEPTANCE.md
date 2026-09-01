@@ -144,7 +144,7 @@ only equality inside one notary context.
 
 ## Candidate wire shape
 
-This is a sketch to test semantics, not settled tag grammar:
+The smallest grammar uses the verified source snapshot as the only value store:
 
 ```json
 {
@@ -153,26 +153,26 @@ This is a sketch to test semantics, not settled tag grammar:
   "tags": [
     ["a", "30829:<notary-pubkey>:hcr2001", "", "context"],
     ["slot", "proposition-number-assigned"],
-    ["scope", "tag:event_date"],
-    ["value", "tag:event_date", "[[\"event_date\",\"2026-07-01\"]]"],
-    ["a", "30828:<source-pubkey>:proposition-number-assigned", "", "source"],
-    ["e", "<source-event-id>", "", "source"]
+    ["e", "<source-event-id>", "", "source"],
+    ["snapshot", "<canonical complete signed 30828 JSON>"],
+    ["select", "tag:event_date"],
+    ["select", "tag:g"]
   ]
 }
 ```
 
 The notary context is explicit because one key may own several notaries. The slot is
-explicit because the source is optional and because several sources may contain the
-same value.
+explicit because several sources may use the same `d` or contain the same value. The
+source coordinate is derived from the verified snapshot's pubkey and `d`.
 
 ### Field keys
 
-Two generic shapes are enough:
+Two selector shapes are enough:
 
 - `content` for the event's `content` string;
 - `tag:<name>` for all card tags whose first element is `<name>`.
 
-A tag-field value is the ordered list of every matching tag, encoded as compact JSON.
+A tag-field value is the ordered list of every matching tag in the snapshot.
 This preserves repeated tags, extra elements, duplicates, and order. It makes all
 geohash prefix rungs one block rather than allowing a projection to accidentally mix
 rungs from different proposals.
@@ -180,25 +180,22 @@ rungs from different proposals.
 Examples:
 
 ```json
-["scope", "tag:g"],
-["value", "tag:g", "[[\"g\",\"xn76urx6\"],[\"g\",\"xn76\"],[\"g\",\"xn7\"]]"]
+["select", "tag:g"]
 ```
 
 ```json
-["scope", "tag:event_time"],
-["value", "tag:event_time", "[]"]
+["select", "tag:event_time"]
 ```
 
 The second example explicitly selects absence. This differs from having no decision
 about `event_time`.
 
-For `scope: content`, the act's `content` is the copied value. Explicit scope allows an
-empty content string to be selected without confusing it with an out-of-scope field.
+For `select:content`, the value is the snapshot's exact content string, including empty.
+The act's own content remains empty so the protocol has only one value channel.
 
-The exact encoding still needs a formal canonicalization rule. It should operate on
-decoded Nostr strings and UTF-8, not on incidental JSON escape spelling received from a
-relay. Preserving tag order is the least opinionated baseline: reordering produces a
-different block even when a client believes the tags are semantically equivalent.
+The snapshot encoding still needs a formal canonicalization rule. Field equality
+operates on decoded Nostr strings and ordered tag arrays, not incidental relay JSON
+escape spelling.
 
 ### Core selectable fields
 
@@ -218,9 +215,8 @@ decision references are not partial-selection blocks. A whole-card envelope pres
 them, but a partial act does not transplant them. A future specification may define
 additional blocks; clients do not infer them merely from unfamiliar tag names.
 
-For migration, a new text-field act can also carry the existing native `title` or
-`summary` copy, and content remains in event `content`. Old readers then safely see the
-positive text acceptance while ignoring the contextual field projection.
+There are no separate `scope` and `value` tags. Repeating `select` names blocks already
+preserved by the verified source envelope.
 
 ## Selection and provenance are different claims
 
@@ -255,11 +251,10 @@ For an act to affect a notary projection:
 
 - it must name exactly one `30829` context and the act signer must be the pubkey in
   that coordinate;
-- it must name exactly one slot, one source event, and one or more non-duplicated field
-  scopes with well-formed copied values;
-- a `supersede` or `revoke` target must be signed by the same key;
-- a supersede used to change a register must point to an act for the same notary,
-  slot, and field.
+- it must name exactly one slot, one source event, one verified complete source snapshot,
+  and either `select:card` or one or more distinct allowed selectors;
+- a `revoke` target must be signed by the same key, share context and slot, and sort
+  before the revoke in the deterministic act order.
 
 An act by another key can still be displayed as voice, but it cannot change that
 notary's projection. Source availability, candidate-chain reachability, and optional
@@ -274,16 +269,11 @@ The conceptual state is one independent register for every:
 (notary coordinate, slot d, field key)
 ```
 
-A field-selection act sets one register. A later selection should supersede the prior
-current act for that register. A revoke clears the selected act without resurrecting an
-older superseded value. Reversion is explicit: the notary signs a new selection of the
-old bytes.
-
-If incomplete or malformed history leaves several unsuperseded acts in one register,
-the projection is contested. A client must retain that fact rather than silently call
-plurality or recency the protocol winner. A deterministic display fallback may be
-needed for interoperability, but it must be labeled as client behavior and must not
-erase the competing signed positions.
+Valid acts from the one context key are folded by `(created_at, event id)`. A whole-card
+act installs a fresh baseline and clears prior overlays. A partial act changes only its
+named registers. A revoke unsets only registers still sourced from its target and never
+resurrects an older value. Same-key races remain visible history, but deterministic
+ordering produces one projection rather than protocol-level contested heads.
 
 The notary's projection is the map of selected field blocks. It may combine a title
 from one card, content from another, and a date from a third. That exact combination may
@@ -387,7 +377,7 @@ are inspected once. Act-id provenance edges are hashes and do not create coordin
 | Date, offset time, and geohash conflict | Preserve every signed block and show a compatibility warning; do not silently normalize or invalidate. |
 | Upstream notary withdraws a value | Downstream selection survives; its provenance is shown as later withdrawn upstream. |
 | Notary wants to follow upstream live | Its client observes upstream changes and signs downstream replacements; no `auto` wire mode is needed. |
-| Several current acts remain for one register | Show a contested notary position; do not silently use plurality. |
+| Same-key acts race for one register | Fold by `(created_at, event id)`, retain both in history, and let the notary clarify with another act if needed. |
 
 ## Migration from the present drafts
 
@@ -398,9 +388,10 @@ must not silently reinterpret them as modular notary projections.
 A migration can proceed as follows:
 
 1. New readers continue displaying legacy acts as historical card-scoped acceptance.
-2. New writers create one contextual act per selected field.
-3. For title, summary, and content, writers also preserve the existing copy shapes where
-   possible so older readers safely under-read rather than misread.
+2. New writers create one contextual act per exact source card, selecting one or more
+   blocks from its verified embedded snapshot.
+3. Older readers ignore the new shape rather than reading a second, potentially
+   contradictory value channel.
 4. A notary client may offer its operator suggested new acts based on current legacy
    acceptances, but the operator signs the contextual projection explicitly.
 5. Only after the contextual model is stable should the normative drafts remove
@@ -412,20 +403,13 @@ A migration can proceed as follows:
 The lab direction is coherent, but these details require deliberate choices before a
 NIP rewrite:
 
-1. Final names and marker positions for context, slot, scope, value, source, and credit.
-2. Exact canonical encoding for content and ordered tag blocks.
-3. Final encoding for field-to-predecessor edges when one act selects several fields
-   whose registers have different current heads.
-4. Whether a register may intentionally retain several heads after a fork, beyond
-   displaying them as contested until a resolving act cites them all.
-5. How clients display explicit selected absence versus an unset register.
-6. How a source reference to an upstream `8828` is distinguished from a card source.
-7. Whether mismatched provenance remains a selected but explicitly suspect notary
-   statement, as recommended here, or is excluded from projection. Excluding it gives a
-   source continuing power over the notary's state.
-8. Key rotation and succession for notaries; the present model leaves a new key with an
+1. Confirm final names and marker positions for context, slot, snapshot, select, source,
+   credit, and revoke.
+2. Exact canonical serialization of the complete signed snapshot.
+3. How clients display explicit selected absence versus an unset register.
+4. Key rotation and succession for notaries; the present model leaves a new key with an
    empty ledger.
-9. Bounded discovery guidance for deep or wide notary graphs.
+5. Bounded discovery guidance for deep or wide notary graphs.
 
 ## Recommended baseline
 
