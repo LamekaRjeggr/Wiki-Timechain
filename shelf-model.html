@@ -25,7 +25,7 @@ h1{font-size:22px;margin:0 0 5px}h2{font-size:13px;text-transform:uppercase;lett
 .empty{color:var(--muted);padding:15px 0}.section-actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0}
 .signal{border-left:3px solid var(--cyan)}.cluster{display:grid;grid-template-columns:92px 1fr auto;gap:8px;padding:5px 0;border-bottom:1px solid #20232a}.count{color:var(--cyan);font:12px ui-monospace,monospace}
 .note{font-size:12px;color:var(--muted);margin-top:8px}.warning{color:#ffc09d}.source{font-size:11px;color:var(--muted);margin-top:3px}
-.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 10px 16px}.step{border:1px solid var(--line);background:var(--panel);padding:9px}.step b{color:var(--blue);margin-right:5px}.synth{border:1px solid var(--cyan);background:#0e171a;padding:10px;margin:9px 0}.synth .field{grid-template-columns:92px minmax(0,1fr) auto}
+.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 10px 16px}.step{border:1px solid var(--line);background:var(--panel);padding:9px}.step b{color:var(--blue);margin-right:5px}.synth{border:1px solid var(--cyan);background:#0e171a;padding:10px;margin:9px 0}.synth .field{grid-template-columns:92px minmax(0,1fr) auto}.path{border:1px solid var(--line);padding:9px;margin:9px 0;background:#12141a}.path strong{display:block;margin-bottom:3px}.path.default{border-color:var(--blue)}
 footer{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:20px}.tape,.wire{border:1px solid var(--line);background:var(--panel);padding:11px;min-height:180px}
 .tape-head{display:flex;justify-content:space-between;align-items:center}.ticks{display:flex;gap:3px;align-items:end;margin:9px 0;min-height:25px}.tick{width:12px;height:15px;border:1px solid var(--gold);cursor:pointer}.tick.card{border-color:var(--blue)}.tick.cfg{border-color:var(--muted)}.tick.at{height:25px;background:var(--text);border-color:var(--text)}.tick.future{opacity:.25}
 .event{font:11px/1.55 ui-monospace,monospace;white-space:pre-wrap;margin:7px 0}.event strong{font-family:system-ui,sans-serif;font-size:12px}.legend{display:flex;gap:13px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:15px}.legend b{color:var(--text)}
@@ -37,15 +37,15 @@ footer{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:20px}.t
 <header>
   <div>
     <h1>Fields are the blocks · signed acts assemble the timeline</h1>
-    <div class="lede">30828 cards submit candidate bundles. Each 8828 selects one exact field block in one notary slot. Matching values create a visible signal, never an automatic winner. A downstream notary signs its own choices.</div>
+    <div class="lede">30828 cards submit candidate bundles. A notary can accept a whole card unchanged, revise one, or assemble exact field blocks. Matching values create a visible signal, never an automatic winner. A downstream notary signs its own choices.</div>
   </div>
   <div class="toolbar"><button data-action="back">◀</button><span id="cursor" class="mono sub"></span><button data-action="forward">▶</button><button data-action="reset">Reset</button></div>
 </header>
 
 <div class="guide">
-  <div class="step"><b>1</b> Pick exact field values for Notary A. Mix cards if that reads best.</div>
-  <div class="step"><b>2</b> Publish A’s assembled projection as one optional 30828 snapshot.</div>
-  <div class="step"><b>3</b> Main inspects that card and signs its own independent field choices.</div>
+  <div class="step"><b>1</b> Usually, pass one complete card unchanged with a single card-scoped acceptance.</div>
+  <div class="step"><b>2</b> If needed, revise one card or open advanced field assembly.</div>
+  <div class="step"><b>3</b> Main sees the accepted bundle but still makes its own independent decision.</div>
 </div>
 
 <div class="grid">
@@ -94,7 +94,7 @@ const FIELDS=[
   {key:'g',label:'g · geohash'}
 ];
 const initial={
-  nextCard:4,nextEvent:4,nextAct:1,nextSynth:1,linked:true,synths:[],
+  nextCard:4,nextEvent:4,nextAct:1,nextSynth:1,linked:true,synths:[],passed:[],
   cards:[
     {id:'c1',event:'e1',d:'bridge-vote',author:'Alice',pk:'pk_alice',credit:true,available:true,
       title:'Council approves river bridge',summary:'The council approved construction of a new river bridge.',
@@ -137,6 +137,17 @@ function selectCommunity(cardId,field){
   const wire=wireSelect('community',c,field,c[field],null)+(old?'\n  e: '+old.act+' · supersede':'');
   push(s,'Curator A selects '+field+' from '+c.author,wire,'act');
 }
+function passFull(cardId){
+  const s=clone(state()),c=s.cards.find(function(x){return x.id===cardId});if(!c||!c.available)return;
+  const act='act'+s.nextAct++,fields={};
+  FIELDS.forEach(function(f){fields[f.key]=clone(c[f.key]);s.community[f.key]={value:clone(c[f.key]),act:act,sourceEvent:c.event,sourceCard:c.id,sourceAuthor:c.author,credit:c.credit,status:'verified · whole-card acceptance'}});
+  const sources={};FIELDS.forEach(function(f){sources[f.key]=act});
+  s.passed.push({id:'p'+act,event:c.event,d:c.d,pk:c.pk,author:c.author,credit:c.credit,fields:fields,sources:sources,sourceAct:act,order:s.events.length+1});
+  const lines=['kind 8828 · id '+act+' · pk pk_a','  a: 30829:pk_a:bridge-record · context','  scope: card','  a: 30828:'+c.pk+':'+c.d+' · source','  e: '+c.event+' · source','  snapshot: all signed card fields'];
+  if(c.credit)lines.push('  p: '+c.pk+' · optional credit');
+  lines.push('One act accepts and preserves the bundle unchanged. Main discovers the original 30828 through A; no replacement card is invented.');
+  push(s,'Notary A passes '+c.author+'’s complete card unchanged',lines.join('\n'),'act');
+}
 function clearField(where,field){
   const s=clone(state()),old=s[where][field];if(!old)return;
   delete s[where][field];const act='act'+s.nextAct++;
@@ -145,18 +156,24 @@ function clearField(where,field){
   push(s,who+' clears '+field,wire,'act');
 }
 function selectMain(field,synthId){
-  const s=clone(state()),synth=synthId?s.synths.find(function(x){return x.id===synthId}):null,src=synth?synth.fields[field]:s.community[field];if(src===undefined||src===null)return;
+  const s=clone(state()),synth=synthId?s.synths.concat(s.passed).find(function(x){return x.id===synthId}):null,src=synth?synth.fields[field]:s.community[field];if(src===undefined||src===null)return;
   const value=synth?src:src.value,old=s.main[field],act='act'+s.nextAct++;
   s.main[field]={value:clone(value),act:act,sourceAct:synth?synth.event:src.act,sourceAuthor:'Notary A',status:synth?'verified 30828 snapshot':'verified upstream act'};
-  const fake=synth?{pk:'pk_a',d:synth.d,event:synth.event,credit:false}:{pk:'pk_a',d:'bridge-vote',event:src.act,credit:false};
+  const fake=synth?{pk:synth.pk||'pk_a',d:synth.d,event:synth.event,credit:false}:{pk:'pk_a',d:'bridge-vote',event:src.act,credit:false};
   const wire=wireSelect('main',fake,field,value,synth?null:src.act)+(old?'\n  e: '+old.act+' · supersede':'');
   push(s,'Main independently selects '+field+' from '+(synth?'A’s assimilated card':'Notary A’s act'),wire,'act');
+}
+function acceptFullAtMain(sourceId){
+  const s=clone(state()),bundle=s.synths.concat(s.passed).find(function(x){return x.id===sourceId});if(!bundle)return;
+  const act='act'+s.nextAct++;
+  FIELDS.filter(function(f){return Object.prototype.hasOwnProperty.call(bundle.fields,f.key)}).forEach(function(f){s.main[f.key]={value:clone(bundle.fields[f.key]),act:act,sourceAct:bundle.event,sourceAuthor:'Notary A',status:'verified · whole-card acceptance'}});
+  push(s,'Main accepts the complete card unchanged','kind 8828 · id '+act+' · pk pk_main\n  a: 30829:pk_main:main · context\n  scope: card\n  e: '+bundle.event+' · accepted bundle\n  snapshot: all signed card fields\nOne downstream decision; no field-by-field clicks required.','act');
 }
 function assimilate(){
   const s=clone(state()),keys=Object.keys(s.community);if(!keys.length)return;
   const n=s.nextSynth++,eid='e'+(++s.nextEvent),fields={},sources={};
   keys.forEach(function(k){fields[k]=clone(s.community[k].value);sources[k]=s.community[k].act});
-  const synth={id:'s'+n,event:eid,d:'bridge-vote',fields:fields,sources:sources,createdFrom:keys};
+  const synth={id:'s'+n,event:eid,d:'bridge-vote',pk:'pk_a',fields:fields,sources:sources,createdFrom:keys,order:s.events.length+1};
   s.synths.push(synth);
   const lines=['kind 30828 · id '+eid+' · pk pk_a','  d: bridge-vote','  a: 30829:pk_main:main   ← submitted to Main'];
   keys.forEach(function(k){lines.push('  '+k+': '+JSON.stringify(fields[k]));lines.push('  e: '+sources[k]+' · source · '+k)});
@@ -196,11 +213,11 @@ function clusters(cards,field){
 function candidateHTML(c){
   const selected=state().community;
   let fields=FIELDS.map(function(f){const used=selected[f.key]&&same(selected[f.key].value,c[f.key]);return '<div class="field"><div class="field-name">'+esc(f.label)+'</div><div class="value">'+esc(valText(c[f.key]))+'</div><div class="actions"><button class="'+(used?'gold':'primary')+'" data-action="select" data-card="'+c.id+'" data-field="'+f.key+'">'+(used?'✓ A uses this':'use for A')+'</button></div></div>'}).join('');
-  return '<article class="candidate"><div class="name">'+esc(c.title)+' <span class="chip blue">'+esc(c.author)+'</span></div><div class="sub mono">30828:'+esc(c.pk)+':'+esc(c.d)+' · '+esc(c.event)+'</div><div class="chips"><span class="chip">'+(c.credit?'optional p credit':'no public p credit')+'</span></div><div class="fields">'+fields+'</div><div class="section-actions"><button data-action="revise" data-card="'+c.id+'" data-field="event_date">revise date</button><button data-action="revise" data-card="'+c.id+'" data-field="content">revise content</button><button data-action="credit" data-card="'+c.id+'">'+(c.credit?'request no credit':'allow credit')+'</button><button data-action="delete" data-card="'+c.id+'">delete source</button></div></article>';
+  return '<article class="candidate"><div class="name">'+esc(c.title)+' <span class="chip blue">'+esc(c.author)+'</span></div><div class="sub mono">30828:'+esc(c.pk)+':'+esc(c.d)+' · '+esc(c.event)+'</div><div class="chips"><span class="chip">'+(c.credit?'optional p credit':'no public p credit')+'</span></div><div class="section-actions"><button class="primary" data-action="passfull" data-card="'+c.id+'">Pass full card unchanged →</button></div><div class="fields">'+fields+'</div><div class="section-actions"><button data-action="revise" data-card="'+c.id+'" data-field="event_date">revise date</button><button data-action="revise" data-card="'+c.id+'" data-field="content">revise content</button><button data-action="credit" data-card="'+c.id+'">'+(c.credit?'request no credit':'allow credit')+'</button><button data-action="delete" data-card="'+c.id+'">delete source</button></div></article>';
 }
-function synthHTML(x){
+function synthHTML(x,passed){
   const rows=FIELDS.filter(function(f){return Object.prototype.hasOwnProperty.call(x.fields,f.key)}).map(function(f){return '<div class="field"><div class="field-name">'+esc(f.label)+'</div><div><div class="value">'+esc(valText(x.fields[f.key]))+'</div><div class="source">copied from '+esc(x.sources[f.key])+'</div></div><div class="actions"><button class="gold" data-action="mainselect" data-field="'+f.key+'" data-synth="'+x.id+'">Main · use</button></div></div>'}).join('');
-  return '<div class="synth"><div class="name">Assimilated candidate <span class="chip cyan">30828 · '+esc(x.event)+'</span></div><div class="sub mono">30828:pk_a:'+esc(x.d)+' → 30829:pk_main:main</div><div class="fields">'+rows+'</div><div class="note">This is A’s signed composite snapshot. It is a candidate for Main, not an automatic downstream decision.</div></div>';
+  return '<div class="synth"><div class="name">'+(passed?'Passed unchanged':'Assembled candidate')+' <span class="chip cyan">30828 · '+esc(x.event)+'</span></div><div class="sub mono">'+(passed?'original card · accepted by '+esc(x.sourceAct):'30828:pk_a:'+esc(x.d))+' → 30829:pk_main:main</div><div class="section-actions"><button class="primary" data-action="acceptfull" data-source="'+esc(x.id)+'">Main · accept full card</button></div><div class="fields">'+rows+'</div><div class="note">'+(passed?'A accepted the original bundle without revising it. The card keeps its author and address.':'This is A’s signed composite snapshot. It is a candidate for Main, not an automatic downstream decision.')+'</div></div>';
 }
 function projectionHTML(where){
   const s=state(),p=s[where],upstream=where==='main';
@@ -217,9 +234,10 @@ function render(){
   const live=s.cards.filter(function(c){return c.available});
   document.getElementById('candidates').innerHTML='<div class="notary"><div><div class="name">Event slot <code>bridge-vote</code></div><div class="sub">Same d inside Notary A’s context · '+live.length+' visible candidates</div></div><button class="primary" data-action="addmatch">add matching card</button></div>'+live.map(candidateHTML).join('');
   const chosen=Object.keys(s.community).length;
-  document.getElementById('community').innerHTML='<div class="notary"><div><div class="name">Notary A <span class="chip gold">30829</span></div><div class="sub">No passes mode · acts are the ledger</div></div><button data-action="link">'+(s.linked?'withdraw pointer to Main':'point at Main')+'</button></div><div class="signal"><div class="name">Observable convergence · advisory only</div>'+signalsHTML()+'<div class="note">Counts group exact candidate blocks in this local view. Free keys can corrupt them. Nothing below changes until Curator A signs an 8828.</div></div>'+projectionHTML('community')+'<div class="section-actions"><button class="primary" data-action="assimilate" '+(chosen?'':'disabled')+'>Publish '+chosen+' selected field'+(chosen===1?'':'s')+' as one 30828 → Main</button></div><div class="note">Optional materialization: this does not replace the 8828 field ledger.</div>';
+  document.getElementById('community').innerHTML='<div class="notary"><div><div class="name">Notary A <span class="chip gold">30829</span></div><div class="sub">Signed acts are the ledger</div></div><button data-action="link">'+(s.linked?'withdraw pointer to Main':'point at Main')+'</button></div><div class="path default"><strong>Default · pass a full card</strong><span class="sub">Use the prominent button on a candidate. One card-scoped 8828 preserves the complete bundle unchanged.</span></div><div class="signal"><div class="name">Advanced · observable convergence</div>'+signalsHTML()+'<div class="note">Counts group exact candidate blocks in this local view. Nothing changes until A signs an act.</div></div>'+projectionHTML('community')+'<div class="section-actions"><button data-action="assimilate" '+(chosen?'':'disabled')+'>Assemble '+chosen+' selected field'+(chosen===1?'':'s')+' into a new 30828 → Main</button></div><div class="note">Revision and assembly both produce ordinary 30828 cards. Their difference is derived from what they inherit and change—not from a special event flag.</div>';
   const compat=s.main.event_date&&s.main.event_time&&String(s.main.event_time.value).indexOf('-07:00')<0;
-  document.getElementById('main').innerHTML='<div class="notary"><div><div class="name">Main <span class="chip gold">30829</span></div><div class="sub">'+(s.linked?'Notary A is a discovery source':'No current pointer; prior choices remain')+'</div></div><span class="chip '+(s.linked?'cyan':'warn')+'">'+(s.linked?'linked':'unlinked')+'</span></div>'+(s.synths.length?synthHTML(s.synths[s.synths.length-1]):'<div class="empty">No assimilated 30828 yet. A can publish its selected blocks here as one candidate.</div>')+'<h2 style="margin-top:14px">Main’s selected projection</h2>'+projectionHTML('main')+(compat?'<div class="note warning">Compatibility warning: selected date/time blocks may not describe the same civil frame. The signed values remain visible.</div>':'')+'<div class="note">Main may select from A’s materialized 30828. Its choices remain independent if A later changes the source acts or publishes another snapshot.</div>';
+  const incoming=s.synths.concat(s.passed).sort(function(a,b){return a.order-b.order}),latest=incoming[incoming.length-1];
+  document.getElementById('main').innerHTML='<div class="notary"><div><div class="name">Main <span class="chip gold">30829</span></div><div class="sub">'+(s.linked?'Notary A is a discovery source':'No current pointer; prior choices remain')+'</div></div><span class="chip '+(s.linked?'cyan':'warn')+'">'+(s.linked?'linked':'unlinked')+'</span></div>'+(latest?synthHTML(latest,latest.id.charAt(0)==='p'):'<div class="empty">Nothing passed yet. A can accept an original card unchanged, or publish an assembled candidate.</div>')+'<h2 style="margin-top:14px">Main’s selected projection</h2>'+projectionHTML('main')+(compat?'<div class="note warning">Compatibility warning: selected date/time blocks may not describe the same civil frame. The signed values remain visible.</div>':'')+'<div class="note">Main can accept the complete bundle in one act or inspect and select fields. Its choice remains independent.</div>';
   document.getElementById('ticks').innerHTML=history.map(function(h,i){const e=h.events[h.events.length-1],k=e?e.kind:'cfg';return '<div class="tick '+esc(k)+(i===cursor?' at':'')+(i>cursor?' future':'')+'" data-action="goto" data-index="'+i+'" title="'+esc(e?e.head:'start')+'"></div>'}).join('');
   const recent=s.events.slice(-6).reverse();
   document.getElementById('events').innerHTML=recent.length?recent.map(function(e){return '<div class="event"><strong>'+esc(e.head)+'</strong>\n'+esc(e.wire)+'</div>'}).join(''):'<div class="empty">Start by selecting one field. Every action appends a simulated signed event.</div>';
@@ -228,9 +246,11 @@ function render(){
 document.addEventListener('click',function(e){
   const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;
   if(a==='select')selectCommunity(b.dataset.card,b.dataset.field);
+  else if(a==='passfull')passFull(b.dataset.card);
   else if(a==='clear')clearField(b.dataset.where,b.dataset.field);
   else if(a==='mainselect')selectMain(b.dataset.field,b.dataset.synth);
   else if(a==='assimilate')assimilate();
+  else if(a==='acceptfull')acceptFullAtMain(b.dataset.source);
   else if(a==='revise')revise(b.dataset.card,b.dataset.field);
   else if(a==='delete')removeCard(b.dataset.card);
   else if(a==='credit')toggleCredit(b.dataset.card);

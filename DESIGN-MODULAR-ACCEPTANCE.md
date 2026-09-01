@@ -73,12 +73,29 @@ field matching:
 A self-declared hint could be shown by a client, but it would not control derivation.
 Exact matching proves sameness, not who originated a claim or whether copying occurred.
 
-### `8828`: append-only field decision
+### `8828`: append-only acceptance decision
 
-An act is the notary's ledger entry. The safest baseline is **one field per act**. This
-costs more events, but it keeps selection, supersession, revocation, validation, and
-provenance unambiguous. It also preserves the current whole-act meaning of `supersede`
-and `revoke` rather than inventing a field-scoped pointer language.
+An act is the notary's ledger entry. It has two useful scopes:
+
+- **card scope** accepts one complete `30828` unchanged and snapshots its signed field
+  bytes in the act. This is the simple, default path;
+- **field scope** accepts one exact field block. This is the advanced path used to
+  revise a projection or assemble one from several sources.
+
+A card-scoped act atomically sets every field register represented by the card. A later
+field-scoped act may replace one of those registers without disturbing the others. If a
+card-scoped act is revoked, only registers still sourced from that act are cleared; a
+later explicit field decision is not rolled back.
+
+The full snapshot is important. A pointer alone would make the accepted history depend
+on the original card remaining available. Field scope costs more events, but keeps
+selection, supersession, revocation, validation, and provenance unambiguous.
+
+In the user interface these form a progressive path: pass the whole card, revise when a
+small number of fields need judgment, then use modular assembly when several candidate
+values need to be reconciled. Revision and assembly are not distinct protocol event
+types. Both may produce an ordinary `30828`; clients infer the description from whether
+its blocks predominantly derive from one source or several.
 
 ### `30829`: identity and discovery
 
