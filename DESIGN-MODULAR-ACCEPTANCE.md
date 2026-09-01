@@ -100,7 +100,10 @@ its blocks predominantly derive from one source or several.
 ### `30829`: identity and discovery
 
 A notary event should carry stable identity and discovery information: `d`, title,
-description, corpus topics, a default geohash if retained, and links to other notaries.
+description, corpus topics, a default geohash if retained, and zero or more links to
+other notaries. Those links form an unordered source set. Tag order, graph depth, number
+of routes, and position in a client must not imply rank, delegation, or authority. Sources
+may use different `d` values; sharing a name is not a protocol requirement.
 
 It should not carry the acceptance ledger. A replaceable event is a poor historical
 record: an edit rewrites apparent state, old versions may disappear, and every field
@@ -335,9 +338,11 @@ Therefore a client must not translate plurality into `accepted`, `winner`, `true
 it, or treat it as evidence of manipulation. The signed act—not the signal—is the
 decision.
 
-## Stacked notaries
+## Notary source graphs
 
-A `30829` link means "look here for candidate material." It does not mean:
+Each `30829` `a` link means "look here for candidate material." A notary may name more
+than one such source, and clients inspect their union subject to explicit traversal
+budgets. A link does not mean:
 
 - accept everything the other notary accepts;
 - delegate future decisions;
@@ -355,14 +360,15 @@ supersession, or revocation changes the displayed provenance context, not downst
 validity. A downstream client that wishes to follow upstream changes can automatically
 sign new acts. That is local automation expressed through the same explicit wire events.
 
-Chain reachability should not be a historical validity requirement. `30829` is
+Graph reachability should not be a historical validity requirement. `30829` is
 replaceable, old link versions may be unavailable, and signer-provided timestamps do
 not prove that a path existed when an act was signed. Chaining is discovery; the
 downstream signature is authority for the downstream lens.
 
-Clients walking notary links must keep a visited-coordinate set and may impose traversal
-depth, event, relay, and time budgets. Incomplete traversal is expected and should be
-visible. Act-id provenance edges are hashes and do not create coordinate loops.
+Clients walking notary links must keep a visited-coordinate set per traversal branch and
+may impose depth, event, relay, width, and time budgets. Incomplete traversal is expected
+and should be visible. Convergent routes do not create extra weight; duplicate coordinates
+are inspected once. Act-id provenance edges are hashes and do not create coordinate loops.
 
 ## Scenario table
 

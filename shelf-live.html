@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Modular acceptance · live relay shelf</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c0e;--panel:#101216;--line:#292d35;--muted:#979ca8;--text:#edf0f5;--blue:#59aaff;--gold:#ffb52e;--cyan:#72d8e8;--bad:#ff995c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}.app{padding:24px 28px 48px;min-width:1100px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}h1{margin:0 0 5px;font-size:22px}h2{margin:0;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.lede,.sub,.source{color:var(--muted)}.sub{font-size:12px}.mono,code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.toolbar{display:flex;gap:6px}.toolbar a{border:1px solid #454b57;color:var(--text);padding:5px 9px;text-decoration:none;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}.card,.act,.notary,.empty,.raw{background:var(--panel);border:1px solid var(--line);padding:10px;margin:9px 0}.card{border-left:3px solid var(--blue)}.act{border-left:3px solid var(--gold)}.synth{border-color:var(--cyan);border-left-color:var(--cyan)}.name{font-weight:650}.chip{display:inline-block;border:1px solid var(--line);padding:1px 5px;margin:3px 3px 0 0;font:11px ui-monospace,monospace;color:var(--muted)}.chip.gold{border-color:var(--gold);color:#ffd17b}.chip.cyan{border-color:var(--cyan);color:var(--cyan)}.chip.blue{border-color:var(--blue);color:#9dceff}.field{display:grid;grid-template-columns:82px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid #20232a}.key{color:var(--muted);font:11px ui-monospace,monospace}.value{white-space:pre-wrap;overflow-wrap:anywhere}.source{font-size:11px;margin-top:5px}.notary .sources{margin-top:7px}.raw{margin-top:18px}.raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:330px;overflow:auto}.pick{cursor:pointer}.pick:hover{border-color:var(--text)}iframe{display:none}@media(max-width:900px){.app{min-width:0}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><div><h1>Fields are the blocks · live signed evidence</h1><div class="lede">The shelf and timeline clients read the same local relay events. 30829 references are unordered discovery sources; only a notary’s own 8828 acts decide its view.</div></div><div class="toolbar"><a href="shelf-model.html">Demo lab</a><a id="timeline" href="modular.html">Timeline client</a></div></header>
+  <div id="status" class="notary">Waiting for the verified relay view…</div>
+  <div class="grid">
+    <section><h2>Candidate cards · 30828</h2><div id="cards"></div></section>
+    <section><h2>Notary A · signed selections</h2><div id="a"></div></section>
+    <section><h2>Main · independent selections</h2><div id="main"></div></section>
+  </div>
+  <section class="raw"><b>Exact selected event</b><pre id="raw">Click a card or act to inspect the exact verified relay event.</pre></section>
+</div>
+<iframe id="engine" title="verified relay engine"></iframe>
+<script>
+"use strict";
+const q = new URLSearchParams(location.search);
+const C = q.get("c") || "us-israel-defense-tech-2026-lab";
+const APK = q.get("a") || "93a2e6405477aec127347a59e30b3c93ba49e9082e375ab328e6c18de3cd540e";
+const MPK = q.get("m") || "e27d664e26a7a80f388926ad2828344fd962dee011f61f024d4add9a5fdcd89a";
+const ACT=8828, CARD=30828, NOTARY=30829;
+const A=`${NOTARY}:${APK}:${C}`, MAIN=`${NOTARY}:${MPK}:${C}`;
+const engine=document.getElementById("engine");
+engine.src=`modular.html?c=${encodeURIComponent(C)}&k=${APK.slice(0,12)}`;
+document.getElementById("timeline").href=`modular.html?c=${encodeURIComponent(C)}&k=${MPK.slice(0,12)}`;
+const tag=(e,k)=>(e.tags.find(t=>t[0]===k)||[])[1]||"";
+const tags=(e,k)=>e.tags.filter(t=>t[0]===k);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+const short=s=>String(s||"").slice(0,12);
+function sources(N){return [...new Set(tags(N,"a").map(t=>t[1]).filter(x=>x.startsWith("30829:")))];}
+function deadActs(acts){
+  const byId=new Map(acts.map(x=>[x.id,x])),dead=new Set;
+  for(const x of acts)for(const t of x.tags)if(t[0]==="e"&&(t[3]==="revoke"||t[3]==="supersede")){
+    const old=byId.get(t[1]);if(old&&old.pubkey===x.pubkey)dead.add(old.id);
+  }
+  return dead;
+}
+function fields(e){
+  const out=[];for(const k of ["title","summary","event_date","event_time"]){const v=tag(e,k);if(v)out.push([k,v]);}
+  for(const g of tags(e,"g"))out.push(["g",g[1]]);if(e.content)out.push(["content",e.content]);return out;
+}
+function fieldRows(e){return fields(e).map(([k,v])=>`<div class="field"><div class="key">${esc(k)}</div><div class="value">${esc(v)}</div></div>`).join("");}
+function rawPick(e){return `data-id="${esc(e.id)}"`;}
+function cardHTML(e){
+  const synth=e.pubkey===APK&&tags(e,"e").some(t=>t[3]==="source");
+  const prov=tags(e,"field_source").map(t=>`${t[1]} ← source ${short(t[2])} via act ${short(t[4])}`).join(" · ");
+  return `<article class="card pick ${synth?"synth":""}" ${rawPick(e)}><div class="name">${esc(tag(e,"title")||tag(e,"d"))}</div><div class="sub mono">${short(e.pubkey)} · ${esc(tag(e,"d"))} · ${short(e.id)}</div><span class="chip blue">30828</span>${synth?'<span class="chip cyan">synthesized</span>':''}${fieldRows(e)}${prov?`<div class="source">${esc(prov)}</div>`:""}</article>`;
+}
+function actFields(e){
+  const scope=tag(e,"scope");if(scope==="card"){
+    try{return fieldRows(JSON.parse(tag(e,"snapshot")));}catch{return '<div class="source">invalid snapshot</div>';}
+  }
+  return fieldRows(e);
+}
+function actHTML(e,dead){
+  const src=tags(e,"e").find(t=>!t[3]);
+  return `<article class="act pick" ${rawPick(e)}><div class="name">${esc(tag(e,"scope")||"legacy field selection")}</div><div class="sub mono">8828 · ${short(e.id)} · slot ${esc(tag(e,"slot"))}</div><span class="chip gold">${dead.has(e.id)?"historical / superseded":"effective"}</span>${actFields(e)}<div class="source">source ${esc(src?short(src[1]):"not disclosed")} · credit ${esc(tag(e,"p")?short(tag(e,"p")):"not public")}</div></article>`;
+}
+function notaryHTML(N,label){
+  if(!N)return `<div class="empty">${label} not loaded</div>`;
+  const ss=sources(N);return `<div class="notary"><div class="name">${esc(tag(N,"title")||label)}</div><div class="sub mono">${esc(NOTARY+":"+short(N.pubkey)+":"+tag(N,"d"))}</div><div class="sources">${ss.length?ss.map(x=>`<span class="chip cyan">source ${esc(short(x.split(":")[1]))}</span>`).join(""):"<span class=\"sub\">no discovery sources</span>"}</div><div class="source">Source chips are an unordered set, not a hierarchy.</div></div>`;
+}
+let last="", all=new Map;
+let actSocket=null;
+function ensureActs(api){
+  if(actSocket)return;
+  actSocket=new WebSocket("ws://127.0.0.1:7777");
+  actSocket.onopen=()=>actSocket.send(JSON.stringify(["REQ","shelf-acts",{kinds:[ACT]}]));
+  actSocket.onmessage=m=>{let x;try{x=JSON.parse(m.data)}catch{return}if(x[0]==="EVENT"&&x[1]==="shelf-acts")api.labAdmitAct(x[2]);};
+}
+function paint(s){
+  all=new Map([...s.events,...s.notaries,...s.acts].map(e=>[e.id,e]));
+  const sig=s.events.map(e=>e.id).concat(s.notaries.map(e=>e.id),s.acts.map(e=>e.id)).sort().join();if(sig===last)return;last=sig;
+  const dead=deadActs(s.acts),AN=s.notaries.find(n=>n.pubkey===APK&&tag(n,"d")===C),MN=s.notaries.find(n=>n.pubkey===MPK&&tag(n,"d")===C);
+  const cards=s.events.filter(e=>e.kind===CARD&&tags(e,"a").some(t=>t[1]===A||t[1]===MAIN));
+  const aa=s.acts.filter(e=>e.kind===ACT&&tag(e,"context")===A),ma=s.acts.filter(e=>e.kind===ACT&&tag(e,"context")===MAIN);
+  document.getElementById("status").innerHTML=`<div><b>Local relay · verified by timeline client</b><div class="sub">${cards.length} current cards · ${aa.length} A acts · ${ma.length} Main acts · ${s.notaries.length} notaries observed</div></div>`;
+  document.getElementById("cards").innerHTML=notaryHTML(AN,"Notary A")+(cards.length?cards.sort((x,y)=>tag(x,"event_date").localeCompare(tag(y,"event_date"))).map(cardHTML).join(""):'<div class="empty">No cards loaded.</div>');
+  document.getElementById("a").innerHTML=notaryHTML(AN,"Notary A")+(aa.length?aa.sort((x,y)=>x.created_at-y.created_at).map(e=>actHTML(e,dead)).join(""):'<div class="empty">No A decisions.</div>');
+  document.getElementById("main").innerHTML=notaryHTML(MN,"Main")+(ma.length?ma.sort((x,y)=>x.created_at-y.created_at).map(e=>actHTML(e,dead)).join(""):'<div class="empty">No Main decisions.</div>');
+}
+document.addEventListener("click",e=>{const p=e.target.closest("[data-id]");if(p&&all.has(p.dataset.id))document.getElementById("raw").textContent=JSON.stringify(all.get(p.dataset.id),null,2);});
+setInterval(()=>{try{const api=engine.contentWindow.__wtc;if(api&&api.labSnapshot){ensureActs(api);paint(api.labSnapshot());}}catch{}},350);
+</script>
+</body>
+</html>

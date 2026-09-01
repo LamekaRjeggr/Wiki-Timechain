@@ -44,7 +44,10 @@ The `lab/modular-acceptance-mock` branch includes a standalone protocol mock at
 http://localhost:8000/shelf-model.html
 ```
 
-It uses simulated events only: nothing is signed or sent to a relay. The exact prior
+The default view uses simulated events only: nothing is signed or sent to a relay. The
+companion `shelf-live.html` view reads the local Colima lab through the verified timeline
+client and renders the same signed 30828/30829/8828 events in the shelf layout; it holds
+no private keys and does not sign. The exact prior
 shelf mock is retained as `shelf-model-original.html` for comparison.
 
 ### Signed protocol back-test
