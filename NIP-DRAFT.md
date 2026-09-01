@@ -96,6 +96,34 @@ disclosure — `title` in a list, `summary` in a preview, `content` on open. A c
 rendering a subset MUST fall back to the fields the card does carry, so that no card
 carrying any text renders blank.
 
+## Modular field blocks
+
+Timeline Acts may select fields from a card without changing the card format. For that
+purpose, a kind `30828` has exactly six core modular field blocks:
+
+| Block | Exact bytes |
+|---|---|
+| `title` | the complete ordered list of every `title` tag |
+| `summary` | the complete ordered list of every `summary` tag |
+| `content` | the exact `content` string |
+| `event_date` | the complete ordered list of every `event_date` tag |
+| `event_time` | the complete ordered list of every `event_time` tag |
+| `g` | the complete ordered list of every geohash `g` tag |
+
+The complete `g` list is one block. A selector MUST NOT mix individual geohash rungs
+from different source cards. An empty list or empty content string is that source card's
+absence of the block; Timeline Acts distinguish selecting that absence from leaving a
+register unchanged.
+
+The following are structural or documentary metadata, not partial-selection blocks:
+`d`, `a`, `published_at`, `t`, and provenance or decision-reference tags. A whole-card
+acceptance preserves them inside the complete signed source envelope, but a partial-card
+selection does not transplant them into another projection.
+
+This block view adds no required tag and changes no existing `30828` serialization.
+Future specifications may define additional selectable blocks; clients MUST NOT infer
+new blocks merely from an unfamiliar tag name.
+
 Filling a card in under its own `d` — adding the `content` a `summary` anticipated —
 is an ordinary replacement per [NIP-01](01.md), not a revision: no `cite` marker is
 involved, because the recorded event never changed. A publisher MUST NOT reuse a `d`

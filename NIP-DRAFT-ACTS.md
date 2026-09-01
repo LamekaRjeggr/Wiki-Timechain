@@ -20,8 +20,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
 - **Card address** — `(author pubkey, card d)`, one author's replaceable card lineage.
 - **Event slot** — `(notary coordinate, card d)`, the subject being decided within one
   notary lens.
-- **Field** — a modular block carried by a card, such as title, summary, content, date,
-  time, location, or geohash.
+- **Field** — one of the six core modular blocks defined by Timeline Cards: `title`,
+  `summary`, `content`, `event_date`, `event_time`, or `g`.
 - **Register** — `(event slot, field)`, equivalently `(notary coordinate, card d, field)`,
   the place where one notary's current field selection is derived.
 - **Whole-card acceptance** — one decision accepting and preserving a complete exact
@@ -135,18 +135,19 @@ register and carries its selected bytes. A field name MUST occur at most once in
 Tag-valued fields preserve the complete ordered list of every source tag with that name;
 content preserves the exact content string. The final compact encoding remains open.
 
-Exact absence, if supported, MUST have an explicit encoding. Selecting an empty block
-is distinct from leaving a register unset, and absence MUST NOT be inferred from a
-missing value.
+Exact absence MUST have an explicit encoding. It is valid only when the exact source
+card lacks that tag block, or has the empty content string for `content`. Selecting an
+empty block is distinct from leaving a register unset, and absence MUST NOT be inferred
+from an omitted scope/value pair.
 
 A partial-card selection overlays only its named registers. Registers not named by the
 act retain their current heads or baseline values. Multi-source synthesis therefore uses
 at least one act per source card, not one act per field.
 
-This draft is intentionally not opinionated about the meaning of fields. Timeline
-clients may recognize title, summary, content, event date, event time, location, and
-geohash, while another corpus may define additional repeatable tag blocks. A scope names
-bytes, not truth.
+This draft is intentionally not opinionated about what selected field bytes mean. A
+scope names bytes, not truth. Unknown and custom tags remain preserved by a whole-card
+baseline but are not partial-selection blocks unless a future specification defines
+their block boundaries.
 
 ### Replace a decision
 
@@ -154,7 +155,7 @@ A new selection identifies, for every register it changes, the prior head or hea
 replaces. Conceptually:
 
 ```json
-["e", "<prior-act-id>", "<field-key>", "supersede"]
+["prev", "<field-key>", "<prior-act-id>"]
 ```
 
 The final encoding for field-to-predecessor edges remains open. The target MUST be signed
@@ -293,5 +294,5 @@ cannot derive as unsupported rather than reinterpret it using older live-consent
 
 Before promotion beyond draft, this document still needs final names and marker positions
 for `context`, `slot`, `scope`, `value`, `snapshot`, source, credit, field provenance,
-field-scoped predecessor heads, supersede, and revoke. The semantics above are intentionally
+field-scoped `prev` heads, supersede, and revoke. The semantics above are intentionally
 named before those spellings are frozen.

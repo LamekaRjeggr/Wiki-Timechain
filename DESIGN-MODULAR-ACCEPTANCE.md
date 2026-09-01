@@ -13,7 +13,7 @@ The project began as a way to record events in the past so people can better
 understand what happened and make decisions in the present and future.
 
 Permissionless publication produces several versions of the same event. One card may
-have the best title, another the best account, and a third the best date or location.
+have the best title, another the best account, and a third the best date or geohash.
 Several independent cards may also contain exactly the same value. A useful timeline
 needs to express a curator's current reading without pretending that popularity,
 recency, or convergence governs the record.
@@ -32,8 +32,8 @@ within an event slot.
 1. **Only a signed act decides.** A notary's projection changes only through a valid
    kind `8828` signed by that notary's key. Matching cards, counts, recency, notary
    declarations, and upstream results are signals or inputs only.
-2. **Acceptance is modular.** Title, summary, content, date, time, geohash, and other
-   fields can be selected independently.
+2. **Acceptance is modular.** The six core card blocks—title, summary, content, event
+   date, event time, and geohash—can be selected independently.
 3. **Bytes identify the value.** Exact copied values are the protocol fact. Semantic
    similarity, normalization, and factual compatibility are client interpretations.
 4. **The act preserves the decision.** A selected value remains readable and selected
@@ -200,9 +200,9 @@ decoded Nostr strings and UTF-8, not on incidental JSON escape spelling received
 relay. Preserving tag order is the least opinionated baseline: reordering produces a
 different block even when a client believes the tags are semantically equivalent.
 
-### Familiar fields without a closed registry
+### Core selectable fields
 
-The first clients will understand at least:
+The card specification defines exactly these six core blocks:
 
 ```text
 tag:title
@@ -213,10 +213,10 @@ tag:event_time
 tag:g
 ```
 
-Location should not be forced into one protocol object. A corpus may use `g`, `L`, `l`,
-`location`, or a later convention, and the generic block shape can preserve each. A
-client may visually group related fields and warn when date, time, and location appear
-incompatible. Such warnings do not invalidate exact signed selections.
+Structural and documentary tags such as `d`, `a`, `published_at`, `t`, provenance, and
+decision references are not partial-selection blocks. A whole-card envelope preserves
+them, but a partial act does not transplant them. A future specification may define
+additional blocks; clients do not infer them merely from unfamiliar tag names.
 
 For migration, a new text-field act can also carry the existing native `title` or
 `summary` copy, and content remains in event `content`. Old readers then safely see the
@@ -418,15 +418,14 @@ NIP rewrite:
    whose registers have different current heads.
 4. Whether a register may intentionally retain several heads after a fork, beyond
    displaying them as contested until a resolving act cites them all.
-5. Whether selected absence is needed for every field and how clients display it.
-6. Which structural tags must be excluded from generic `tag:<name>` selection.
-7. How a source reference to an upstream `8828` is distinguished from a card source.
-8. Whether mismatched provenance remains a selected but explicitly suspect notary
+5. How clients display explicit selected absence versus an unset register.
+6. How a source reference to an upstream `8828` is distinguished from a card source.
+7. Whether mismatched provenance remains a selected but explicitly suspect notary
    statement, as recommended here, or is excluded from projection. Excluding it gives a
    source continuing power over the notary's state.
-9. Key rotation and succession for notaries; the present model leaves a new key with an
+8. Key rotation and succession for notaries; the present model leaves a new key with an
    empty ledger.
-10. Bounded discovery guidance for deep or wide notary graphs.
+9. Bounded discovery guidance for deep or wide notary graphs.
 
 ## Recommended baseline
 
