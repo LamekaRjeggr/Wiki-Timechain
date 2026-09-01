@@ -1,0 +1,445 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #0b0c0e; color: #e9eaee; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    button { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 12px; height: 26px; padding: 0 9px; border: 1.5px solid #42454e; background: #0b0c0e; color: #e9eaee; cursor: pointer; border-radius: 0; white-space: nowrap; }
+    button:hover { border-color: #e9eaee; }
+    button.on { border-color: #4aa3ff; color: #8cc6ff; }
+    .small { font-size: 12px; color: #9296a0; }
+    .col-head { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: #9296a0; padding-bottom: 6px; border-bottom: 1px solid #262930; margin-bottom: 4px; }
+    .ev { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; line-height: 1.5; color: #c9c7c1; white-space: pre-line; background: #101216; border-left: 2px solid #42454e; padding: 6px 10px; }
+    .head { font-size: 13px; font-weight: 600; color: #e9eaee; }
+    .gap { display: flex; align-items: center; justify-content: center; }
+    .tok { border: 1.5px solid #262930; background: #101216; padding: 7px 10px; display: flex; flex-direction: column; gap: 5px; position: relative; }
+    .tok .name { font-size: 14px; font-weight: 600; color: #e9eaee; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .tok.sub { border-color: #4aa3ff; }
+    .tok.acc { border-color: #ffb02e; }
+    .tok.dark { border-color: #42454e; color: #9296a0; }
+    .tok.dark .name { color: #9296a0; }
+    .tok.dead { border-style: dashed; opacity: 0.55; }
+    .tok.fork { margin-left: 18px; }
+    .chip { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 400; color: #9296a0; border: 1px solid #262930; padding: 0 6px; line-height: 17px; }
+    .chip.b { color: #8cc6ff; border-color: #4aa3ff; }
+    .chip.g { color: #ffb02e; border-color: #ffb02e; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .T { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); column-gap: 10px; align-items: start; }
+    .arm { display: flex; flex-direction: column; gap: 8px; }
+    .stem { border: 1.5px solid #262930; background: #101216; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .bar { height: 1.5px; background: #262930; grid-column: 1 / -1; margin: 2px 0 4px; }
+    .armhead { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #9296a0; }
+    .armhead.b { color: #4aa3ff; } .armhead.g { color: #ffb02e; }
+    .dgrp { display: flex; flex-direction: column; gap: 4px; }
+    .dlabel { font-size: 11px; color: #9296a0; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .T.main { align-content: start; }
+    .rail { display: flex; align-items: center; gap: 6px; padding: 6px 0 10px; }
+    .axle { flex: 1; display: flex; align-items: center; gap: 3px; height: 26px; border-bottom: 1.5px solid #262930; }
+    .tick { width: 12px; height: 16px; box-sizing: border-box; border: 1.5px solid #262930; background: #101216; cursor: pointer; }
+    .tick.k30828 { border-color: #4aa3ff; } .tick.k8828 { border-color: #ffb02e; background: #2a2210; } .tick.k30829 { border-color: #9296a0; } .tick.k5 { border-style: dashed; }
+    .tick.at { height: 26px; background: #e9eaee; border-color: #e9eaee; }
+    .tick.fut { opacity: 0.3; }
+    .lg.fut { opacity: 0.3; }
+    @keyframes pulseA { 0% { stroke-width: 7; } 100% { stroke-width: 2.5; } }
+    @keyframes pulseB { 0% { stroke-width: 7; } 100% { stroke-width: 2.5; } }
+    @keyframes boxA { 0% { box-shadow: 0 0 0 5px rgba(233,234,238,.35); } 100% { box-shadow: 0 0 0 0 rgba(233,234,238,0); } }
+    @keyframes boxB { 0% { box-shadow: 0 0 0 5px rgba(233,234,238,.35); } 100% { box-shadow: 0 0 0 0 rgba(233,234,238,0); } }
+  </style>
+</helmet>
+<div id="pan" style="width: 100%; height: 100vh; overflow: auto; background: #0b0c0e; position: relative; cursor: grab;">
+<div style="position: fixed; top: 10px; right: 18px; z-index: 5; display: flex; gap: 6px; align-items: center; background: #101216; border: 1.5px solid #262930; padding: 4px 6px;">
+  <button onClick="{{zoomOut}}" style="width: 32px; padding: 0;">−</button>
+  <span class="small mono" style="min-width: 44px; text-align: center;">{{zoomPct}}</span>
+  <button onClick="{{zoomIn}}" style="width: 32px; padding: 0;">+</button>
+  <button onClick="{{zoomFit}}">Fit</button>
+  <span class="small">⌘ scroll · drag to pan</span>
+</div>
+<div style="width: {{sizeW}}px; height: {{sizeH}}px; position: relative;">
+<div style="width: 2200px; min-height: 1500px; transform: scale({{zoom}}); transform-origin: 0 0; background: #0b0c0e; padding: 28px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; background-image: radial-gradient(#1a1d23 1px, transparent 1px); background-size: 24px 24px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <div style="font-size: 22px; font-weight: 600;">The seal is the listing: a notary’s accepted side is its own 8828 seals, each a byte copy of what it accepted</div>
+    <button onClick="{{reset}}">Reset</button>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 300px 56px 560px 56px 560px minmax(0, 1fr); align-items: stretch;">
+
+    <div class="col-head">1 · Cards (30828)</div>
+    <div></div>
+    <div class="col-head">2 · Community notary — submitted · accepted</div>
+    <div></div>
+    <div class="col-head">3 · Main notary — its accepted side is the timeline</div>
+    <div class="col-head" style="padding-left: 24px;">Events, newest first</div>
+
+    <div style="display: grid; grid-template-columns: 300px 56px 560px 56px; grid-column: span 4; row-gap: 36px; align-content: start; padding-top: 10px;">
+      <sc-for list="{{homes}}" as="h" hint-placeholder-count="3">
+        <div style="display: grid; grid-template-columns: 300px 56px 560px 56px; grid-column: span 4;">
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <sc-for list="{{h.cards}}" as="c" hint-placeholder-count="2">
+              <div class="tok sub {{c.cls1}}" style="{{c.pulse}}">
+                <div class="name">{{c.name}}<sc-if value="{{c.isFork}}" hint-placeholder-val="{{false}}"><span class="chip b">{{c.by}} · cites</span></sc-if><sc-if value="{{c.taken}}" hint-placeholder-val="{{false}}"><span class="chip">taken</span></sc-if><sc-if value="{{c.took}}" hint-placeholder-val="{{false}}"><span class="chip b">took {{c.tookBy}}</span></sc-if><sc-if value="{{c.dead}}" hint-placeholder-val="{{false}}"><span class="chip">deleted</span></sc-if></div>
+                <sc-if value="{{c.alive}}" hint-placeholder-val="{{true}}">
+                  <div class="row">
+                    <button onClick="{{c.revise}}">{{c.by}} · revise</button>
+                    <button onClick="{{c.del}}">{{c.by}} · delete</button>
+                    <sc-if value="{{c.canTake}}" hint-placeholder-val="{{false}}"><button class="on" onClick="{{c.take}}">{{c.by}} · take {{c.forkBy}}’s words</button></sc-if>
+                  </div>
+                  <sc-if value="{{c.isSource}}" hint-placeholder-val="{{true}}">
+                    <div class="row">
+                      <sc-for list="{{c.others}}" as="o" hint-placeholder-count="2"><button onClick="{{o.revise}}">{{o.cur}} · revise</button></sc-for>
+                    </div>
+                  </sc-if>
+                </sc-if>
+              </div>
+            </sc-for>
+            <button class="on" onClick="{{h.addCard}}">Author · submit a card → {{h.name}}</button>
+          </div>
+
+          <div class="gap">
+            <svg width="56" height="120" viewBox="0 0 56 120">
+              <sc-if value="{{h.anyCards}}" hint-placeholder-val="{{true}}">
+                <path d="M 4 60 L 46 60" stroke="#4aa3ff" stroke-width="2.5" stroke-linecap="round" fill="none" style="{{h.pulseCard}}"></path>
+                <path d="M 38 53 L 47 60 L 38 67" stroke="#4aa3ff" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+                <text x="26" y="46" font-size="11" fill="#4aa3ff" text-anchor="middle" font-family="IBM Plex Mono, monospace">a tag</text>
+              </sc-if>
+            </svg>
+          </div>
+
+          <div class="T">
+            <div class="armhead b">Submitted</div>
+            <div class="stem" style="align-self: stretch;">
+              <div style="font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline;">{{h.name}}<span class="chip {{h.passCls}}" style="{{h.pulsePass}}">passes: {{h.passes}}</span></div>
+              <div class="small">{{h.cur}}</div>
+              <button onClick="{{h.togglePasses}}" style="white-space: normal; height: auto; padding: 5px 8px;">switch to passes: {{h.otherPasses}}</button>
+              <button class="{{h.submitCls}}" onClick="{{h.submit}}" style="white-space: normal; height: auto; padding: 5px 8px;">{{h.submitLabel}}</button>
+            </div>
+            <div class="armhead g">{{h.armTitle}}</div>
+            <div class="bar"></div>
+            <div class="arm">
+              <sc-for list="{{h.subs}}" as="g" hint-placeholder-count="1">
+                <div class="dgrp">
+                  <sc-if value="{{g.several}}" hint-placeholder-val="{{false}}"><div class="dlabel">{{g.n}} submitted</div></sc-if>
+                  <sc-for list="{{g.items}}" as="c" hint-placeholder-count="1">
+                    <div class="tok sub {{c.clsL}}">
+                      <div class="name">{{c.name}}<sc-if value="{{c.isFork}}" hint-placeholder-val="{{false}}"><span class="chip b">{{c.by}}</span></sc-if></div>
+                      <sc-if value="{{c.canAccept}}" hint-placeholder-val="{{true}}"><div class="row"><button onClick="{{c.accept}}">{{h.cur}} · accept</button></div></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <sc-if value="{{h.noCards}}" hint-placeholder-val="{{true}}"><div class="small">nothing points here</div></sc-if>
+            </div>
+            <div></div>
+            <div class="arm">
+              <sc-for list="{{h.listed}}" as="c" hint-placeholder-count="1">
+                <div class="tok acc {{c.clsR}}" style="{{c.pulseAct}}">
+                  <div class="name">{{c.name}}<sc-if value="{{c.isFork}}" hint-placeholder-val="{{false}}"><span class="chip b">{{c.by}}</span></sc-if><sc-if value="{{c.waiting}}" hint-placeholder-val="{{false}}"><span class="chip">revised ▸</span></sc-if><sc-if value="{{c.dead}}" hint-placeholder-val="{{false}}"><span class="chip">deleted</span></sc-if></div>
+                  <div class="row">
+                    <sc-if value="{{c.waiting}}" hint-placeholder-val="{{false}}"><button class="on" onClick="{{c.accept}}">{{h.cur}} · accept this version</button></sc-if>
+                    <button onClick="{{c.drop}}">{{h.cur}} · drop</button>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{h.noListed}}" hint-placeholder-val="{{true}}"><div class="small">{{h.emptyTxt}}</div></sc-if>
+            </div>
+          </div>
+
+          <div class="gap">
+            <svg width="56" height="120" viewBox="0 0 56 120">
+              <sc-if value="{{h.points}}" hint-placeholder-val="{{true}}">
+                <path d="M 4 60 L 46 60" stroke="#4aa3ff" stroke-width="2.5" stroke-linecap="round" fill="none" style="{{h.pulsePoint}}"></path>
+                <path d="M 38 53 L 47 60 L 38 67" stroke="#4aa3ff" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+                <text x="26" y="46" font-size="11" fill="#4aa3ff" text-anchor="middle" font-family="IBM Plex Mono, monospace">a tag</text>
+              </sc-if>
+            </svg>
+          </div>
+
+        </div>
+      </sc-for>
+    </div>
+
+    <div class="T main" style="margin-top: 10px;">
+      <div class="armhead b">Submitted <span class="small">(notaries pointing here)</span></div>
+      <div style="font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; justify-content: center;">Main<span class="chip g">passes: manual</span></div>
+      <div class="armhead g">Accepted = the timeline</div>
+      <div class="bar"></div>
+      <div class="arm">
+        <sc-for list="{{mainPending}}" as="h" hint-placeholder-count="1">
+          <div class="tok">
+            <div class="name">{{h.name}}<span class="chip {{h.passCls}}">passes: {{h.passes}}</span></div>
+            <sc-for list="{{h.carries}}" as="c" hint-placeholder-count="1">
+              <div class="tok sub {{c.clsM}}" style="margin-left: 12px; padding: 5px 8px;"><div class="name" style="font-size: 12.5px;">{{c.name}}<sc-if value="{{c.isFork}}" hint-placeholder-val="{{false}}"><span class="chip b">{{c.by}}</span></sc-if></div><sc-if value="{{c.canMain}}" hint-placeholder-val="{{true}}"><div class="row"><button onClick="{{c.mainAccept}}" style="height: 22px; font-size: 11.5px;">Main · accept</button></div></sc-if></div>
+            </sc-for>
+            <sc-if value="{{h.noCarries}}" hint-placeholder-val="{{true}}"><div class="small" style="margin-left: 12px;">nothing passes</div></sc-if>
+          </div>
+        </sc-for>
+        <sc-if value="{{mainNoPending}}" hint-placeholder-val="{{true}}"><div class="small">nothing points here</div></sc-if>
+      </div>
+      <div></div>
+      <div class="arm">
+        <sc-for list="{{mainCards}}" as="c" hint-placeholder-count="1">
+          <div class="tok acc {{c.cls}}" style="{{c.pulseMain}}">
+            <div class="name">{{c.name}}<span class="chip">{{c.year}}</span><span class="chip">{{c.homeName}}</span><sc-if value="{{c.isFork}}" hint-placeholder-val="{{false}}"><span class="chip b">{{c.by}}</span></sc-if><sc-if value="{{c.waiting}}" hint-placeholder-val="{{false}}"><span class="chip">revised ▸</span></sc-if><sc-if value="{{c.open}}" hint-placeholder-val="{{false}}"><span class="chip">{{c.openTxt}}</span></sc-if></div>
+            <div class="row">
+              <sc-if value="{{c.waiting}}" hint-placeholder-val="{{false}}"><button class="on" onClick="{{c.mainAccept}}">Main · accept this version</button></sc-if>
+              <button onClick="{{c.mainDrop}}">Main · drop</button>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{mainNoListed}}" hint-placeholder-val="{{true}}"><div class="small">empty — the timeline is blank</div></sc-if>
+      </div>
+    </div>
+
+    <div style="padding-left: 24px; padding-top: 6px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="rail">
+        <button onClick="{{back}}" style="width: 28px; padding: 0;">◀</button>
+        <div class="axle">
+          <sc-for list="{{ticks}}" as="t" hint-placeholder-count="4"><div class="tick {{t.cls}}" onClick="{{t.go}}" title="{{t.head}}"></div></sc-for>
+        </div>
+        <button onClick="{{fwd}}" style="width: 28px; padding: 0;">▶</button>
+        <span class="small mono" style="min-width: 54px; text-align: right;">{{cursorTxt}}</span>
+      </div>
+      <sc-if value="{{logEmpty}}" hint-placeholder-val="{{true}}"><div class="small">Nothing yet. Every button publishes one signed event; it shows here. Ticks: blue 30828 · gold 8828 · grey 30829 · dashed kind 5. Click a tick to rewind; acting while rewound cuts the future off.</div></sc-if>
+      <sc-for list="{{log}}" as="line" hint-placeholder-count="3">
+        <div class="lg {{line.cls}}" style="display: flex; flex-direction: column; gap: 4px;">
+          <div class="head" style="{{line.headStyle}}">{{line.head}}</div>
+          <sc-if value="{{line.full}}" hint-placeholder-val="{{true}}"><div class="ev">{{line.ev}}</div></sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+
+  <div style="display: flex; gap: 24px; align-items: flex-start; max-width: 1500px;">
+    <div class="stem" style="min-width: 360px; gap: 8px;">
+      <div class="armhead">Gate rule</div>
+      <div class="row"><button class="{{gateAddrCls}}" onClick="{{gateAddr}}">by address</button><button class="{{gateBytesCls}}" onClick="{{gateBytes}}">by bytes</button></div>
+      <div class="small" style="line-height: 1.5;">{{gateTxt}}</div>
+    </div>
+    <div class="ev" style="flex: 1; border-left-color: #262930;">{{reqs}}</div>
+  </div>
+
+  <div class="small" style="line-height: 1.55; max-width: 1100px;">
+    <span style="color: #4aa3ff;">Blue</span> = submitted (the author’s signature, always). <span style="color: #ffb02e;">Gold</span> = accepted (a notary’s signature, only under <span class="mono">passes: manual</span>). Dim = passed once, not passing now. Dashed = deletion requested; a viewer hides it, relays may keep it. Three kinds: 30828 = a card, replaceable, the author’s current words · 30829 = a notary, replaceable, its <span class="mono">passes</span> setting and nothing else — no list · 8828 = one notary’s acceptance of one card, kept, holding a byte copy of what it read. A card passes upward only while a copy byte-equals the live words. An author’s revision changes the bytes; consent lapses; the card reads “revised ▸” until the notary accepts again. A curator cannot replace another author’s card — it publishes its own under its own key, same <span class="mono">d</span>, citing the source; that is a second submission of the same entry (“2 submitted”), accepted or not on its own. When the author’s words come to match a citing card byte for byte, the citing card is <b>taken</b>: the words agreeing is the whole evidence, no act; it holds no slot of its own. Drop = a revoke act on the acceptance; what was accepted stays readable in the copy.
+  </div>
+
+</div>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+const NAMES = ['Gold strike', 'Rail arrives', 'Town incorporated', 'Bank opens', 'Mine floods', 'School built', 'Courthouse burns', 'Highway paved'];
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = this.fresh(); }
+  fresh0() {
+    return {
+      homes: [
+        { key: 'a', name: 'Notary A', cur: 'Curator A', d: 'hcr2001', pk: 'pk_a', points: false, passes: 'manual' },
+        { key: 'b', name: 'Notary B', cur: 'Curator B', d: 'tonopah', pk: 'pk_b', points: false, passes: 'manual' },
+        { key: 'c', name: 'Notary C', cur: 'Curator C', d: 'goldfield', pk: 'pk_c', points: false, passes: 'manual' },
+      ],
+      cards: [], nextId: 1, nextEv: 1 };
+  }
+  fresh() { return { hist: [{ snap: this.fresh0(), head: 'start', ev: '', kind: '' }], cursor: 0, zoom: 1, pulse: null, tick: 0, gate: 'address' }; }
+  cur() { return this.state.hist[this.state.cursor].snap; }
+  setCursor(i) { this.setState({ cursor: Math.max(0, Math.min(this.state.hist.length - 1, i)), pulse: null }); }
+  componentDidMount() {
+    this._wheel = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault(); e.stopPropagation();
+      this.setZoom(this.state.zoom * Math.exp(-e.deltaY * 0.01));
+    };
+    window.addEventListener('wheel', this._wheel, { passive: false, capture: true });
+    this._down = (e) => {
+      const pan = document.getElementById('pan');
+      if (!pan || e.button !== 0 || !pan.contains(e.target) || e.target.closest('button')) return;
+      this._drag = { x: e.clientX, y: e.clientY, sx: pan.scrollLeft, sy: pan.scrollTop };
+      pan.style.cursor = 'grabbing'; e.preventDefault();
+    };
+    this._move = (e) => {
+      const d = this._drag, pan = document.getElementById('pan'); if (!d || !pan) return;
+      pan.scrollLeft = d.sx - (e.clientX - d.x); pan.scrollTop = d.sy - (e.clientY - d.y);
+    };
+    this._up = () => { const pan = document.getElementById('pan'); if (pan) pan.style.cursor = 'grab'; this._drag = null; };
+    window.addEventListener('mousedown', this._down, true);
+    window.addEventListener('mousemove', this._move, true);
+    window.addEventListener('mouseup', this._up, true);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('wheel', this._wheel, { capture: true });
+    window.removeEventListener('mousedown', this._down, true);
+    window.removeEventListener('mousemove', this._move, true);
+    window.removeEventListener('mouseup', this._up, true);
+  }
+  setZoom(z) { this.setState({ zoom: Math.min(2.5, Math.max(0.3, z)) }); }
+  homeAddr(h) { return '30829:' + h.pk + ':' + h.d; }
+  cardAddr(c) { return '30828:' + c.pk + ':' + c.d; }
+  // --- the model ---
+  // A card's bytes are its `text` token. A seal copies the text it read. Every revision mints a new text; `take` copies the fork's text onto the source.
+  src(c) { return c.cite ? this.cur().cards.find((x) => x.id === c.cite) : null; }
+  taken(c) { const s = this.src(c); return !!(s && !s.deleted && !c.deleted && s.text === c.text); }
+  // Does this notary hold a seal whose copy equals the card's live bytes?
+  sealOk(cards, c, field) {
+    if (this.state.gate === 'address') return c[field] !== null && c[field] === c.text;
+    return cards.some((x) => x.d === c.d && x.home === c.home && x[field] !== null && x[field] === c.text);
+  }
+  carried(h, c) { return !c.deleted && !this.taken(c) && (h.passes === 'auto' || this.sealOk(this.cur().cards, c, 'hCopy')); }
+  homeEvent(h) {
+    const lines = ['kind 30829 · pk ' + h.pk, '  d: ' + h.d + ' · t: wikitimechain · passes: ' + h.passes];
+    if (h.points) lines.push('  a: 30829:pk_main:main   ← points at main');
+    lines.push('No outbound list. Its accepted side = the 8828 seals ' + h.pk + ' has signed whose copy is still live.');
+    return lines.join('\n');
+  }
+  actEv(pk, who, c) {
+    return 'kind 8828 · pk ' + pk + ' (' + who + ')\n  a: ' + this.cardAddr(c) + '   (the card)\n  e: ' + c.eid + '\n  content: <byte copy of ' + c.eid + '>   (consent = bytes)';
+  }
+  dropEv(pk, who, c) {
+    return 'kind 8828 · pk ' + pk + ' (' + who + ')\n  a: ' + this.cardAddr(c) + '\n  revoke   ← withdrawn. The seal it revokes stays readable.';
+  }
+  // Every button = one event appended to the record. Acting while rewound cuts the future off.
+  push(patch, head, ev, pulse, kind) {
+    const s = this.state, snap = Object.assign({}, this.cur(), patch);
+    const hist = s.hist.slice(0, s.cursor + 1).concat([{ snap, head, ev, kind }]);
+    this.setState({ hist, cursor: hist.length - 1, pulse: pulse || null, tick: s.tick + 1 });
+  }
+  pulseStyle(key) { return this.state.pulse === key ? 'animation: ' + (this.state.tick % 2 ? 'pulseA' : 'pulseB') + ' 1.1s ease-out;' : ''; }
+  boxPulse(key) { return this.state.pulse === key ? 'animation: ' + (this.state.tick % 2 ? 'boxA' : 'boxB') + ' 1.1s ease-out;' : ''; }
+  renderVals() {
+    const st = this.state, s = this.cur();
+    const upd = (list, id, patch) => list.map((x) => (x.id === id || x.key === id) ? Object.assign({}, x, patch) : x);
+    const byOf = (c) => c.cite ? s.homes.find((h) => h.pk === c.pk).cur : 'Author';
+    const homes = s.homes.map((h) => {
+      const mine = s.cards.filter((c) => c.home === h.key);
+      const gated = h.passes === 'manual';
+      const tok = (c) => {
+        const taken = this.taken(c);
+        const src = this.src(c);
+        const forks = s.cards.filter((x) => x.cite === c.id && !x.deleted);
+        const liveFork = forks.find((x) => x.text !== c.text);
+        const takenFork = forks.find((x) => x.text === c.text);
+        const onArm = c.hCopy !== null && !taken;
+        const waiting = gated && onArm && !c.deleted && !this.sealOk(s.cards, c, 'hCopy');
+        const carried = this.carried(h, c);
+        const mWaiting = c.mCopy !== null && !c.deleted && !this.sealOk(s.cards, c, 'mCopy');
+        const by = byOf(c);
+        const accept = () => {
+          this.push({ cards: upd(s.cards, c.id, { hCopy: c.text }) }, h.cur + ' accepts “' + c.name + '”' + (c.cite ? ' (' + by + '’s)' : '') + ' — one event',
+            this.actEv(h.pk, h.cur, c) + (c.hCopy ? '\nSupersedes the earlier seal. That copy stays on relays; this one is current.' : '\nThis seal is the listing. Nothing else to publish.'), 'act:' + c.id, '8828');
+        };
+        const reviseBy = (who, pk) => () => {
+          const eid = 'e' + s.nextEv, text = 't' + s.nextEv;
+          const patch = { v: c.v + 1, eid, text };
+          const cards2 = upd(s.cards, c.id, patch);
+          const tail = gated && c.hCopy ? '\n' + h.cur + '’s seal copies the old bytes → “revised ▸” until ' + h.cur + ' accepts again.' : h.passes === 'auto' ? '\npasses: auto — newest wins, nothing to do.' : '';
+          this.push({ cards: cards2, nextEv: s.nextEv + 1 }, who + ' revises “' + c.name + '”',
+            'kind 30828 · id ' + eid + ' · pk ' + pk + '\n  d: ' + c.d + '   (same d, newer created_at — relays drop ' + c.eid + ')\n  a: ' + this.homeAddr(h) + '   (unchanged)' + tail, 'ver:' + c.id, '30828');
+        };
+        const others = s.homes.filter((o) => o.pk !== c.pk).map((o) => ({
+          cur: o.cur,
+          revise: () => {
+            const n = s.nextId, eid = 'e' + s.nextEv, text = 't' + s.nextEv;
+            const fork = { id: n, home: h.key, name: c.name, d: c.d, year: c.year, pk: o.pk, v: 1, eid, text, deleted: false, hCopy: null, mCopy: null, cite: c.id };
+            this.push({ cards: s.cards.concat([fork]), nextId: n + 1, nextEv: s.nextEv + 1 }, o.cur + ' revises “' + c.name + '” — a card of its own, citing the source',
+              'kind 30828 · id ' + eid + ' · pk ' + o.pk + '\n  d: ' + c.d + '   (same d, other key — a rival version, not a replacement)\n  a: ' + this.homeAddr(h) + '\n  a: ' + this.cardAddr(c) + ' · cite\n  e: ' + c.eid + ' · cite\n  content: {-old-}{+new+} marks\nSubmitted here like any card. ' + h.cur + ' may accept either.', 'card:' + h.key, '30828');
+          },
+        }));
+        return {
+          id: c.id, name: c.name, by, isFork: !!c.cite, isSource: !c.cite, taken, took: !!takenFork, tookBy: takenFork ? byOf(takenFork) : '',
+          dead: !!c.deleted, alive: !c.deleted, onArm, gated, waiting,
+          canTake: !c.cite && !!liveFork, forkBy: liveFork ? byOf(liveFork) : '',
+          cls1: c.deleted ? 'dead' : taken ? 'dark' : c.cite ? 'fork' : '', clsL: c.deleted ? 'dead' : '', clsR: c.deleted ? 'dead' : waiting ? 'dark' : '', clsM: c.deleted ? 'dead' : mWaiting ? 'dark' : '',
+          pulse: this.boxPulse('ver:' + c.id), pulseAct: this.boxPulse('act:' + c.id),
+          canAccept: gated && !c.deleted && !taken && c.hCopy === null, canMain: carried && c.mCopy === null,
+          accept, others,
+          mainAccept: () => this.push({ cards: upd(s.cards, c.id, { mCopy: c.text }) }, 'Main accepts “' + c.name + '” — one event',
+            this.actEv('pk_main', 'main', c) + '\nThis seal puts the card on the timeline.', 'main:' + c.id, '8828'),
+          revise: reviseBy(by, c.pk),
+          take: () => {
+            const cards2 = upd(s.cards, c.id, { v: c.v + 1, eid: 'e' + s.nextEv, text: liveFork.text });
+            this.push({ cards: cards2, nextEv: s.nextEv + 1 }, by + ' takes ' + byOf(liveFork) + '’s words — “' + c.name + '”',
+              'kind 30828 · id e' + s.nextEv + ' · pk ' + c.pk + '\n  d: ' + c.d + '\n  content: byte for byte ' + liveFork.eid + '’s newer document\nNo act, no tag. The words agreeing is the whole evidence: ' + byOf(liveFork) + '’s card is taken and holds no slot.' + (st.gate === 'address' ? '\nGate by address: the seal sits at ' + byOf(liveFork) + '’s address. The source’s bytes changed → “revised ▸” until accepted again.' : '\nGate by bytes: a seal on these bytes under this d exists → the source passes as it stands.'), 'ver:' + c.id, '30828');
+          },
+          del: () => {
+            const cards2 = (c.hCopy !== null || c.mCopy !== null) ? upd(s.cards, c.id, { deleted: true }) : s.cards.filter((x) => x.id !== c.id);
+            this.push({ cards: cards2 }, by + ' requests deletion of “' + c.name + '”',
+              'kind 5 · pk ' + c.pk + '\n  a: ' + this.cardAddr(c) + '   (every version at this address)\n  e: ' + c.eid + '\nA request, not a guarantee: relays may keep it; this viewer honours it.' + (c.hCopy !== null ? '\nSeals still copy the old text; curators may revoke them.' : ''), 'ver:' + c.id, '5');
+          },
+          drop: () => {
+            const cards2 = c.deleted && c.mCopy === null ? s.cards.filter((x) => x.id !== c.id) : upd(s.cards, c.id, { hCopy: null });
+            this.push({ cards: cards2 }, h.cur + ' drops “' + c.name + '” — revoke act', this.dropEv(h.pk, h.cur, c), null, '8828');
+          },
+        };
+      };
+      const cards = mine.map(tok);
+      const subsMap = {};
+      cards.filter((c) => !c.dead && !c.taken).forEach((c) => { (subsMap[s.cards.find((x) => x.id === c.id).d] = subsMap[s.cards.find((x) => x.id === c.id).d] || []).push(c); });
+      const subs = Object.keys(subsMap).map((d) => ({ items: subsMap[d], n: subsMap[d].length, several: subsMap[d].length > 1 }));
+      const listed = cards.filter((c) => c.onArm);
+      const carries = cards.filter((c) => this.carried(h, s.cards.find((x) => x.id === c.id)));
+      return {
+        key: h.key, name: h.name, cur: h.cur, d: h.d, pk: h.pk, points: h.points, passes: h.passes, otherPasses: gated ? 'auto' : 'manual',
+        passCls: gated ? 'g' : 'b', pulsePass: this.boxPulse('passes:' + h.key),
+        cards, subs, listed, carries, noCards: cards.length === 0, noListed: listed.length === 0, noCarries: carries.length === 0, anyCards: cards.length > 0,
+        armTitle: gated ? 'Accepted' : 'passes: auto — everything submitted, newest version',
+        emptyTxt: gated ? 'empty — nothing accepted yet' : 'empty — nothing points here',
+        pulseCard: this.pulseStyle('card:' + h.key), pulsePoint: this.pulseStyle('point:' + h.key),
+        submitCls: h.points ? 'on' : '', submitLabel: h.cur + (h.points ? ' · pointing at main (click to withdraw)' : ' · point at main'),
+        submit: () => {
+          const homes2 = upd(s.homes, h.key, { points: !h.points });
+          this.push({ homes: homes2 }, h.cur + (h.points ? ' withdraws ' : ' points ') + h.name + (h.points ? ' from main' : ' at main') + ' — republishes ' + h.name,
+            this.homeEvent(homes2.find((x) => x.key === h.key)) + (h.points ? '' : '\nJust a tag. Main sees what this notary passes on; nothing arrives until main accepts a card.'), 'point:' + h.key, '30829');
+        },
+        togglePasses: () => {
+          const passes = gated ? 'auto' : 'manual', homes2 = upd(s.homes, h.key, { passes });
+          this.push({ homes: homes2 }, h.cur + ' sets ' + h.name + ' to passes: ' + passes + ' — republishes ' + h.name,
+            this.homeEvent(homes2.find((x) => x.key === h.key)) + (passes === 'auto' ? '\nauto: every card submitted here passes, newest version, no seal needed. Old seals are ignored.' : '\nmanual: only cards whose live bytes match a seal copy by ' + h.pk + ' pass. Existing seals count again.'), 'passes:' + h.key, '30829');
+        },
+        addCard: () => {
+          const n = s.nextId, name = NAMES[(n - 1) % NAMES.length], d = name.toLowerCase().replace(/ /g, '-'), eid = 'e' + s.nextEv;
+          const card = { id: n, home: h.key, name, d, year: 1898 + ((n * 7) % 20), pk: 'pk_author' + n, v: 1, eid, text: 't' + s.nextEv, deleted: false, hCopy: null, mCopy: null, cite: null };
+          this.push({ cards: s.cards.concat([card]), nextId: n + 1, nextEv: s.nextEv + 1 }, 'Author submits “' + name + '” → ' + h.name,
+            'kind 30828 · id ' + eid + ' · pk ' + card.pk + '\n  d: ' + d + ' · title · summary · event_date\n  a: ' + this.homeAddr(h) + '\nA public tag. The notary has not done anything yet.', 'card:' + h.key, '30828');
+        },
+      };
+    });
+    const live = s.cards.filter((c) => !c.deleted).length, acts = s.cards.filter((c) => c.hCopy !== null).length, mActs = s.cards.filter((c) => c.mCopy !== null).length;
+    const reqs = ['REQ {kinds:[30829], "#t":["wikitimechain"]}  ← ' + (1 + s.homes.length) + ' notaries', 'REQ {kinds:[30828], "#a":[notary addresses]}  ← ' + live + ' cards', 'REQ {kinds:[8828], authors:[notary pks]}  ← ' + acts + ' seals = the notaries’ accepted sides', 'REQ {kinds:[8828], authors:[pk_main]}  ← ' + mActs + ' seals = the timeline'].join('\n');
+    const mainCards = s.cards.filter((c) => c.mCopy !== null).sort((a, b) => a.year - b.year).map((c) => {
+      const h = s.homes.find((x) => x.key === c.home), open = !this.carried(h, c), waiting = !c.deleted && !open && !this.sealOk(s.cards, c, 'mCopy');
+      return {
+        name: c.name, year: c.year, homeName: h.name, by: byOf(c), isFork: !!c.cite,
+        cls: c.deleted ? 'dead' : open || waiting ? 'dark' : '', waiting, open, openTxt: c.deleted ? 'deleted' : this.taken(c) ? 'taken' : h.name + ' no longer passes it',
+        pulseMain: this.boxPulse('main:' + c.id),
+        mainAccept: () => this.push({ cards: upd(s.cards, c.id, { mCopy: c.text }) }, 'Main accepts “' + c.name + '” — one event', this.actEv('pk_main', 'main', c) + '\nSupersedes the earlier seal.', 'main:' + c.id, '8828'),
+        mainDrop: () => {
+          const cards2 = c.deleted && c.hCopy === null ? s.cards.filter((x) => x.id !== c.id) : upd(s.cards, c.id, { mCopy: null });
+          this.push({ cards: cards2 }, 'Main drops “' + c.name + '” — revoke act', this.dropEv('pk_main', 'main', c), null, '8828');
+        },
+      };
+    });
+    return {
+      homes, logEmpty: st.hist.length === 1,
+      log: st.hist.map((l, i) => ({ head: l.head, ev: l.ev, full: i === st.cursor, cls: i > st.cursor ? 'fut' : '', headStyle: i === st.cursor ? '' : 'color: #9296a0; font-weight: 400;', i })).filter((l) => l.i > 0).reverse(),
+      ticks: st.hist.map((l, i) => ({ head: l.head, cls: 'k' + l.kind + (i === st.cursor ? ' at' : '') + (i > st.cursor ? ' fut' : ''), go: () => this.setCursor(i) })),
+      back: () => this.setCursor(st.cursor - 1), fwd: () => this.setCursor(st.cursor + 1), cursorTxt: st.cursor + ' / ' + (st.hist.length - 1),
+      mainPending: homes.filter((h) => h.points),
+      mainNoPending: !homes.some((h) => h.points), mainNoListed: mainCards.length === 0, mainCards, reqs,
+      gateAddrCls: st.gate === 'address' ? 'on' : '', gateBytesCls: st.gate === 'bytes' ? 'on' : '',
+      gateAddr: () => this.setState({ gate: 'address' }), gateBytes: () => this.setState({ gate: 'bytes' }),
+      gateTxt: st.gate === 'address' ? 'As written: a card passes while THIS card’s seal copy byte-equals its live words. A seal on a citing card does not count for the source, even when the words agree.' : 'Bytes, not address: a card passes while ANY seal by this notary under the same d byte-equals its live words. Taking a revision inherits the seal on those words.',
+      reset: () => this.setState(Object.assign(this.fresh(), { zoom: st.zoom })),
+      zoom: st.zoom, zoomPct: Math.round(st.zoom * 100) + '%', sizeW: Math.round(2200 * st.zoom), sizeH: Math.round(1500 * st.zoom),
+      zoomIn: () => this.setZoom(st.zoom * 1.2), zoomOut: () => this.setZoom(st.zoom / 1.2), zoomFit: () => this.setZoom(Math.min(1, (window.innerWidth - 8) / 2200)),
+    };
+  }
+}
+</script>
+</body>
+</html>

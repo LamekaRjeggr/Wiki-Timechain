@@ -35,6 +35,18 @@ python3 -m http.server 8000
 
 **Not `file://`** — some relays reject the `null` origin and cards go missing silently.
 
+### Modular acceptance lab
+
+The `lab/modular-acceptance-mock` branch includes a standalone protocol mock at
+`shelf-model.html`. With the local server running, open:
+
+```
+http://localhost:8000/shelf-model.html
+```
+
+It uses simulated events only: nothing is signed or sent to a relay. The exact prior
+shelf mock is retained as `shelf-model-original.html` for comparison.
+
 To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 
 `MARKER` and `RELAYS` are the two knobs, set in **both** HTML files. The writer stamps
