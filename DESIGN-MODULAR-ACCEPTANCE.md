@@ -152,9 +152,8 @@ The smallest grammar uses the verified source snapshot as the only value store:
   "content": "",
   "tags": [
     ["a", "30829:<notary-pubkey>:hcr2001", "", "context"],
-    ["slot", "proposition-number-assigned"],
     ["e", "<source-event-id>", "", "source"],
-    ["snapshot", "<canonical complete signed 30828 JSON>"],
+    ["snapshot", "<complete signed 30828 JSON>"],
     ["select", "tag:event_date"],
     ["select", "tag:g"]
   ]

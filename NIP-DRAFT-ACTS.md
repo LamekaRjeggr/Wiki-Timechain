@@ -18,7 +18,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
 
 - **Card** — one signed kind `30828` account of an event.
 - **Event slot** — `(notary coordinate, card d)`, the subject being decided within one
-  notary lens.
+  notary lens. It is never written as a tag: an acceptance derives it from the verified
+  snapshot, a revoke from its target.
 - **Field block** — one of the six core blocks defined by Timeline Cards: `title`,
   `summary`, `content`, `event_date`, `event_time`, or `g`.
 - **Register** — `(notary coordinate, card d, field block)`, where one notary's current
@@ -59,9 +60,8 @@ An acceptance has empty `content` and these tags:
   "content": "",
   "tags": [
     ["a", "30829:<notary-pubkey>:<notary-d>", "", "context"],
-    ["slot", "<card-d>"],
     ["e", "<source-event-id>", "", "source"],
-    ["snapshot", "<canonical complete signed 30828 JSON>"],
+    ["snapshot", "<complete signed 30828 JSON>"],
     ["select", "tag:title"],
     ["select", "tag:event_date"]
   ]
@@ -71,13 +71,13 @@ An acceptance has empty `content` and these tags:
 An acceptance MUST contain:
 
 - exactly one marked `a` context;
-- exactly one `slot`;
 - exactly one marked source `e`;
 - exactly one complete `snapshot`; and
 - either exactly one `select:card` or one or more distinct field `select` tags.
 
-There is no duplicate unmarked `context` tag and no source-card `a` tag. The verified
-snapshot supplies the source pubkey and `d`, from which its `30828` coordinate is derived.
+There is no duplicate unmarked `context` tag, no source-card `a` tag, and no slot tag. The
+verified snapshot supplies the source pubkey and `d`, from which its `30828` coordinate and
+the slot are derived.
 The source `e` verifies which snapshot was selected and provides a relay index.
 
 There are no separate scope/value pairs. The snapshot already preserves the exact values.
@@ -144,7 +144,7 @@ creates nor validates a selection.
 
 ## Revocation
 
-A revoke has empty `content`, the same context and slot as its target, and one target:
+A revoke has empty `content`, the same context as its target, and one target:
 
 ```json
 {
@@ -152,13 +152,13 @@ A revoke has empty `content`, the same context and slot as its target, and one t
   "content": "",
   "tags": [
     ["a", "30829:<notary-pubkey>:<notary-d>", "", "context"],
-    ["slot", "<card-d>"],
     ["e", "<target-act-id>", "", "revoke"]
   ]
 }
 ```
 
-The target MUST be signed by the same key and have the same context and slot. In the
+The target MUST be signed by the same key and have the same context. The revoke's slot is
+the target's slot. In the
 deterministic order below, the revoke MUST sort after its target. It clears all and only
 registers whose current source is still the targeted act. Registers changed by an
 intervening act are unaffected. A prior value does not return.
@@ -171,9 +171,10 @@ The snapshot MUST contain the source event's `id`, `pubkey`, `created_at`, `kind
 `content`, and `sig`. It MUST be kind `30828`; its id and signature MUST validate; and its
 id MUST equal the marked source `e`.
 
-The final canonical JSON spelling used by the `snapshot` tag remains to be specified.
-Field equality operates on the decoded Nostr strings and ordered tag arrays, not on
-incidental JSON escape spelling received from a relay.
+No canonical JSON spelling is required. Any spelling that decodes to those seven fields,
+recomputes to the marked source `e` under NIP-01, and carries a valid signature is a valid
+snapshot. Field equality operates on the decoded Nostr strings and ordered tag arrays, not
+on incidental JSON escape spelling received from a relay.
 
 Because the exact source envelope is embedded, disappearance of the separately relayed
 source event does not make the selected bytes unavailable. If the source event is also
@@ -187,11 +188,10 @@ For an act to affect a notary projection:
 1. the act's event id and signature MUST validate;
 2. it MUST identify exactly one parseable marked notary context;
 3. its signer MUST equal the pubkey in that context coordinate;
-4. it MUST identify exactly one slot;
-5. it MUST be exactly one valid acceptance shape or one valid revoke shape;
-6. an acceptance snapshot and its source `e` MUST pass Snapshot validation;
-7. acceptance selectors MUST be allowed, distinct, and structurally valid;
-8. a revoke target MUST pass the same-key, context, slot, and ordering checks above.
+4. it MUST be exactly one valid acceptance shape or one valid revoke shape;
+5. an acceptance snapshot and its source `e` MUST pass Snapshot validation;
+6. acceptance selectors MUST be allowed, distinct, and structurally valid;
+7. a revoke target MUST pass the same-key, context, and ordering checks above.
 
 Current source-card replacement, present notary-graph reachability, optional credit, and
 observed plurality are not validity requirements.
@@ -254,7 +254,19 @@ built-in Sybil resistance.
 Readers can query decisions by marked context `#a`, exact source or revoke target `#e`,
 notary author, or known event id. Results MUST pass local validation before derivation.
 The source-card coordinate is derived from the verified snapshot. Relay filters are
-discovery hints only.
+discovery hints only. Multi-character tag names such as `snapshot` and `select` are not
+indexed by common relays; nothing in this document needs to filter on them.
+
+## Size
+
+An acceptance is its source card plus a few hundred bytes of framing. Card size is the
+budget; this document sets no act-side limit and defines no chunking. A card too large to
+embed is a card too large to accept.
+
+Relays cap the whole message, not the tag. `nostr-rs-relay` defaults to 262144 bytes for
+the entire `["EVENT", ...]` text; other relays commonly cap at 64 to 128 KB. An oversized
+act MAY be refused with a `NOTICE` rather than an `OK false`, so a writer MUST NOT wait
+only for `OK` by event id and MUST surface a `NOTICE` as a failed publish.
 
 ## Degradation
 
@@ -264,7 +276,6 @@ reinterpret it using older live-consent or causal-head rules.
 
 ## Open wire questions
 
-Before promotion beyond draft, this document still needs the final canonical snapshot
-serialization and confirmation of the provisional `slot`, `snapshot`, and `select` tag
-names. The derivation intentionally requires no `scope`, `value`, `prev`, or `supersede`
+Before promotion beyond draft, this document still needs confirmation of the provisional
+`snapshot` and `select` tag names. The derivation intentionally requires no `scope`, `value`, `prev`, or `supersede`
 machinery.
