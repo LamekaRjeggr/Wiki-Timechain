@@ -16,7 +16,7 @@
   default-src 'none';
   script-src 'self' 'unsafe-inline';
   style-src 'unsafe-inline';
-  connect-src wss:;
+  connect-src wss: ws://127.0.0.1:7777;
   img-src 'self' data:;
   base-uri 'none';
   form-action 'none'">
@@ -393,17 +393,25 @@
     </div>
   </section>
 
+  <!-- Act mode (kind 8828). Hidden on an ordinary visit: ?act=1 carrying a v2 wtc:act
+       record is the only thing that opens it, and it stands the card form down entirely —
+       an act is not a card and shares nothing with it but the key that signs it. -->
   <section id="sec-act" style="display:none">
-    <h2><i>2</i>the acceptance</h2>
-    <p class="note" id="act-chip"></p>
-    <pre class="json" id="act-text" style="display:none"></pre>
+    <h2><i>2</i>the act</h2>
+    <p class="note" id="act-note"></p>
+    <pre class="json" id="act-what"></pre>
+    <div class="bar">
+      <button class="go" id="b-act" disabled>sign &amp; publish the act</button>
+      <span class="msg" id="act-msg" style="margin:0"></span>
+    </div>
+    <p class="note" id="act-back" style="display:none"></p>
+    <pre class="json" id="act-json" style="display:none"></pre>
   </section>
 
   <section id="sec-card">
     <h2><i>2</i>the card</h2>
     <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
-      existing one or type a new slug, which is all it takes to start one — it is minted as a
-      notary under your key when you publish.</p>
+      existing one or type a new slug, which is all it takes to start one.</p>
 
     <div id="mine-row">
       <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
@@ -420,21 +428,19 @@
     </div>
     <div class="inh" id="inherit" style="display:none"></div>
 
-    <!-- The address hangs off the COLLECTION, not the title — the ↳ has to point at what it
-         is actually made from, or the form teaches the wrong thing. -->
+    <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
+    <input id="f-title" placeholder="Mirepoix" autocomplete="off">
+
     <div class="derives">
       <span class="arm" aria-hidden="true">↳</span>
       <div class="dbody">
         <label for="f-d">its address <span class="h" id="d-src"></span></label>
-        <input id="f-d" placeholder="pick a collection above" autocomplete="off">
+        <input id="f-d" placeholder="mirepoix" autocomplete="off">
         <p class="msg" id="d-msg"></p>
       </div>
     </div>
 
-    <label for="f-title">title <span class="h">— the event, no year prefix</span></label>
-    <input id="f-title" placeholder="Mirepoix" autocomplete="off">
-
-    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14 — and a time after a full date, if known: 2003-07-14 14:30 (UTC), or 06:15-07:00 for local time with its offset.</span></label>
+    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
 
     <label for="f-summary">summary <span class="h">— optional, your plain-words gloss; the viewer can show this instead of the record</span></label>
@@ -525,11 +531,20 @@ const RELAYS = [
   "wss://nostr.mom"
 ];
 const KIND   = 30828;
+// The two kinds the act handoff touches. Read AND written, but never from the
+// card form: an act is signed on the ?act=1 path alone. See the act-mode block at the
+// foot of this file.
+const ACT_KIND    = 8828;    // Timeline Acts (draft NIP): regular events, accept/revoke
+const NOTARY_KIND = 30829;   // Timeline Notaries (draft NIP): the collection as its own event
+// Decided before the first socket opens, because it changes what this page ASKS the relays
+// for. The record itself is read (and consumed) at the foot of the file; this flag is only
+// "an act is crossing", so a bare ?act=1 with nothing behind it still gets a visible answer.
+const actMode = new URLSearchParams(location.search).get("act") === "1";
 const CITE   = new Set(["cite","fork","adopt"]);   // spec marker + the two words it superseded (read only)
-const ACT_KIND = 8828;            // Timeline Acts (draft NIP) — the ?act=1 accept handoff
 const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
-const NOTARY_KIND = 30829;        // Timeline Notaries (draft NIP): the collection as its own event
-const NS_DATE = "timeline.date";  // the spec's one label namespace this form still writes
+// The spec's namespaces.
+const NS_COLL = "timeline.collection";
+const NS_DATE = "timeline.date";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -670,6 +685,75 @@ async function signWithSk(tmpl, skHex){
   return ev;
 }
 
+// ── the verify half, lifted from the viewer's gate ───────────────────────────────────
+// The card form never needed this: it signs, it does not judge. The act path does. An act
+// is a claim ABOUT another author's event, and the acceptance carries that event whole —
+// so before this page will put its name on one, the embedded 30828 has to be shown to be
+// the real thing: its id the hash of its own contents, and its signature that pubkey's
+// over that id. Same discipline, same code as index.html's admit().
+const fpow = (b, e, m) => {                // modular exponent, square-and-multiply
+  let r = 1n; b = fmod(b, m);
+  while (e > 0n){ if (e & 1n) r = fmod(r*b, m); b = fmod(b*b, m); e >>= 1n; }
+  return r;
+};
+function liftX(x){                         // x → the curve point with even y, or null
+  if (x <= 0n || x >= CURVE_P) return null;
+  const c = fmod(x*x*x + 7n, CURVE_P);
+  const y = fpow(c, (CURVE_P + 1n) / 4n, CURVE_P);
+  if (fmod(y*y, CURVE_P) !== c) return null;   // no square root: x is not on the curve
+  return [x, (y & 1n) ? CURVE_P - y : y];
+}
+async function schnorrVerify(msgHex, pkHex, sigHex){
+  if (!/^[0-9a-f]{64}$/.test(String(pkHex)) || !/^[0-9a-f]{128}$/.test(String(sigHex))) return false;
+  const P = liftX(BigInt("0x" + pkHex));
+  if (!P) return false;
+  const r = BigInt("0x" + sigHex.slice(0, 64)), s = BigInt("0x" + sigHex.slice(64));
+  if (r >= CURVE_P || s >= CURVE_N) return false;
+  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge",
+    intTo32(r), intTo32(P[0]), hexToBytes(msgHex))), CURVE_N);
+  const R = padd(pmul(G, s), pmul(P, CURVE_N - e));      // R = sG − eP
+  return !!R && (R[1] & 1n) === 0n && R[0] === r;
+}
+// the NIP-01 id of an event: the hash of its own contents, so it can't be reassigned
+async function eventId(ev){
+  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+  return bytesToHex(await sha256(new TextEncoder().encode(ser)));
+}
+// The gate, in the viewer's shape: id re-derived every time (it is the only thing binding
+// a cached verdict to these bytes), signature verdict cached by id. Only a signature
+// failure is remembered as bad — a body whose id doesn't match may belong to a real event
+// still on its way, and blacklisting the id would take the real one down with it.
+const vOK = new Set(), vBad = new Set(), vQ = [];
+let vBusy = false, vDropped = 0;
+function admit(ev, fn){
+  if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id))) return;
+  if (vBad.has(ev.id)) return;
+  vQ.push([ev, fn]);
+  if (!vBusy) drainGate();
+}
+async function drainGate(){
+  vBusy = true;
+  while (vQ.length){
+    const [ev, fn] = vQ.shift();
+    if (vBad.has(ev.id)) continue;
+    let hashOK = false, ok = false, spent = false;
+    try {
+      hashOK = (await eventId(ev)) === ev.id;
+      if (hashOK && vOK.has(ev.id)) ok = true;
+      else if (hashOK){ spent = true; ok = await schnorrVerify(ev.id, ev.pubkey, ev.sig); }
+    } catch { ok = false; }
+    if (ok) { vOK.add(ev.id); fn(ev); }
+    else {
+      if (hashOK) vBad.add(ev.id);
+      console.warn("wiki-timechain: dropped an event —",
+                   hashOK ? "signature does not check out" : "id is not the hash of its contents",
+                   ev.id, "— total dropped:", ++vDropped);
+    }
+    if (spent) await new Promise(r => setTimeout(r, 0));   // breathe between real checks
+  }
+  vBusy = false;
+}
+
 // ═══════════════ the signer ladder ═══════════════
 // Three rungs behind one interface, same shape as the viewer's getSigner() seam. The
 // difference from the viewer, and it is deliberate: there is NO minted key. A reaction is
@@ -704,7 +788,7 @@ async function useNip07(quiet){
   if (!quiet) signMsg("waiting for the extension…");
   try {
     const pk = await window.nostr.getPublicKey();
-    remember({ via:"extension", pk });
+    remember({ via:"extension" });
     setSigner({ via:"extension", pubkey: pk, sign: t => window.nostr.signEvent(t) });
   } catch(e){ if (!quiet) signMsg(msgOf(e), "bad"); }
 }
@@ -734,12 +818,9 @@ async function connectBunker(uri, clientKey, quiet){
     $("bunker-uri").value = "";
     // Reusing the same client key is what makes this silent next time — a fresh one would
     // re-prompt your signer for approval on every page load.
-    remember({ via:"bunker", uri, ck: bytesToHex(clientKey), pk });
+    remember({ via:"bunker", uri, ck: bytesToHex(clientKey) });
     setSigner({ via:"bunker", pubkey: pk, sign: t => b.signEvent(t) });
-  } catch(e){
-    // a remembered session that does not answer must say so — silence reads as "forgotten"
-    signMsg(quiet ? "this browser remembers your signer, but it did not answer — open the signer app on your phone and reload, or paste the bunker:// again" : msgOf(e), "bad");
-  }
+  } catch(e){ say(msgOf(e), "bad"); }
 }
 
 // ── nostrconnect:// — the same rung entered from the other end ───────────────────────
@@ -894,7 +975,12 @@ function useNsec(){
     if (d === 0n || d >= CURVE_N) throw new Error("that key is out of range for secp256k1");
     sessionSk = sk;
     $("nsec-in").value = "";
-    setSigner({ via:"nsec · this tab only", pubkey: xonlyPub(sk), sign: t => signWithSk(t, sessionSk) });
+    const pk = xonlyPub(sk);
+    // The SECRET stays in memory (see clearSession). Only the PUBLIC key crosses to storage,
+    // so index.html knows who you are and can offer act handoff. This is deliberately not
+    // a wtc:signin session: there is nothing here to resume a signature from.
+    try { localStorage.setItem("wtc:pk", pk); } catch {}
+    setSigner({ via:"nsec · this tab only", pubkey: pk, sign: t => signWithSk(t, sessionSk) });
     armIdle();
     signMsg("your clipboard still holds your key — copy something else over it.");
   } catch(e){
@@ -916,8 +1002,7 @@ function setSigner(s){
     ? "This browser remembers nothing. Close the tab, or sit idle for fifteen minutes, and you are out."
     : "This browser will sign you back in on your next visit. Sign out to forget it.";
   signMsg("");
-  subMine();             // your cards are read only once we know who you are
-  renderMine();
+  renderMine();          // your cards can only be listed once we know who you are
   tryRevise();           // an addressed card might turn out to be this key's own
   refresh();
 }
@@ -944,7 +1029,6 @@ function signOut(keep){
   if (keep !== true) { ncClose(); forget(); }
   $("signed-out").style.display = "";
   $("signed-in").style.display = "none";
-  subMine();
   renderMine();
   refresh();
 }
@@ -993,49 +1077,28 @@ $("b-nc-copy").addEventListener("click", async () => {
 resume();
 
 // ═══════════════ reading the corpus ═══════════════
-// Three subs, none of them the whole corpus. `ntry`: the notaries, by marker — the collection
-// list. `mine`: your own cards, by author, once you sign in — the edit list and the d-collision
-// guard. `coll`: the cards submitted to the collection you picked — the fork picker and the
-// inherited tags. No baked pubkey anywhere; nothing is read that the form does not need.
-const cards    = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
-const notaries = new Map();   // "30829:pubkey:d" → newest notary; a collection slug is a notary's d
-const loaded   = new Set();   // notary coords whose cards have been asked for
+// One sub, the viewer's own discovery filter: kind + marker, no author filter. That single
+// read feeds all three things this page needs — the collection list, the d-collision guard,
+// and the fork picker — so there is no second query and no baked pubkey anywhere.
+const cards   = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
 const relayUp = new Map();
 let eosed = 0, settled = false;
 
 const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
 const dOf     = ev => tagOf(ev, "d");
 const dateOf  = ev => tagOf(ev, "event_date");
-// the field's one grammar: "date" or "date time" — how a card's when reads back into it
-const whenOf  = ev => dateOf(ev) + (tagOf(ev, "event_time") ? " " + tagOf(ev, "event_time") : "");
-// a card's collection = the d of the notary it submits to (["a","30829:<pubkey>:<d>"])
 const collOf  = ev => {
-  const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
-  return a ? a[1].split(":").slice(2).join(":") : "";
+  const l = ev.tags.find(t => t[0] === "l" && t[2] === NS_COLL);
+  return l ? l[1] : "";
 };
-// the notary a slug names: the viewer's ?k= pick when it carries one, else the oldest —
-// the same default the viewer shows first, so "add to this timeline" lands on the same line
-let qk = new URLSearchParams(location.search).get("k") || "";
-function notaryOf(c){
-  const L = [...notaries.values()].filter(n => dOf(n) === c)
-    .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
-  return L.find(n => qk && n.pubkey.startsWith(qk)) || L[0] || null;
-}
-const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + dOf(n);
 
-// The membership gate, exactly as the spec states it: a card counts only if it submits to a
-// notary and carries a parseable YYYY-MM-DD event_date. The marker is discovery bait, not proof.
+// The membership gate, exactly as the spec states it: the marker is squattable, so a card
+// counts only if it ALSO carries a collection label and a parseable YYYY-MM-DD event_date.
 function passes(ev){
   if (ev.kind !== KIND) return false;
+  if (!ev.tags.some(t => t[0] === "t" && t[1] === MARKER)) return false;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOf(ev))) return false;
   return !!collOf(ev) && !!dOf(ev);
-}
-function ingestNotary(ev){
-  if (!ev || ev.kind !== NOTARY_KIND || !dOf(ev)) return;
-  const cur = notaries.get(coordOf(ev));
-  if (cur && cur.created_at >= ev.created_at) return;
-  notaries.set(coordOf(ev), ev);
-  scheduleDraw();
 }
 function ingest(ev){
   if (!passes(ev)) return;
@@ -1049,26 +1112,8 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; wantColl(); renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
 }
-const openSockets = () => sockets.filter(ws => ws.readyState === WebSocket.OPEN);
-const sub = (ws, id, f) => { ws.send(JSON.stringify(["CLOSE", id])); ws.send(JSON.stringify(["REQ", id, f])); };
-// your cards, per signer. Sign-in change re-reads; the collision guard is unsettled until
-// this read comes back (≥2 relays, or the 9 s fallback) — there is no read to settle before.
-function subMine(){
-  eosed = 0; settled = false;
-  openSockets().forEach(ws => signer ? sub(ws, "mine", { kinds:[KIND], authors:[signer.pubkey] }) : ws.send(JSON.stringify(["CLOSE","mine"])));
-  if (signer) setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
-}
-// the picked collection's cards, once per notary. Reads the field on every draw, so a
-// notary that lands after a ?c= deep link is still fetched.
-function wantColl(){
-  const n = notaryOf(wikiSlug(val("f-coll")));
-  if (!n || loaded.has(coordOf(n))) return;
-  loaded.add(coordOf(n));
-  openSockets().forEach(subColl);
-}
-const subColl = ws => loaded.size && sub(ws, "coll", { kinds:[KIND], "#a":[...loaded] });
 
 function connect(url){
   let ws;
@@ -1076,17 +1121,31 @@ function connect(url){
   relayUp.set(url, "connecting");
   ws.onopen = () => {
     relayUp.set(url, "up"); renderRelays();
-    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }]));
-    if (signer) sub(ws, "mine", { kinds:[KIND], authors:[signer.pubkey] });   // a late socket joins the reads already open
-    subColl(ws);
+    ws.send(JSON.stringify(["REQ", "tsieve", { kinds:[KIND], "#t":[MARKER], limit:500 }]));
+    // Only when an act is actually crossing. The notaries are what a context can legally
+    // be; the acts are what the six registers currently hold. A revoke cannot be resolved
+    // without both, so this read is a precondition of signing, not decoration.
+    if (actMode)
+      ws.send(JSON.stringify(["REQ", "asieve", { kinds:[NOTARY_KIND], limit:500 },
+                                                { kinds:[ACT_KIND], limit:2000 }]));
   };
   ws.onmessage = m => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
-    if (data[0] === "EVENT" && (data[1] === "mine" || data[1] === "coll")) ingest(data[2]);
-    if (data[0] === "EVENT" && data[1] === "ntry") ingestNotary(data[2]);
-    if (data[0] === "EVENT" && data[1] === "acts" && data[2]) priorActs.push(data[2]);
-    if (data[0] === "EOSE" && data[1] === "mine"){ eosed++; if (eosed >= 2) markSettled(); }
+    if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EVENT" && data[1] === "asieve" && data[2]){
+      // Everything here is a claim until the bytes check out — the same gate the viewer
+      // puts in front of its own act ingest, for the same reason.
+      if (data[2].kind === NOTARY_KIND) admit(data[2], ingestNotary);
+      if (data[2].kind === ACT_KIND)    admit(data[2], ingestAct);
+    }
+    if (data[0] === "EOSE" && data[1] === "asieve") actEosed();
+    // A NOTICE is the relay refusing in words instead of in an OK frame. On the act path
+    // that is a publish FAILURE and has to read as one — a silent NOTICE would leave
+    // "waiting for their verdicts…" on screen forever and pass for success.
+    if (data[0] === "NOTICE") actNotice(String(data[1] ?? ""));
+    if (data[0] === "EOSE" && data[1] === "tsieve"){ eosed++; if (eosed >= 2) markSettled(); }
     if (data[0] === "OK"){
+      actOk(String(data[1] || ""), !!data[2], String(data[3] || ""));
       const t = tallies.get(data[1]);
       if (t){ data[2] ? t.ok++ : (t.no++, t.why = t.why || String(data[3] || "")); renderPubTally(); }
     }
@@ -1097,24 +1156,26 @@ function connect(url){
 }
 const sockets = [];
 
-// Until the read of your cards settles, a d that looks free may only look free — and
-// publishing over your own card cannot be undone. So an unsettled read blocks the publish.
+// Until the read settles, a d that looks free may only look free — and publishing over your
+// own card cannot be undone. So an unsettled read blocks the publish rather than passing it.
 function markSettled(){
   if (settled) return;
   settled = true;
   refresh();
 }
+setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
 
 function renderRelays(){
   $("relays").innerHTML = RELAYS.map(r => {
     const st = relayUp.get(r) || "connecting";
-    return `<span class="rl ${st}">${esc(r.replace("wss://",""))}</span>`;
+    return `<span class="rl ${st}">${esc(r.replace(/^wss?:\/\//,""))}</span>`;
   }).join("");
 }
 renderRelays();
 RELAYS.forEach(connect);
 
 // ═══════════════ authoring helpers (ported from the Forge writer) ═══════════════
+// NIP-54 subject normalization: two authors writing the same subject land on the same d.
 function wikiSlug(s){
   return String(s).toLowerCase()
     .replace(/\s+/g, "-")
@@ -1122,15 +1183,6 @@ function wikiSlug(s){
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-// The address is MINTED, not derived from the title (CONVENTION.md). A title is a claim and
-// can be corrected; d is frozen forever, so a title-derived address outlives the claim it
-// named. Random beats a serial here: a counter would have to ask the relays what exists,
-// which makes minting stateful, racy between two tabs, and wrong when a relay is behind.
-function mintSuffix(){
-  return [...crypto.getRandomValues(new Uint8Array(3))]
-    .map(b => b.toString(16).padStart(2, "0")).join("");
-}
-let dSuffix = mintSuffix();      // one per card; the collection prefix follows the field
 // djot link targets can't contain whitespace — a space or line-wrap inside [label](url) is
 // always a copy/paste artifact (chat clients and terminals soft-wrap long URLs).
 function fixLinkTargets(s){
@@ -1198,21 +1250,21 @@ function dMsg(text, cls){
   el.textContent = text || "";
   el.className = "msg" + (cls ? " " + cls : "");
 }
-// It says what it is: minted under the collection while it follows, yours once you edit it.
-// Also OWNS the value — refresh() calls this, so the prefix tracks the collection field.
+// It says what it is: made from the title while it follows, yours once you edit it.
 function paintD(){
-  const dEl = $("f-d"), own = !!dEl.dataset.touched;
-  if (!own){
-    const c = wikiSlug(val("f-coll"));
-    dEl.value = c ? `${c}-${dSuffix}` : "";     // no collection yet, nothing to mint under
-  }
-  dEl.classList.toggle("own", own);
+  const own = !!$("f-d").dataset.touched;
+  $("f-d").classList.toggle("own", own);
   $("d-src").textContent = own
-    ? "— yours now, no longer minted. Frozen once published: republishing the same address replaces that card."
-    : "— minted under the collection, not made from the title. A wrong title can be corrected; the address never changes.";
+    ? "— yours now, no longer following the title. Frozen once published: republishing the same address replaces that card."
+    : "— made from the title automatically. Edit it only if you want a different one.";
 }
 
-$("f-title").addEventListener("input", refresh);
+// d follows the title until you touch it — then it is yours, because it is the address.
+$("f-title").addEventListener("input", () => {
+  const dEl = $("f-d");
+  if (!dEl.dataset.touched) dEl.value = wikiSlug($("f-title").value);
+  refresh();
+});
 $("f-d").addEventListener("input", () => { $("f-d").dataset.touched = "1"; refresh(); });
 ["f-coll","f-date","f-summary","f-content","f-extra",
  "f-fork-d","f-fork-e","f-fork-pk"].forEach(id => $(id).addEventListener("input", refresh));
@@ -1225,13 +1277,10 @@ $("f-coll").addEventListener("input", () => { $("f-coll-select").value = ""; });
 
 function renderCollections(){
   const sel = $("f-coll-select"), keep = sel.value;
-  // a notary is a timeline even before its first card lands; a count is shown only once
-  // that collection's cards were read — until then the number would be a lie
-  const seen = [...new Set([...cards.values()].map(collOf).concat([...notaries.values()].map(dOf)))].filter(Boolean).sort();
-  const cnt = c => { const n = notaryOf(c); return n && loaded.has(coordOf(n))
-    ? ` · ${[...cards.values()].filter(e => collOf(e) === c).length} cards` : ""; };
+  const seen = [...new Set([...cards.values()].map(collOf))].filter(Boolean).sort();
   sel.innerHTML = '<option value="">— pick one —</option>' +
-    seen.map(c => `<option value="${esc(c)}">${esc(c)}${cnt(c)}</option>`).join("");
+    seen.map(c => `<option value="${esc(c)}">${esc(c)} · ${
+      [...cards.values()].filter(e => collOf(e) === c).length} cards</option>`).join("");
   // A prefilled collection — a ?c= deep link or a handoff draft — is a choice already made
   // elsewhere. Show it as chosen; "— pick one —" beside a filled field reads as unset.
   const pre = wikiSlug(val("f-coll"));
@@ -1266,7 +1315,7 @@ function loadMine(){
   $("f-coll-select").value = "";
   $("f-summary").value = tagOf(ev,"summary");
   loadedPubAt          = tagOf(ev,"published_at");
-  $("f-date").value    = whenOf(ev);
+  $("f-date").value    = dateOf(ev);
   $("f-content").value = ev.content;
   const fa = ev.tags.find(t => t[0] === "a" && CITE.has(t[3]));
   const fe = ev.tags.find(t => t[0] === "e" && CITE.has(t[3]));
@@ -1276,15 +1325,12 @@ function loadMine(){
   $("f-fork-e").value  = fe?.[1] || "";
   // Everything the form owns comes back out of its own fields; anything else on the event
   // is round-tripped through the extra-tags box verbatim so an edit cannot silently drop it.
-  // Ownership is by VALUE, not tag name: the builder re-emits only the marker t and the
-  // timeline.date labels, so a topic t or a location ladder rung must ride the box or vanish.
-  // The fork's own p tag and the submission `a` are dropped too — the builder re-emits
-  // both, and a survivor here would ride along in extra tags and be published twice.
-  const owned = new Set(["d","title","summary","published_at","event_date","event_time","t","L","l"]);
+  // The fork's own p tag is dropped with the fork tags — the builder re-emits it, and a
+  // survivor here would ride along in extra tags and be published twice.
+  const owned = new Set(["d","title","summary","published_at","event_date","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
-    .filter(t => (!owned.has(t[0]) || topicOrLadder(t)) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk)
-              && !(t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")))
+    .filter(t => !owned.has(t[0]) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk))
     .map(t => t.join(" ")).join("\n");
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
@@ -1298,7 +1344,6 @@ function resetForm(){
   ["f-title","f-d","f-summary","f-content","f-extra",
    "f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
   delete $("f-d").dataset.touched;
-  dSuffix = mintSuffix();          // a new card is a new address, never the last one's
   $("f-fork").value = "";
   loadedD = null; loadedPubAt = "";
   cardMsg("");
@@ -1350,25 +1395,17 @@ function buildTemplate(){
   const extraRaw = val("f-extra");
   let content    = fixLinkTargets($("f-content").value || "");
 
+  const d = wikiSlug(dRaw || title);
   const c = wikiSlug(category);
-  const d = wikiSlug(dRaw);
-  // Collection first: d is minted under it, so an empty collection reads as an empty address
-  // and "pick a collection" is the honest complaint, not "the address is missing".
+  if (!d) throw new Error("a title (or a d slug) is required — it is the card's address");
   if (!c) throw new Error("a collection is required — every card joins a timeline");
-  if (!d) throw new Error("the address is empty — it is minted under the collection, or type your own");
-  if (!title) throw new Error("a title is required — it is what the card says happened");
 
-  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD — and one rung deeper, a time after a
-  // full date ("2026-08-06 14:30" = UTC; "06:15-07:00" = local, offset kept verbatim).
-  // The TAG is always a full date, because
+  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD. The TAG is always a full date, because
   // the membership gate needs a concrete point on the spine; a coarse input is placed on
   // day 01 and the precision is recorded where the convention puts it, in the content.
-  // Time attaches only to a known day: the grammar has no slot for it on a coarse date.
-  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2})(?: (\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2})?))?)?)?$/);
-  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD, with an optional time after a full date (e.g. 2003-07-14 14:30 UTC, or 2003-07-14 06:15-07:00 local)");
-  const [, wy, wmIn, wdIn, wt] = dm;
-  if (wt && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:[+-](?:0\d|1[0-4]):[0-5]\d)?$/.test(wt))
-    throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour; bare is UTC, a trailing ±HH:MM is local`);
+  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14)");
+  const [, wy, wmIn, wdIn] = dm;
   const wm = wmIn || "01";
   const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
   const dchk = new Date(fullDate + "T00:00:00Z");
@@ -1396,16 +1433,10 @@ function buildTemplate(){
   if (title) tags.push(["title", title]);
   tags.push(["published_at", loadedPubAt || String(now)]);
   tags.push(["event_date", fullDate]);
-  // Seconds only if typed — precision-only, like the buckets. prec, not wdIn: a content
-  // line declaring a coarser date wins, and a time on a placeholder day would be a lie.
-  if (wt && prec === "day") tags.push(["event_time", wt]);
-  // Marker, submission, NIP-32 date buckets. The submission names the collection's notary —
-  // yours, minted at publish, when the slug has none yet (the signer is the pubkey then).
-  // Date buckets encode KNOWN precision: a year-only card emits no month bucket, because
-  // the placeholder month is not a fact about the world.
+  // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
+  // no month bucket, because the placeholder month is not a fact about the world.
   tags.push(["t", MARKER]);
-  const ntry = notaryOf(c);
-  tags.push(["a", ntry ? coordOf(ntry) : `${NOTARY_KIND}:${signer ? signer.pubkey : ""}:${c}`]);
+  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
   tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
   if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
   if (summary) tags.push(["summary", summary]);
@@ -1449,23 +1480,19 @@ function buildTemplate(){
   return { kind: KIND, created_at: now, tags, content };
 }
 
-// A topic t (never the marker) or a location L/l rung — the tags a card carries that this
-// form does not build itself. Only the builder's own namespace is excluded;
-// timeline.location is a ladder rung like the ISO ones and travels the same way.
-function topicOrLadder(t){
-  const ns = t[0] === "L" ? (t[1] || "") : (t[2] || "");
-  return (t[0] === "t" && t[1] !== MARKER) ||
-    ((t[0] === "L" || t[0] === "l") && ns !== NS_DATE);
-}
-
-// What a collection's cards AGREE on — the exact tags present on every one of them. A
+// What a collection's cards AGREE on — the exact tags present on every one of them. Topic
+// t's (never the marker) and location L/l ladders (never the spec's own namespaces). A
 // collection whose cards disagree on a tag inherits nothing for it: agreement, not guess.
 function inheritedTags(c){
   const list = [...cards.values()].filter(e => collOf(e) === c);
   if (!list.length) return [];
+  const cand = t =>
+    (t[0] === "t" && t[1] !== MARKER) ||
+    ((t[0] === "L" || t[0] === "l") &&
+      !/^timeline\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
   let common = null;   // key -> original tag array, so a value with a space survives
   for (const ev of list){
-    const m = new Map(ev.tags.filter(topicOrLadder).map(t => [JSON.stringify(t), t]));
+    const m = new Map(ev.tags.filter(cand).map(t => [JSON.stringify(t), t]));
     common = common === null ? m : new Map([...common].filter(([k]) => m.has(k)));
   }
   return [...common.values()];
@@ -1481,21 +1508,15 @@ function collisionCheck(d){
     return { block: true, text: `"${d}" is already your card "${tagOf(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Load it above to edit, or give this one its own d.` };
   }
   const rival = [...cards.values()].find(e => dOf(e) === d && e.pubkey !== signer.pubkey);
-  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which the viewer shows as two submitted. That is allowed; just make sure you meant it.` };
+  if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which the viewer shows as contested. That is allowed; just make sure you meant it.` };
   return null;
 }
 
 // ═══════════════ preview + gating ═══════════════
 function refresh(){
-  // act mode: there is no card form — the only gate is a signer. The card machinery
-  // below would read empty fields and cry about them.
-  if (qact){
-    $("b-pub").disabled = !signer;
-    if (!signer) pubMsg("sign in first");
-    else if (!actSent) pubMsg("");
-    return;
-  }
-  wantColl();                          // the picked collection's cards, if not read yet
+  // Act mode drives its own gate and its own button. The card form is not on screen and
+  // must never become publishable from here — an act and a card share only the signer.
+  if (actMode){ $("b-pub").disabled = true; actGate(); return; }
   let tmpl = null, err = null;
   try { tmpl = buildTemplate(); } catch(e){ err = msgOf(e); }
 
@@ -1518,27 +1539,26 @@ function refresh(){
   }
 
   // An untouched form has nothing wrong with it yet — say what's missing, don't cry error.
-  // d is deliberately NOT in this test: it mints itself, and a ?c= deep link fills it before
-  // you have typed a thing. A form you have not touched must still read as untouched.
-  const pristine = !val("f-title") && !val("f-summary") && !$("f-content").value.trim();
+  const pristine = !val("f-title") && !val("f-d") && !$("f-content").value.trim();
   $("pv-host").innerHTML = tmpl ? previewHtml(tmpl)
     : `<p class="msg${pristine ? "" : " bad"}">${esc(pristine ? "fill in the card above and it appears here" : err || "")}</p>`;
   $("pv-json").textContent = tmpl ? JSON.stringify(tmpl, null, 2) : "";
 
   const why = !signer ? "sign in first"
     : err ? err
-    : !settled ? `still reading your cards from the relays — the d check can't answer yet`
+    : !settled ? `still reading the existing cards from the relays (${cards.size} so far) — the d check can't answer yet`
     : "";
   $("b-pub").disabled = !!why;
   if (why && !$("pub-msg").classList.contains("ok")) pubMsg(why, err && signer && settled ? "bad" : "");
   else if (!why && !$("pub-msg").classList.contains("ok")) pubMsg("");
 }
 
-// The fields the gate needs, orange while empty. Never red, and the label already says
-// "Required" in words. d is not among them — it mints itself once a collection is picked,
-// so an empty d is the collection's fault and the collection is already glowing.
+// The three fields the gate needs, orange while empty. Title and d glow as a pair — the
+// builder takes either one. Never red, and the label already says "Required" in words.
 function needGlow(){
-  $("f-title").classList.toggle("need", !val("f-title"));
+  const needName = !val("f-title") && !val("f-d");
+  $("f-title").classList.toggle("need", needName);
+  $("f-d").classList.toggle("need", needName);
   $("f-coll").classList.toggle("need", !wikiSlug(val("f-coll")));
   $("f-date").classList.toggle("need", !val("f-date"));
 }
@@ -1595,42 +1615,16 @@ function renderPubTally(){
   if (!t) return;
   const open = [...relayUp.values()].filter(v => v === "up").length;
   pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
-  // an act was the tab's one job — first relay OK, route back to the timeline it came from
-  if (actSent && t.ok && !backTimer){
-    const url = "index.html" + (qact.c ? "?c=" + encodeURIComponent(qact.c) + (qk ? "&k=" + qk : "") : "");
-    $("pub-msg").innerHTML += ` — <a href="${url}">back to the timeline</a> (going in 3s…)`;
-    backTimer = setTimeout(() => { location.href = url; }, 3000);
-  }
 }
-let backTimer = null;
 
 async function publish(){
-  if (qact) return publishAct();
   if (!signer) return;
   let signed;
   $("b-pub").disabled = true;
   pubMsg("signing…");
-  // A new slug is a new notary: minted under your key, automatic (`passes auto`), sent BEFORE the
-  // card so the submission never points at nothing. Two signatures, same click.
-  let ntry = null, act = null;
   try {
-    const tmpl = buildTemplate();
-    const c = collOf({ tags: tmpl.tags });
-    if (!notaryOf(c)){
-      ntry = await signer.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
-        tags: [["d", c], ["title", c.replaceAll("-", " ")], ["t", MARKER], ["passes", "auto"]] });
-      if (!ntry || !ntry.sig) throw new Error("the signer returned nothing for the new collection's notary — was the request approved?");
-    }
-    signed = await signer.sign(tmpl);
+    signed = await signer.sign(buildTemplate());
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
-    // your own manual notary: the acceptance rides with the card, same click. No owner
-    // special case in the rule — the act is still what passes it — just no second trip.
-    const N = notaryOf(c);
-    if (N && N.pubkey === signed.pubkey && tagOf(N, "passes") !== "auto"){
-      const tags = [["a", KIND + ":" + signed.pubkey + ":" + dOf(signed)], ["e", signed.id], ["p", signed.pubkey]];
-      for (const f of ["title", "summary"]) if (tagOf(signed, f)) tags.push([f, tagOf(signed, f)]);
-      act = await signer.sign({ kind: ACT_KIND, created_at: signed.created_at + 1, content: signed.content, tags });
-    }
   } catch(e){
     pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
   }
@@ -1638,10 +1632,8 @@ async function publish(){
   if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
 
   tallies.set(signed.id, { ok: 0, no: 0, why: "" });
-  const send = ev => { const msg = JSON.stringify(["EVENT", ev]); open.forEach(ws => { try { ws.send(msg); } catch {} }); };
-  if (ntry){ send(ntry); ingestNotary(ntry); }
-  send(signed);
-  if (act) send(act);
+  const msg = JSON.stringify(["EVENT", signed]);
+  open.forEach(ws => { try { ws.send(msg); } catch {} });
 
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];
@@ -1658,28 +1650,6 @@ $("b-pub").addEventListener("click", publish);
 // timeline already chosen.
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
-
-// ?act=1: an acceptance carried from the viewer (no NIP-07 there) — kind 8828, the act
-// of standing behind ONE exact version. Consume-once like wtc:draft. The exact version
-// travels in the record — id and byte-exact content — so a replacement racing the hop
-// cannot swap what gets accepted. The coord is checked against the writer-side rule
-// (draft acts NIP): parse <kind>:<64-hex>:<d> and refuse a p that mismatches it.
-const priorActs = [];            // acts already on the coord — mine feeds the supersede pointer
-let actSent = false;
-const qact = (() => {
-  if (new URLSearchParams(location.search).get("act") !== "1") return null;
-  let rec = null;
-  try {
-    rec = JSON.parse(localStorage.getItem("wtc:act") || "null");
-    localStorage.removeItem("wtc:act");
-  } catch {}
-  const okCoord = rec && /^\d+:[0-9a-f]{64}:./.test(rec.coord || "");
-  return rec && rec.v === 1 && Date.now() - rec.at < 24*3600*1000 && okCoord &&
-         /^[0-9a-f]{64}$/.test(rec.e || "") && rec.coord.split(":")[1] === rec.p &&
-         typeof rec.content === "string"
-    ? rec : null;
-})();
-if (qact) actMode();
 
 // ?d/&e/&p: a card arrives addressed — the "revise" link beside any card's pyramid in the
 // viewer. Which door it opens is decided late: the fork fields fill NOW, so a visitor can
@@ -1720,127 +1690,6 @@ function reviseMode(){
     '<a href="NIP-DRAFT.md">the spec</a>.';
   $("card-note").textContent = "The card you are revising, loaded as it stands. Mark up what changed.";
 }
-
-// ── act mode: the accept handoff's one screen — sign in, see what you're signing, sign ──
-function actMode(){
-  $("mine-row").style.display = "none";
-  $("sec-card").style.display = "none";
-  $("sec-fork").style.display = "none";
-  $("fork-wake").style.display = "none";
-  $("sec-preview").style.display = "none";
-  $("sec-act").style.display = "";
-  document.querySelector("header h1").textContent = qact.w ? "Withdraw an acceptance" : "Accept a card";
-  document.querySelector("header .sub").innerHTML = qact.w
-    ? 'A kind-8828 revoke: withdraws your current acceptance, backing nothing in its ' +
-      'place. The revoked act stays visible history — only the tally forgets it.'
-    : 'A kind-8828 act: your signature over the exact text of the version you chose — ' +
-      'a byte copy that stands as a record even if the card is later replaced.';
-  $("act-chip").innerHTML =
-    `${qact.w ? "withdrawing your acceptance of" : "accepting"} <strong>${esc(qact.title || "")}</strong> by ` +
-    `<code>${esc(npub(qact.p).slice(0, 14))}…</code>` +
-    (qact.w ? "" :
-      ` — the exact version you saw on the timeline. <a id="act-show" href="#">show the text you are signing</a>`);
-  if (!qact.w) $("act-show").addEventListener("click", e => {
-    e.preventDefault();
-    $("act-text").style.display = "";
-    // every byte copy the act will carry — title/summary tags plus the content
-    $("act-text").textContent =
-      [qact.t && "title: " + qact.t, qact.s && "summary: " + qact.s, qact.content]
-        .filter(Boolean).join("\n\n");
-  });
-  $("b-pub").textContent = qact.w ? "sign & withdraw" : "sign & accept";
-  askActs(); setTimeout(askActs, 3000);   // sockets still connecting get the second ask
-  // same signpost move as handoffMode: you're here because the viewer had no extension,
-  // so hand "start here" to the rung that can sign for someone whose key lives elsewhere
-  let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
-  if (!window.nostr && !saved){
-    document.querySelector(".ladder").classList.add("plain");
-    const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
-    ext.classList.remove("picked");
-    bunk.classList.add("picked");
-    bunk.prepend(ext.querySelector(".kick"));
-  }
-}
-// prior acceptances of this coord — the newest of MINE gets the supersede pointer
-function askActs(){
-  if (!qact) return;
-  // #a fetches the acceptances; a standalone revoke carries NO `a`, so the second filter
-  // asks by the act ids already held — without it a revoked act looks current here and a
-  // withdraw would revoke a corpse (the viewer's actE set, in one-shot form)
-  const f = [{ kinds: [ACT_KIND], "#a": [qact.coord] }];
-  const ids = priorActs.map(a => a.id);
-  if (ids.length) f.push({ kinds: [ACT_KIND], "#e": ids });
-  const msg = JSON.stringify(["REQ", "acts", ...f]);
-  sockets.forEach(ws => { try { if (ws.readyState === WebSocket.OPEN) ws.send(msg); } catch {} });
-}
-async function publishAct(){
-  if (!signer || !qact) return;
-  $("b-pub").disabled = true;
-  pubMsg("signing…");
-  let signed, ntry = null;
-  try {
-    // dead = acts a SAME-KEY act of mine already revoked or superseded (the reader-side
-    // rule, applied here so the pointer never lands on a corpse)
-    const dead = new Set();
-    for (const a of priorActs){
-      if (a.pubkey !== signer.pubkey) continue;
-      for (const t of a.tags)
-        if (t[0] === "e" && (t[3] === "revoke" || t[3] === "supersede")) dead.add(t[1]);
-    }
-    const mine = priorActs
-      .filter(a => a.kind === ACT_KIND && a.pubkey === signer.pubkey && !dead.has(a.id) &&
-                   a.tags.some(t => t[0] === "a" && t[1] === qact.coord))
-      .sort((x, y) => y.created_at - x.created_at)[0];
-    let tags, content;
-    if (qact.w){
-      // withdraw: revoke the current act, nothing in its place (draft NIP, Revoke)
-      if (!mine) throw new Error("no current acceptance of yours on this card — nothing to withdraw");
-      tags = [["e", mine.id, "", "revoke"]];
-      content = "";
-    } else {
-      tags = [["a", qact.coord], ["e", qact.e], ["p", qact.p]];
-      // field scope (draft NIP): copy each field the card carried, the way it carried it —
-      // presence = scope. t/s ride the handoff; an old record without them still signs a
-      // valid content-scope act.
-      if (qact.t) tags.push(["title", qact.t]);
-      if (qact.s) tags.push(["summary", qact.s]);
-      if (mine) tags.push(["e", mine.id, "", "supersede"]);
-      content = qact.content;
-    }
-    // CURATE (same rule as the viewer's acceptCard): accepting on someone else's timeline
-    // coins your own notary for the name — manual, chained to theirs — the first time.
-    const N = !qact.w && qact.n ? notaries.get(qact.n) : null;
-    if (N && N.pubkey !== signer.pubkey &&
-        ![...notaries.values()].some(n => n.pubkey === signer.pubkey && dOf(n) === dOf(N))){
-      ntry = await signer.sign({ kind: NOTARY_KIND, created_at: Math.floor(Date.now() / 1000), content: "",
-        tags: [["d", dOf(N)], ["title", tagOf(N,"title") || dOf(N)], ["t", MARKER], ["passes", "manual"], ["a", qact.n]] });
-      if (!ntry || !ntry.sig) throw new Error("the signer returned nothing for your notary — was the request approved?");
-    }
-    // strictly newer than the superseded/revoked act, so newest-per-key derivation can't tie
-    signed = await signer.sign({
-      kind: ACT_KIND,
-      created_at: Math.max(Math.floor(Date.now() / 1000), (mine ? mine.created_at : 0) + 1),
-      content,
-      tags
-    });
-    if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
-  } catch(e){
-    pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
-  }
-  const open = sockets.filter(ws => ws.readyState === WebSocket.OPEN);
-  if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
-  actSent = true;
-  tallies.set(signed.id, { ok: 0, no: 0, why: "" });
-  if (ntry){ ingestNotary(ntry); qk = signer.pubkey.slice(0, 12); }   // your notary first; the way back lands on it
-  for (const ev of ntry ? [ntry, signed] : [signed]){
-    const out = JSON.stringify(["EVENT", ev]);
-    open.forEach(ws => { try { ws.send(out); } catch {} });
-  }
-  priorActs.push(signed);                 // an immediate re-accept supersedes THIS one
-  $("pub-json").style.display = "";
-  $("pub-json").textContent = JSON.stringify(signed, null, 2);
-  pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);
-}
 // Named while it can be — the target may still be in flight from the relays, so this runs
 // once with nothing and again the moment the card lands.
 function reviseChip(ev){
@@ -1870,7 +1719,7 @@ function tryPrefill(){
   if (val("f-title") || $("f-content").value.trim()) return;
   $("f-title").value   = tagOf(ev,"title").replace(/^\d{4}\s*·\s*/, "");
   $("f-coll").value    = collOf(ev);
-  $("f-date").value    = whenOf(ev);
+  $("f-date").value    = dateOf(ev);
   $("f-summary").value = tagOf(ev,"summary");
   $("f-content").value = ev.content;
   // d is left to derive from the title: this is a new card under YOUR key, and pubkey:d is
@@ -1912,12 +1761,11 @@ if (new URLSearchParams(location.search).get("draft") === "1"){
     if (rec && rec.v === 1 && Date.now() - rec.at < 24*3600*1000){
       $("f-title").value   = rec.title || "";
       $("f-coll").value    = rec.coll || qc || "";
-      $("f-date").value    = (rec.date || "") + (rec.time ? " " + rec.time : "");
+      $("f-date").value    = rec.date || "";
       $("f-summary").value = rec.summary || "";
       $("f-content").value = rec.content || "";
-      // The viewer minted its own address for this draft and did not carry it — the handoff
-      // is a NEW card, so mint here. refresh() paints it under the collection just set.
-      refresh();
+      // fire the follower, not just the value — d is made from the title
+      $("f-title").dispatchEvent(new Event("input", { bubbles: true }));
       handoffMode();
     }
   } catch {}
@@ -1936,20 +1784,447 @@ function handoffMode(){
   $("card-note").textContent = "Carried over from the timeline. Check it, then publish.";
   // You are here because the viewer had no extension to offer, so don't open by recommending
   // one: drop the "no key yet?" signpost with its arm, and hand "start here" to the rung that
-  // can sign for someone who already has a key elsewhere.
-  let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
-  if (!window.nostr && !saved){
-    document.querySelector(".ladder").classList.add("plain");
-    const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
-    ext.classList.remove("picked");
-    bunk.classList.add("picked");
-    bunk.prepend(ext.querySelector(".kick"));
-  }
+  // can sign for someone who already has a key elsewhere. Act mode wants the same thing.
+  preferBunkerRung();
 }
 $("fork-wake").addEventListener("click", () => {
   $("sec-fork").style.display = "";
   $("fork-wake").style.display = "none";
 });
+
+// ═══════════════ act mode — kind 8828, the handoff from the viewer ═══════════════
+// The viewer signs its own acts when a NIP-07 extension is there. When it isn't, the act
+// crosses to this page, because this is where the bunker and nsec rungs live. What crosses
+// is a wtc:act record: consume-once, gated on ?act=1 and on freshness, exactly like the
+// draft handoff above.
+//
+// The GRAMMAR is not re-derived here. parseAct/foldProjection/acceptances below are the
+// viewer's own reducer, ported verbatim, and they are the authority twice over: they
+// resolve which acceptance a revoke targets, and they are run one last time on the SIGNED
+// bytes before anything is sent. If the reducer will not take the act, this page does not
+// publish it. That is what keeps the two ends from drifting apart again.
+
+// ── the viewer's reducer, ported verbatim from index.html ──────────────────────────
+const notaries    = new Map();   // 30829:pubkey:d → newest notary
+const acts        = new Map();   // act id → kind-8828 event; regular events, nothing replaces
+const validActs   = new Map();   // act id → strict normalized act
+const rejectedActs = new Map();  // act id → { code, event } — visible degradation, never silent
+
+const AFIELDS = ["title", "summary", "content", "event_date", "event_time", "g"];
+const SELECT_FIELD = new Map([["tag:title","title"],["tag:summary","summary"],
+  ["content","content"],["tag:event_date","event_date"],
+  ["tag:event_time","event_time"],["tag:g","g"]]);
+const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tagOf(n,"d");
+const CTX_RE  = new RegExp("^" + NOTARY_KIND + ":[0-9a-f]{64}:.+");
+const notarySources = N => N ? [...new Set(N.tags
+  .filter(t => t[0] === "a" && CTX_RE.test(t[1] || ""))
+  .map(t => t[1]))] : [];
+function notariesOf(c){
+  return [...notaries.values()].filter(n => tagOf(n,"d") === c)
+    .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
+}
+const evShape = (x, kind) => x && typeof x === "object" && /^[0-9a-f]{64}$/.test(x.id || "") &&
+  /^[0-9a-f]{64}$/.test(x.pubkey || "") && Number.isSafeInteger(x.created_at) && x.created_at >= 0 &&
+  x.kind === kind && Array.isArray(x.tags) && typeof x.content === "string" && /^[0-9a-f]{128}$/.test(x.sig || "");
+
+function parseAct(ev){
+  const bad = code => ({ok:false, code});
+  if (!evShape(ev, ACT_KIND) || ev.content !== "") return bad("invalid-shape");
+  const allowed = new Set(["a","e","snapshot","select","p"]);
+  if (ev.tags.some(t => !Array.isArray(t) || t.some(x => typeof x !== "string") || !allowed.has(t[0])))
+    return bad("unexpected-tag");
+  const aa = ev.tags.filter(t => t[0] === "a"), a = aa.filter(t => t[3] === "context");
+  if (aa.length !== 1 || a.length !== 1 || a[0].length !== 4 ||
+      !CTX_RE.test(a[0][1]) || a[0][1].split(":")[1] !== ev.pubkey) return bad("invalid-context");
+  const ee = ev.tags.filter(t => t[0] === "e"), src = ee.filter(t => t[3] === "source"),
+        rev = ee.filter(t => t[3] === "revoke"), snaps = ev.tags.filter(t => t[0] === "snapshot"),
+        sels = ev.tags.filter(t => t[0] === "select"), credits = ev.tags.filter(t => t[0] === "p");
+  if (credits.some(t => t.length !== 4 || !/^[0-9a-f]{64}$/.test(t[1]) || t[3] !== "credit"))
+    return bad("invalid-credit");
+  const common = {id:ev.id, pubkey:ev.pubkey, createdAt:ev.created_at, context:a[0][1], event:ev};
+  if (ee.length === 1 && rev.length === 1 && rev[0].length === 4 &&
+      /^[0-9a-f]{64}$/.test(rev[0][1]) && !snaps.length && !sels.length && !credits.length)
+    return {ok:true, act:{...common,type:"revoke",targetActId:rev[0][1]}};
+  if (ee.length !== 1 || src.length !== 1 || src[0].length !== 4 ||
+      !/^[0-9a-f]{64}$/.test(src[0][1]) || snaps.length !== 1 || snaps[0].length !== 2 ||
+      !sels.length || sels.some(t => t.length !== 2)) return bad("invalid-acceptance");
+  let snapshot; try { snapshot = JSON.parse(snaps[0][1]); } catch { return bad("invalid-snapshot-json"); }
+  if (!evShape(snapshot, KIND) || !snapshot.tags.every(t => Array.isArray(t) && t.every(x => typeof x === "string")) ||
+      snapshot.id !== src[0][1])
+    return bad("invalid-snapshot");
+  const ds = snapshot.tags.filter(t => t[0] === "d");
+  if (ds.length !== 1 || !ds[0][1]) return bad("invalid-snapshot-d");
+  const names = sels.map(t => t[1]);
+  if (new Set(names).size !== names.length || (names.includes("card") && names.length !== 1) ||
+      (!names.includes("card") && names.some(x => !SELECT_FIELD.has(x)))) return bad("invalid-selector");
+  const fields = names[0] === "card" ? [...AFIELDS] : names.map(x => SELECT_FIELD.get(x));
+  const blocks = Object.fromEntries(fields.map(f => [f, f === "content" ? snapshot.content :
+    snapshot.tags.filter(t => t[0] === f).map(t => t.slice())]));
+  return {ok:true,act:{...common,type:"acceptance",slot:ds[0][1],sourceEventId:src[0][1],
+    snapshot,fields,blocks,wholeCard:names[0] === "card"}};
+}
+function foldProjection(){
+  const accepted = [...validActs.values()].filter(a => a.type === "acceptance");
+  const byId = new Map(accepted.map(a => [a.id,a])), dead = new Set();
+  for (const r of validActs.values()) if (r.type === "revoke"){
+    const t = byId.get(r.targetActId);
+    if (t && t.pubkey === r.pubkey && t.context === r.context) dead.add(t.id);
+  }
+  const out = new Map(), empty = () => Object.fromEntries(AFIELDS.map(f => [f,{state:"unset"}]));
+  accepted.sort((a,b) => a.createdAt-b.createdAt || a.id.localeCompare(b.id));
+  for (const a of accepted){
+    const k = a.context + "\0" + a.slot;
+    const p = out.get(k) || {context:a.context,slot:a.slot,registers:empty()}; out.set(k,p);
+    for (const f of a.fields) p.registers[f] = {state:"selected",value:a.blocks[f],
+      sourceActId:a.id,sourceEventId:a.sourceEventId,snapshot:a.snapshot};
+    if (dead.has(a.id)) for (const f of AFIELDS)
+      if (p.registers[f].sourceActId === a.id) p.registers[f] = {state:"unset"};
+  }
+  return [...out.values()].sort((a,b) => a.context.localeCompare(b.context)||a.slot.localeCompare(b.slot));
+}
+// The acts that CURRENTLY hold at least one of the six registers for this context and
+// slot. Not "acts that mention the card" — a revoked act, or one every register has since
+// moved off, is not here, and that is exactly the set a withdraw is allowed to target.
+function acceptances(coord, heldId, context){
+  const slot = coord.split(":").slice(2).join(":");
+  const p = foldProjection().find(x => x.context === context && x.slot === slot);
+  if (!p) return [];
+  const ids = new Set(AFIELDS.map(f => p.registers[f].sourceActId).filter(Boolean));
+  return [...ids].map(id => acts.get(id)).filter(Boolean)
+    .sort((a,b) => a.created_at-b.created_at || a.id.localeCompare(b.id));
+}
+
+function ingestNotary(ev){
+  if (!ev || ev.kind !== NOTARY_KIND) return;
+  const d = tagOf(ev, "d"); if (!d) return;
+  const k = NOTARY_KIND + ":" + ev.pubkey + ":" + d, cur = notaries.get(k);
+  if (cur && cur.created_at >= ev.created_at) return;
+  notaries.set(k, ev); scheduleActDraw();
+}
+function ingestAct(ev){
+  if (!ev || ev.kind !== ACT_KIND || acts.has(ev.id)) return;
+  const parsed = parseAct(ev);
+  if (!parsed.ok){ rejectedActs.set(ev.id, { code: parsed.code, event: ev }); scheduleActDraw(); return; }
+  const keep = () => { acts.set(ev.id, ev); validActs.set(ev.id, parsed.act); scheduleActDraw(); };
+  // The outer act's signature cannot vouch for the embedded author's signature.
+  parsed.act.type === "acceptance" ? admit(parsed.act.snapshot, keep) : keep();
+}
+let actDrawT = null;
+function scheduleActDraw(){
+  if (actDrawT) return;
+  actDrawT = setTimeout(() => { actDrawT = null; actRender(); actGate(); }, 150);
+}
+
+// ── the crossing ────────────────────────────────────────────────────────────────────
+let actRec = null;        // the validated v2 handoff record, or null
+let actEose = false;      // the relays have finished sending their notaries and acts
+let actReady = false;     // …and the verify queue has drained behind it
+let actFatal = "";        // a refusal that no amount of waiting fixes
+let actPub = null;        // { id, sent, ok, no, why } for the one act in flight
+
+function actMsg(text, cls){
+  const el = $("act-msg");
+  el.textContent = text || "";
+  el.className = "msg" + (cls ? " " + cls : "");
+}
+function actFail(why){ actFatal = why; actMsg(why, "bad"); $("b-act").disabled = true; }
+
+// A read that never settles must not be signed against: a missing act is indistinguishable
+// from an act that has not arrived, and the difference decides whether a revoke finds its
+// target or invents one. So this fails visibly instead of proceeding on a partial corpus.
+function actEosed(){ if (!actEose){ actEose = true; actSettle(); } }
+function actSettle(){
+  if (!actEose || actReady) return;
+  if (vBusy || vQ.length){ setTimeout(actSettle, 60); return; }   // let the gate drain first
+  actReady = true; actRender(); actGate();
+}
+setTimeout(() => {
+  if (actMode && actRec && !actReady && !actFatal)
+    actFail("the relays never finished sending their notaries and acts — this page will not " +
+            "sign against a partial read, because a missing act and an unarrived one look the " +
+            "same from here. Check the relay and reload.");
+}, 15000);
+
+// ── verdicts. A NOTICE is the relay refusing in prose instead of in an OK frame; on this
+//    path it counts as a refusal, because a silent one would leave "waiting…" on screen and
+//    read as success. ────────────────────────────────────────────────────────────────
+function actOk(id, ok, why){
+  if (!actPub || id !== actPub.id || actPub.ok + actPub.no >= actPub.sent) return;
+  ok ? actPub.ok++ : (actPub.no++, actPub.why = actPub.why || why);
+  actTally();
+}
+function actNotice(text){
+  if (!actPub || actPub.ok + actPub.no >= actPub.sent) return;
+  actPub.no++; actPub.why = actPub.why || ("NOTICE: " + text);
+  actTally();
+}
+function actTally(){
+  const p = actPub; if (!p) return;
+  const done = p.ok + p.no >= p.sent;
+  if (p.no) actMsg(`refused — ${p.no} of ${p.sent} relays` +
+                   (p.why ? ` (${p.why})` : "") + (p.ok ? `, accepted by ${p.ok}` : "") +
+                   ". Nothing of yours changed on the timeline.", "bad");
+  else if (done){ actMsg(`published — accepted by ${p.ok} of ${p.sent} relays`, "ok"); actBack(); }
+  else actMsg(`sent to ${p.sent} relays — waiting for their verdicts…`);
+}
+function actBack(){
+  const c = actRec && actRec.c;
+  $("act-back").style.display = "";
+  $("act-back").innerHTML = `<a href="index.html${c ? "?c=" + encodeURIComponent(c) : ""}">` +
+    `← back to the timeline</a>`;
+}
+
+function actPublish(ev){
+  const open = sockets.filter(ws => ws.readyState === WebSocket.OPEN);
+  const msg = JSON.stringify(["EVENT", ev]);
+  open.forEach(ws => { try { ws.send(msg); } catch {} });
+  return open.length;
+}
+
+// ── what actually gets signed ────────────────────────────────────────────────────────
+// The whole new grammar, in one place and nowhere else. Empty content; ONE marked context
+// `a`; ONE marked source `e`; ONE snapshot, spelled exactly as the viewer spelled it; the
+// whole-card selector; and the credit `p`. No slot, no scope, no supersede, no unmarked
+// context, no copied title/summary/content, no `a` pointing at the source card.
+const acceptTags = (rec, snap, ctx) => [
+  ["a", ctx, "", "context"],
+  ["e", rec.e, "", "source"],
+  ["snapshot", rec.snap],
+  ["select", "card"],
+  ["p", snap.pubkey, "", "credit"]
+];
+const revokeTags = (ctx, targetActId) => [
+  ["a", ctx, "", "context"],
+  ["e", targetActId, "", "revoke"]
+];
+
+// The snapshot is the load-bearing part of an acceptance: it is the complete signed source
+// card, and everything a reader projects comes out of it. So it is checked all the way
+// down before this page signs anything around it — shape, the d it keys a slot by, the id
+// as the hash of its own contents, and the author's signature over that id.
+async function validateSnapshot(rec){
+  let snap;
+  try { snap = JSON.parse(rec.snap); } catch { throw new Error("the carried snapshot is not JSON — nothing was signed"); }
+  if (!evShape(snap, KIND) || !snap.tags.every(t => Array.isArray(t) && t.every(x => typeof x === "string")))
+    throw new Error("the carried snapshot is not a complete signed kind-30828 event — nothing was signed");
+  if (snap.id !== rec.e)
+    throw new Error("the carried snapshot is not the source event the handoff names — nothing was signed");
+  const ds = snap.tags.filter(t => t[0] === "d");
+  if (ds.length !== 1 || !ds[0][1])
+    throw new Error("the carried snapshot has no single non-empty d, so it keys no slot — nothing was signed");
+  if (rec.slot && rec.slot !== ds[0][1])
+    throw new Error("the handoff's slot and the snapshot's d disagree — nothing was signed");
+  if (rec.p && rec.p !== snap.pubkey)
+    throw new Error("the handoff's credit key is not the snapshot's author — nothing was signed");
+  if (await eventId(snap) !== snap.id)
+    throw new Error("the carried snapshot's id is not the hash of its own contents — nothing was signed");
+  if (!await schnorrVerify(snap.id, snap.pubkey, snap.sig))
+    throw new Error("the carried snapshot's signature does not check out — nothing was signed");
+  return snap;
+}
+
+// CURATE, as acceptCard does it: accepting on someone else's timeline coins YOUR OWN
+// notary for the name, submitted to theirs. It has to — the reducer requires the context
+// coordinate's pubkey to be the act's own signer, so you cannot accept into a stranger's
+// register file, only into yours that reads from theirs.
+async function contextForAccept(){
+  const n = actRec.n;
+  if (!n || !CTX_RE.test(n))
+    throw new Error("the handoff names no notary timeline, and an act with no context is not " +
+                    "an act — go back to the viewer, pick a timeline, and press accept again");
+  if (n.split(":")[1] === signer.pubkey) return n;      // already yours: that IS the context
+  const c = n.split(":").slice(2).join(":");
+  const now = Math.floor(Date.now() / 1000);
+  let mine = notariesOf(c).find(x => x.pubkey === signer.pubkey);
+  if (!mine){
+    mine = await signer.sign({ kind: NOTARY_KIND, created_at: now, content: "",
+      tags: [["d", c], ["title", actRec.nTitle || c], ["t", MARKER], ["a", n]] });
+    if (!mine || !mine.sig) throw new Error("the signer returned nothing for your notary — was the request approved?");
+    ingestNotary(mine); actPublish(mine);
+  } else if (!notarySources(mine).includes(n)){
+    // A second lens expands an unordered discovery SET. Keep every non-source tag and
+    // union the coordinates; do not encode a preferred parent in tag order.
+    const tags = mine.tags.filter(t => !(t[0] === "a" && String(t[1] || "").startsWith(NOTARY_KIND + ":")));
+    for (const src of [...new Set(notarySources(mine).concat(n))].sort()) tags.push(["a", src]);
+    const next = await signer.sign({ kind: NOTARY_KIND,
+      created_at: Math.max(now, mine.created_at + 1), content: mine.content || "", tags });
+    if (!next || !next.sig) throw new Error("the signer returned nothing for your notary — was the request approved?");
+    mine = next; ingestNotary(mine); actPublish(mine);
+  }
+  return coordOf(mine);
+}
+// A revoke mints NOTHING. If you hold no notary for this name, no acceptance of yours can
+// exist under it, and the honest answer is that there is nothing here to withdraw.
+function contextsForRevoke(){
+  const n = actRec.n;
+  if (n && CTX_RE.test(n) && n.split(":")[1] === signer.pubkey) return [n];
+  const c = (n && CTX_RE.test(n) ? n.split(":").slice(2).join(":") : "") || actRec.c || "";
+  if (!c) throw new Error("the handoff names no timeline, so there is nothing to look your acceptance up under");
+  const mine = notariesOf(c).filter(x => x.pubkey === signer.pubkey);
+  if (!mine.length)
+    throw new Error(`you hold no notary for "${c}", so no acceptance of yours can exist on it — nothing to withdraw`);
+  return mine.map(coordOf);
+}
+
+async function buildAccept(snap){
+  const ctx = await contextForAccept();
+  const coord = KIND + ":" + snap.pubkey + ":" + tagOf(snap, "d");
+  const prior = acceptances(coord, actRec.e, ctx).find(a => a.pubkey === signer.pubkey);
+  return signer.sign({ kind: ACT_KIND,
+    created_at: Math.max(Math.floor(Date.now() / 1000), (prior ? prior.created_at : 0) + 1),
+    content: "", tags: acceptTags(actRec, snap, ctx) });
+}
+
+// Resolution under the six-register semantics: find the acts of YOURS that currently hold
+// a register in this context and slot. One is the answer. Several, with no unambiguous
+// match on the version you clicked, is NOT an invitation to guess — a wrong revoke retires
+// somebody's live register — so it stops and says so.
+async function buildRevoke(snap){
+  const slotD = tagOf(snap, "d");
+  const coord = KIND + ":" + snap.pubkey + ":" + slotD;
+  const hits = [];
+  for (const ctx of contextsForRevoke())
+    for (const a of acceptances(coord, actRec.e, ctx))
+      if (a.pubkey === signer.pubkey) hits.push({ ctx, a });
+  if (!hits.length)
+    throw new Error(`nothing of yours currently holds "${slotD}" on that timeline — there is no ` +
+                    `acceptance here to withdraw. If you accepted it elsewhere, open that timeline first.`);
+  let pick = hits;
+  if (pick.length > 1){
+    const exact = pick.filter(h => (validActs.get(h.a.id) || {}).sourceEventId === actRec.e);
+    if (exact.length !== 1)
+      throw new Error("more than one act of yours holds this card here and none of them is " +
+                      "unambiguously the one you pressed — nothing was signed, because the wrong " +
+                      "revoke would retire a register you meant to keep. Withdraw from the viewer " +
+                      "with an extension, where the exact act is known.");
+    pick = exact;
+  }
+  const { ctx, a } = pick[0];
+  return signer.sign({ kind: ACT_KIND,
+    created_at: Math.max(Math.floor(Date.now() / 1000), a.created_at + 1),
+    content: "", tags: revokeTags(ctx, a.id) });
+}
+
+async function signAct(){
+  if (!signer || !actRec || actFatal || actPub || !actReady) return;
+  $("b-act").disabled = true;
+  actMsg("signing…");
+  try {
+    const snap = await validateSnapshot(actRec);
+    const act = actRec.k === "revoke" ? await buildRevoke(snap) : await buildAccept(snap);
+    if (!act || !act.sig) throw new Error("the signer returned nothing — was the request approved?");
+    // The last gate is the reducer itself. Nothing below re-states the grammar: it is the
+    // viewer's own parseAct, run on the signed bytes. If it will not take the act, this
+    // page does not get to publish it.
+    const p = parseAct(act);
+    if (!p.ok)
+      throw new Error(`the act this page built is not valid under the grammar (${p.code}) — nothing was sent`);
+    const wrong = actRec.k === "revoke"
+      ? p.act.type !== "revoke"
+      : (p.act.type !== "acceptance" || !p.act.wholeCard ||
+         p.act.slot !== tagOf(snap, "d") || p.act.sourceEventId !== actRec.e);
+    if (wrong) throw new Error("the act this page built is not the act you asked for — nothing was sent");
+    $("act-json").style.display = "";
+    $("act-json").textContent = JSON.stringify(act, null, 2);
+    const sent = actPublish(act);
+    if (!sent){ actMsg("no relay is connected — nothing was sent", "bad"); return; }
+    actPub = { id: act.id, sent, ok: 0, no: 0, why: "" };
+    ingestAct(act);                    // your own act is in the set immediately
+    actTally();
+  } catch(e){
+    actMsg(msgOf(e), "bad");
+  } finally { actGate(); }
+}
+
+function actRender(){
+  if (!actMode || !actRec) return;
+  let snap = null; try { snap = JSON.parse(actRec.snap); } catch {}
+  const title = snap ? (tagOf(snap,"title") || tagOf(snap,"d")) : "(unreadable)";
+  const rows = [
+    ["act",      actRec.k === "revoke" ? "withdraw — revoke your acceptance" : "accept — select all six registers"],
+    ["card",     title],
+    ["slot",     snap ? tagOf(snap,"d") : actRec.slot || ""],
+    ["author",   actRec.p ? npub(actRec.p).slice(0,14) + "…" : ""],
+    ["source",   actRec.e || ""],
+    ["timeline", actRec.n || "(none)"],
+    ["snapshot", actRec.snap.length + " bytes, carried byte-for-byte from the viewer"],
+  ];
+  $("act-what").textContent = rows.map(([k,v]) => k.padEnd(9) + " " + v).join("\n");
+  $("act-note").textContent = actRec.k === "revoke"
+    ? "This withdraws your acceptance of this card on this timeline. It backs nothing in its " +
+      "place and resurrects no earlier value: the registers it held go unset. The revoked act " +
+      "stays as history — only the tally forgets it."
+    : "This puts your name on this card, on this timeline, at this exact version. The whole " +
+      "signed card travels inside the act, so what you accept is what you were looking at.";
+}
+
+function actGate(){
+  if (!actMode) return;
+  const b = $("b-act");
+  if (actFatal || actPub){ b.disabled = true; return; }
+  const why = !actRec ? "no act is waiting here"
+    : !signer ? "sign in above — the act is signed with your key, not the viewer's"
+    : !actReady ? "still reading the notaries and acts — the act cannot be resolved until that read finishes"
+    : "";
+  b.disabled = !!why;
+  const cls = $("act-msg").className;
+  if (why) actMsg(why, "");
+  else if (!/\b(ok|bad)\b/.test(cls)) actMsg("");
+}
+
+// The signer ladder's framing when you arrive from the viewer: you are here BECAUSE there
+// was no extension there, so don't open by recommending one. Shared with handoffMode().
+function preferBunkerRung(){
+  let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
+  if (window.nostr || saved) return;
+  document.querySelector(".ladder").classList.add("plain");
+  const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
+  ext.classList.remove("picked");
+  bunk.classList.add("picked");
+  bunk.prepend(ext.querySelector(".kick"));
+}
+
+// Act mode stands the card form down entirely. Nothing is removed that an act needs.
+function actMount(){
+  $("sec-act").style.display = "";
+  ["sec-card","sec-fork","sec-preview"].forEach(id => $(id).style.display = "none");
+  const P = $("sec-publish");
+  P.querySelector("h2").innerHTML = "<i>3</i>relays";
+  P.querySelector(".bar").style.display = "none";
+  document.querySelector("header h1").textContent = "Sign an act";
+  document.querySelector("header .sub").innerHTML =
+    'A kind-8828 act carried here from the timeline, because the viewer had no key of yours ' +
+    'to sign it with. Sign in below and it goes to the relays. ' +
+    '<a href="NIP-DRAFT.md">the spec</a>.';
+  preferBunkerRung();
+}
+
+$("b-act").addEventListener("click", signAct);
+
+// ?act=1: consume-once, and gated the same three ways the draft handoff is — the query
+// param, the record's own version, and freshness. A v1 record is DISCARDED and said out
+// loud: it was written for a grammar kind 8828 no longer has, and the one thing that must
+// never happen is this page quietly rebuilding it into the retired shape.
+if (actMode){
+  let raw = null;
+  try { raw = localStorage.getItem("wtc:act"); localStorage.removeItem("wtc:act"); } catch {}
+  actMount();
+  let rec = null; try { rec = JSON.parse(raw || "null"); } catch {}
+  if (!rec)
+    actFail("no act is waiting here — go back to the timeline and press accept or withdraw again.");
+  else if (rec.v !== 2)
+    actFail("this handoff was written by an older viewer, in a grammar kind 8828 no longer has. " +
+            "It has been discarded rather than rebuilt — reload the timeline and press the button again.");
+  else if (!Number.isFinite(rec.at) || Date.now() - rec.at > 24 * 3600 * 1000)
+    actFail("that act has been waiting here more than a day — press the button on the timeline " +
+            "again, so the version you act on is the one you are looking at.");
+  else if (rec.k !== "accept" && rec.k !== "revoke")
+    actFail("the handoff does not say whether it is an acceptance or a withdrawal — nothing was signed.");
+  else if (!/^[0-9a-f]{64}$/.test(rec.e || "") || typeof rec.snap !== "string" || !rec.snap)
+    actFail("the handoff is missing the source event or its snapshot — nothing was signed.");
+  else { actRec = rec; actRender(); }
+  actGate();
+}
 
 refresh();
 

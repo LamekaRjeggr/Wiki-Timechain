@@ -164,10 +164,6 @@
   /* the subject's own facts, right under its name — where "N entries" lives now */
   .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
     color:var(--faint)}
-  /* the gate switch: only the notary's own key sees it — one word, flips on tap */
-  .collmeta .gate{background:transparent;border:1px solid var(--border);color:var(--dim);
-    font:inherit;border-radius:20px;padding:1px 8px;margin-left:6px;cursor:pointer}
-  .collmeta .gate:hover{color:var(--text);border-color:var(--rail-dim)}
 
   /* the notaries holding this name — one chip each, the lit one is the timeline on screen.
      Hidden while one key holds the name: then there is nothing to switch between. */
@@ -968,8 +964,10 @@ const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
 const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
 const notaries = new Map();     // 30829:pubkey:d → newest notary; a slug is a notary's d
-const actA     = new Set();     // card coords whose acts we've asked for (#a) — grow-only
+const actA     = new Set();     // notary contexts whose acts we've asked for (#a) — grow-only
 const acts     = new Map();     // act id → kind-8828 event; derived at render, nothing replaces
+const validActs = new Map();    // act id → strict normalized act; snapshots passed the async gate
+const rejectedActs = new Map(); // act id → { code, event } for visible degradation
 const actE     = new Set();     // act ids whose revokes we've asked for (#e) — grow-only
 const actErr   = new Map();     // card coord → accept-failure note, cleared on retry
 RELAYS.forEach(r => relayState.set(r, "connecting"));
@@ -1031,22 +1029,6 @@ rosterEl.addEventListener("click", e => {
   activeN = b.dataset.n;
   history.replaceState(null, "", timelineUrl());
   render();
-});
-
-// flip the gate: republish the notary, same d and tags, `passes` swapped. Replaceable, so
-// strictly newer than the one on screen. Cards do not move — the gate reads live.
-metaEl.addEventListener("click", async e => {
-  const b = e.target.closest(".gate"); if (!b) return;
-  const N = notaryOf(activeF.slice(2)); if (!N) return;
-  b.disabled = true;
-  try {
-    const s = await getSigner();
-    const next = tag(N,"passes") === "auto" ? "manual" : "auto";
-    const tags = N.tags.filter(t => t[0] !== "passes").concat([["passes", next]]);
-    const n = await s.sign({ kind: NOTARY_KIND, content: N.content,
-      created_at: Math.max(Math.floor(Date.now() / 1000), N.created_at + 1), tags });
-    ingestNotary(n); publish(n);
-  } catch { b.disabled = false; b.textContent = "signer declined"; }
 });
 
 // URL that reproduces the current view — the shareable deep link
@@ -1201,16 +1183,28 @@ function collectionSlug(ev){
 }
 const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d");
 const submitsTo = (ev, coord) => ev.tags.some(t => t[0] === "a" && t[1] === coord);
+// A notary has an unordered SET of discovery sources. Position, tag order, graph depth,
+// and the number of routes confer no rank or authority; only this notary's own 8828s
+// decide its projection.
+const notarySources = N => N ? [...new Set(N.tags
+  .filter(t => t[0] === "a" && /^30829:[0-9a-f]{64}:.+/.test(t[1] || ""))
+  .map(t => t[1]))] : [];
 // CANDIDATES (notary NIP, Chaining): a card submitted here, or passed by a notary this one
 // submits to — each link checks the bytes for itself. Coordinates are names and can loop;
 // the walk stops at any it has seen.
 function candidate(ev, N, seen = new Set([coordOf(N)])){
   if (submitsTo(ev, coordOf(N))) return true;
-  return N.tags.some(t => {
-    if (t[0] !== "a" || seen.has(t[1])) return false;
-    const U = notaries.get(t[1]); if (!U) return false;
-    seen.add(t[1]);
-    return candidate(ev, U, seen) && tierOf(ev, U) === 0;
+  // Once this notary has signed its own decision, that decision is sufficient local
+  // candidacy. An upstream revoke or source revision changes provenance status; it must
+  // not silently erase the downstream projection.
+  const cardCoord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
+  if (acceptances(cardCoord, ev.id, coordOf(N)).some(a => a.pubkey === N.pubkey)) return true;
+  return notarySources(N).some(src => {
+    if (seen.has(src)) return false;
+    const U = notaries.get(src); if (!U) return false;
+    // Each branch gets its own visited set. A failed route in a convergent graph must
+    // not suppress another route that reaches the same source with valid evidence.
+    return candidate(ev, U, new Set(seen).add(src)) && tierOf(ev, U) === 0;
   });
 }
 // every notary holding a name, oldest first. That order is only a DEFAULT — the chips show
@@ -1524,10 +1518,22 @@ function scheduleMemberFetch(){
     });
   }, 400);
 }
-// membership = cards submitted to the notaries of wanted slugs (every key holding that d),
-// plus the deep-linked tag when the URL carries one — relays index t and l by value
+function reachableNotaryCoords(roots){
+  const out = new Set(roots), todo = [...out];
+  while (todo.length){
+    const N = notaries.get(todo.pop());
+    for (const src of notarySources(N)) if (!out.has(src)){
+      out.add(src); todo.push(src);
+    }
+  }
+  return [...out];
+}
+// Membership is the unordered discovery closure of each wanted notary. Sources may
+// have different d values; sharing a timeline name is a fixture convenience, not a rule.
+// The deep-linked tag path remains for non-collection axes.
 function memberFilters(){
-  const coords = [...notaries.keys()].filter(k => wanted.has(k.split(":").slice(2).join(":")));
+  const roots = [...notaries.keys()].filter(k => wanted.has(k.split(":").slice(2).join(":")));
+  const coords = reachableNotaryCoords(roots);
   const f = coords.length ? [{ kinds:[KIND], "#a": coords }] : [];
   if (wantedF && axisOf(wantedF) !== "c") f.push({ kinds:[KIND], ["#" + axisOf(wantedF)]: [valOf(wantedF)] });
   return f;
@@ -1594,7 +1600,7 @@ function scheduleProfileFetch(){
 // Act pulls: a grow-only coord set (renderTimeline subscribes every card's coord
 // collection-wide — folded cards never render, so a per-render set would make
 // promotion unobservable), one open "act" sub per socket, debounced resend as it grows.
-function wantCardActs(coord){
+function wantContextActs(coord){
   if (actA.has(coord)) return;
   actA.add(coord);
   scheduleActFetch();
@@ -1612,58 +1618,111 @@ function actFilters(){
 // Regular events: every act is kept, nothing replaces; tallies are reader-derived views.
 function ingestAct(ev){
   if (!ev || ev.kind !== ACT_KIND || acts.has(ev.id)) return;
-  acts.set(ev.id, ev);
-  if (!actE.has(ev.id)){ actE.add(ev.id); scheduleActFetch(); }   // pull its revokes
-  scheduleRender();
-}
-// Effective acceptances for one card address: per key, the newest acceptance no
-// same-key act has revoked or superseded. The same-key rule is enforced HERE, reader-side
-// — a revoke/supersede pointing at another key's act is simply ignored. An act whose
-// revoke target we don't hold yet stays effective (orphan tolerance: over-counting,
-// never corruption).
-// The `e` id is the truth and the `a` coordinate an index hint (draft NIP, Validation 4):
-// when the act's bare-e names the version we hold at this coord, it belongs here even if
-// its `a` is malformed — a hand-typed coordinate must not silently hide a real acceptance.
-function acceptances(coord, heldId){
-  const dead = new Set();
-  for (const a of acts.values())
-    for (const t of a.tags)
-      if (t[0] === "e" && (t[3] === "revoke" || t[3] === "supersede")){
-        const tgt = acts.get(t[1]);
-        if (tgt && tgt.pubkey === a.pubkey) dead.add(t[1]);
-      }
-  const byPk = new Map();
-  for (const a of acts.values()){
-    if (dead.has(a.id)) continue;
-    const byA = a.tags.some(t => t[0] === "a" && t[1] === coord);
-    const byE = heldId && a.tags.some(t => t[0] === "e" && !t[3] && t[1] === heldId);
-    if (!byA && !byE) continue;
-    const prev = byPk.get(a.pubkey);
-    if (!prev || a.created_at > prev.created_at) byPk.set(a.pubkey, a);
+  const parsed = parseAct(ev);
+  if (!parsed.ok){
+    rejectedActs.set(ev.id, { code: parsed.code, event: structuredClone(ev) });
+    scheduleRender();
+    return;
   }
-  return [...byPk.values()].sort((x,y) => x.created_at - y.created_at);
+  const keep = () => {
+    acts.set(ev.id, ev); validActs.set(ev.id, parsed.act);
+    if (!actE.has(ev.id)){ actE.add(ev.id); scheduleActFetch(); }
+    scheduleRender();
+  };
+  // The outer act's signature cannot vouch for the embedded author's signature.
+  // Admit the exact snapshot through the same async hash + Schnorr queue first.
+  parsed.act.type === "acceptance" ? admit(parsed.act.snapshot, keep) : keep();
 }
-// FIELD SCOPE (draft NIP, Accept). An act byte-copies each field it accepts the way the
-// card carries it: title/summary as tags, content in the act's content. Presence of a copy
-// = in scope; empty or absent = out of scope (a card's absent field has nothing to accept,
-// so empty is never ambiguous). A legacy act — content copy, no field tags — reads as
-// content-scope. Consent is PER FIELD and bytes decide it: a copy grants consent exactly
-// while it byte-equals that field on the card now at the coordinate. The `e` id records
-// what was read and never gates; reversion restores ("same bytes, same claim").
-const AFIELDS = ["title", "summary", "content"];
+const AFIELDS = ["title", "summary", "content", "event_date", "event_time", "g"];
+const SELECT_FIELD = new Map([["tag:title","title"],["tag:summary","summary"],
+  ["content","content"],["tag:event_date","event_date"],
+  ["tag:event_time","event_time"],["tag:g","g"]]);
 const fieldOf = (ev, f) => f === "content" ? (ev.content || "") : (tag(ev, f) || "");
-function scopeOf(a){
-  const s = {};
-  for (const f of AFIELDS){
-    const v = f === "content" ? a.content : tag(a, f);
-    if (v) s[f] = v;
+const sourcePin = a => (a.tags.find(t => t[0] === "e" && t[3] === "source") || [])[1];
+function cardSnapshot(a){
+  const raw = tag(a,"snapshot");
+  if (!raw) return null;
+  try { const ev = JSON.parse(raw); return ev && ev.kind === KIND && ev.id === sourcePin(a) ? ev : null; }
+  catch { return null; }
+}
+function parseAct(ev){
+  const bad = code => ({ok:false, code});
+  const shape = (x, kind) => x && typeof x === "object" && /^[0-9a-f]{64}$/.test(x.id || "") &&
+    /^[0-9a-f]{64}$/.test(x.pubkey || "") && Number.isSafeInteger(x.created_at) && x.created_at >= 0 &&
+    x.kind === kind && Array.isArray(x.tags) && typeof x.content === "string" && /^[0-9a-f]{128}$/.test(x.sig || "");
+  if (!shape(ev, ACT_KIND) || ev.content !== "") return bad("invalid-shape");
+  const allowed = new Set(["a","e","snapshot","select","p"]);
+  if (ev.tags.some(t => !Array.isArray(t) || t.some(x => typeof x !== "string") || !allowed.has(t[0])))
+    return bad("unexpected-tag");
+  const aa = ev.tags.filter(t => t[0] === "a"), a = aa.filter(t => t[3] === "context");
+  if (aa.length !== 1 || a.length !== 1 || a[0].length !== 4 ||
+      !new RegExp("^" + NOTARY_KIND + ":[0-9a-f]{64}:.+").test(a[0][1]) ||
+      a[0][1].split(":")[1] !== ev.pubkey) return bad("invalid-context");
+  const ee = ev.tags.filter(t => t[0] === "e"), src = ee.filter(t => t[3] === "source"),
+        rev = ee.filter(t => t[3] === "revoke"), snaps = ev.tags.filter(t => t[0] === "snapshot"),
+        sels = ev.tags.filter(t => t[0] === "select"), credits = ev.tags.filter(t => t[0] === "p");
+  if (credits.some(t => t.length !== 4 || !/^[0-9a-f]{64}$/.test(t[1]) || t[3] !== "credit"))
+    return bad("invalid-credit");
+  const common = {id:ev.id, pubkey:ev.pubkey, createdAt:ev.created_at, context:a[0][1], event:ev};
+  if (ee.length === 1 && rev.length === 1 && rev[0].length === 4 &&
+      /^[0-9a-f]{64}$/.test(rev[0][1]) && !snaps.length && !sels.length && !credits.length)
+    return {ok:true, act:{...common,type:"revoke",targetActId:rev[0][1]}};
+  if (ee.length !== 1 || src.length !== 1 || src[0].length !== 4 ||
+      !/^[0-9a-f]{64}$/.test(src[0][1]) || snaps.length !== 1 || snaps[0].length !== 2 ||
+      !sels.length || sels.some(t => t.length !== 2)) return bad("invalid-acceptance");
+  let snapshot; try { snapshot = JSON.parse(snaps[0][1]); } catch { return bad("invalid-snapshot-json"); }
+  if (!shape(snapshot, KIND) || !snapshot.tags.every(t => Array.isArray(t) && t.every(x => typeof x === "string")) ||
+      snapshot.id !== src[0][1])
+    return bad("invalid-snapshot");
+  const ds = snapshot.tags.filter(t => t[0] === "d");
+  if (ds.length !== 1 || !ds[0][1]) return bad("invalid-snapshot-d");
+  const names = sels.map(t => t[1]);
+  if (new Set(names).size !== names.length || (names.includes("card") && names.length !== 1) ||
+      (!names.includes("card") && names.some(x => !SELECT_FIELD.has(x)))) return bad("invalid-selector");
+  const fields = names[0] === "card" ? [...AFIELDS] : names.map(x => SELECT_FIELD.get(x));
+  const blocks = Object.fromEntries(fields.map(f => [f, f === "content" ? snapshot.content :
+    snapshot.tags.filter(t => t[0] === f).map(t => t.slice())]));
+  return {ok:true,act:{...common,type:"acceptance",slot:ds[0][1],sourceEventId:src[0][1],
+    snapshot,fields,blocks,wholeCard:names[0] === "card"}};
+}
+function foldProjection(){
+  const accepted = [...validActs.values()].filter(a => a.type === "acceptance");
+  const byId = new Map(accepted.map(a => [a.id,a])), dead = new Set();
+  for (const r of validActs.values()) if (r.type === "revoke"){
+    const t = byId.get(r.targetActId);
+    if (t && t.pubkey === r.pubkey && t.context === r.context) dead.add(t.id);
   }
+  const out = new Map(), empty = () => Object.fromEntries(AFIELDS.map(f => [f,{state:"unset"}]));
+  accepted.sort((a,b) => a.createdAt-b.createdAt || a.id.localeCompare(b.id));
+  for (const a of accepted){
+    const k = a.context + "\0" + a.slot;
+    const p = out.get(k) || {context:a.context,slot:a.slot,registers:empty()}; out.set(k,p);
+    for (const f of a.fields) p.registers[f] = {state:"selected",value:a.blocks[f],
+      sourceActId:a.id,sourceEventId:a.sourceEventId,snapshot:a.snapshot};
+    if (dead.has(a.id)) for (const f of AFIELDS)
+      if (p.registers[f].sourceActId === a.id) p.registers[f] = {state:"unset"};
+  }
+  return [...out.values()].sort((a,b) => a.context.localeCompare(b.context)||a.slot.localeCompare(b.slot));
+}
+function contextForView(){ const N = activeF && notaryOf(activeF.slice(2)); return activeN || (N && coordOf(N)) || ""; }
+function acceptances(coord, heldId, context = contextForView()){
+  const slot = coord.split(":").slice(2).join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
+  if (!p) return [];
+  const ids = new Set(AFIELDS.map(f => p.registers[f].sourceActId).filter(Boolean));
+  return [...ids].map(id => acts.get(id)).filter(Boolean).sort((a,b) => a.created_at-b.created_at || a.id.localeCompare(b.id));
+}
+function contentAcceptance(coord, context = contextForView()){
+  const slot = coord.split(":").slice(2).join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
+  const id = p && p.registers.content.sourceActId;
+  return id ? acts.get(id) : null;
+}
+function scopeOf(a){
+  const n = validActs.get(a && a.id), s = {};
+  if (n && n.type === "acceptance") for (const f of n.fields)
+    s[f] = f === "content" ? n.blocks[f] : ((n.blocks[f][0] || [])[1] || "");
   return s;
 }
-// Only the content copy moves documents (draft NIP, Derivation): the lens's fold
-// override — anything that gives a card a place — requires content in scope and LIVE.
-// Title/summary acceptance is voice: it counts and renders, never carries custody.
-const actMoves = (a, ev) => scopeOf(a).content === (ev.content || "") && !!ev.content;
+const actMoves = (a, ev) => { const sc = scopeOf(a); return sc.content === (ev.content || "") && sourcePin(a) === ev.id; };
 function scheduleActFetch(){
   if (actTimer) return;
   actTimer = setTimeout(() => {
@@ -1693,6 +1752,14 @@ function scheduleRender(){
 function matching(f){
   return [...events.values()].filter(ev => matchesF(ev, f));
 }
+function candidatesOf(N){
+  return N ? [...events.values()].filter(ev => candidate(ev, N)) : [];
+}
+function discoveryPool(N){
+  if (!N) return [];
+  const coords = new Set(reachableNotaryCoords([coordOf(N)]));
+  return [...events.values()].filter(ev => ev.tags.some(t => t[0] === "a" && coords.has(t[1])));
+}
 // where a card stands under the notary on screen: 0 = on the line (passed). 1 = passed, waiting
 // on the notary's re-read. 2 = submitted, not passed — behind the fold. Never deleted, only resisted.
 // NOTARY RULE (notary NIP, What passes) — a notary-backed collection ignores the derived
@@ -1700,8 +1767,7 @@ function matching(f){
 // passes a card only while the notary's OWN key holds a content-live acceptance. A lapsed
 // acceptance = passed and waiting on a re-read → shelf 1. No other signal passes a card.
 function notaryTier(N, ev){
-  if (tag(N,"passes") === "auto") return 0;
-  const a = acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id).find(a => a.pubkey === N.pubkey);
+  const a = contentAcceptance(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), coordOf(N));
   return !a ? 2 : actMoves(a, ev) ? 0 : 1;
 }
 const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
@@ -1709,7 +1775,7 @@ const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 function foldOf(c){
   const N = notaryOf(c);
   const byD = new Map();
-  if (N) for (const ev of matching("c:" + c)) if (candidate(ev, N)){
+  if (N) for (const ev of candidatesOf(N)){
     const d = tag(ev,"d"); (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
   // a rival — unpassed under a d the notary passed — stands beside the accepted card, not in the fold
@@ -1723,11 +1789,17 @@ function foldOf(c){
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
   const N = c ? notaryOf(c) : null;
+  // Stacked notaries need the upstream acts before candidate() can admit any card. Pull
+  // them from the whole submitted pool, not only from entries that already rendered;
+  // otherwise a cold load of a downstream lens deadlocks at an empty timeline.
+  const pool = N ? candidatesOf(N) : matching(f);
+  // Ask for acts on the entire discovery pool before candidacy is known. Otherwise a
+  // cold downstream load would need an upstream act in order to decide to fetch it.
+  if (N) reachableNotaryCoords([coordOf(N)]).forEach(wantContextActs);
   const cut = c && hideFold.has(c) ? 1 : 2;                // a shut fold drops the unpassed
   const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
-  for (const ev of matching(f)){
-    if (N && !candidate(ev, N)) continue;
+  for (const ev of pool){
     const d = tag(ev,"d");
     (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
   }
@@ -1785,7 +1857,7 @@ function renderNotaries(){
   rosterEl.style.display = "";
   rosterEl.innerHTML = L.map(n =>
       `<button class="rchip${n === N ? " on" : ""}" type="button" data-n="${esc(coordOf(n))}"` +
-      ` title="${tag(n,"passes") === "auto" ? "automatic — passes every submission" : "manual — passes what this key accepted"}">` +
+      ` title="passes only cards this notary explicitly accepts">` +
       `${authorLabel(n.pubkey)}${n.pubkey === myPk ? " · you" : ""}</button>`
     ).join("") +
     `<div class="rnote">${L.length} notaries hold this name — each is its own timeline</div>`;
@@ -1803,15 +1875,8 @@ function renderTabs(V){
   nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
-  // the notary's `passes` MUST be shown (notary NIP): automatic and manual look alike otherwise.
-  // Enforced in tierOf via notaryTier; every live notary is `auto` as of 2026-08-28.
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
-  const auto = ntry && tag(ntry,"passes") === "auto";
-  const passes = ntry ? (auto ? " · automatic" : " · manual") : "";
-  // the notary's own key can flip the gate here; anyone else only reads it
-  const gate = ntry && hasSigner && ntry.pubkey === myPk
-    ? `<button class="gate" type="button" title="${auto ? "switch to manual — only what you accept passes" : "switch to automatic — every submission passes"}">→ ${auto ? "manual" : "automatic"}</button>` : "";
-  metaEl.innerHTML = activeF ? `${n} entr${n === 1 ? "y" : "ies"}${passes}${gate}` : "";
+  metaEl.innerHTML = activeF ? `${n} entr${n === 1 ? "y" : "ies"} · signed decisions` : "";
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
@@ -1966,8 +2031,10 @@ function renderTimeline(entries){
   // acts subscribe collection-wide: EVERY card, rendered or not. The notary's acceptance is
   // what promotes a card, and a folded card is never rendered — gate the subscription on
   // rendering and a promotion could never be observed, so nothing would ever leave the fold.
-  if (activeF) matching(activeF).forEach(ev =>
-    wantCardActs(KIND + ":" + ev.pubkey + ":" + tag(ev,"d")));
+  if (activeF){
+    const N = notaryOf(activeF.slice(2));
+    if (N) reachableNotaryCoords([coordOf(N)]).forEach(wantContextActs);
+  }
 
   // the act's clock is its SIGNATURE time — never the card's event_date; "signed" says so
   const signedAt = a => new Date(a.created_at * 1000).toISOString().slice(0,16).replace("T"," ");
@@ -1986,16 +2053,16 @@ function renderTimeline(entries){
       const fs = AFIELDS.filter(f => sc[f] != null);
       if (!fs.length) return "✕ empty act";
       const words = fs.map(f => sc[f] === fieldOf(ev, f) ? `${f} ✓` : `${f} lapsed`);
-      const et = a.tags.find(t => t[0] === "e" && !t[3]);
+      const et = a.tags.find(t => t[0] === "e" && t[3] === "source");
       return words.join(" · ") + (et && et[1] === ev.id ? "" : " · pinned earlier");
     };
-    // my current act decides the button: every field I signed still live on this exact
-    // version = lit and done; anything less = "accept this version" (the click supersedes)
+    // my contributing act decides the button: every selected field still matches this
+    // exact version = lit and done; otherwise a new deterministic write replaces it.
     const mine = myPk && es.find(a => a.pubkey === myPk);
-    const met = mine && mine.tags.find(t => t[0] === "e" && !t[3]);
+    const met = mine && mine.tags.find(t => t[0] === "e" && t[3] === "source");
     const msc = mine ? scopeOf(mine) : {};
-    const mineHere = !!(met && met[1] === ev.id &&
-      Object.keys(msc).length && Object.keys(msc).every(f => msc[f] === fieldOf(ev, f)));
+    const mineHere = !!(met && met[1] === ev.id && Object.keys(msc).length &&
+      Object.keys(msc).every(f => msc[f] === fieldOf(ev, f)));
     // a signer shows the button; so does a saved add.html session (bunker) or a cached
     // pubkey — someone with an identity but no extension gets the handoff (➔ = you leave).
     // A plain reader gets none: the page stays read-only for them, same rule as compose.
@@ -2035,7 +2102,7 @@ function renderTimeline(entries){
   const revisedRow = (ev, e) => (e.taken || []).filter(p => takenOf(p, e.d) === ev.pubkey)
     .map(p => `<div class="via" title="this text carries a revision by ${esc(authorLabel(p.pubkey))} — the fork was assimilated and no longer renders; its diff is archived in event ${esc(p.id.slice(0,12))}…">revision taken from ${authorLink(p.pubkey)}</div>`).join("");
   const N = activeF ? notaryOf(activeF.slice(2)) : null;
-  const manual = !!N && tag(N,"passes") !== "auto";
+  const manual = !!N;
   const coordOfC = (ev, d) => KIND + ":" + ev.pubkey + ":" + d;
   const dayOf = ev => new Date(ev.created_at * 1000).toISOString().slice(0,10);
   // a lapsed acceptance (tier 1): the author revised after the notary signed. Relays keep
@@ -2045,9 +2112,10 @@ function renderTimeline(entries){
   const goldOf = (ev, d) => {
     if (!N || notaryTier(N, ev) !== 1) return { show: ev, box: "" };
     const coord = coordOfC(ev, d), live = showLive.has(coord);
-    const a = acceptances(coord, ev.id).find(a => a.pubkey === N.pubkey), sc = scopeOf(a);
-    const pin = (a.tags.find(t => t[0] === "e" && !t[3]) || [])[1];   // the id the notary read = the copy's id
-    const copy = { ...ev, id: pin || ev.id, content: sc.content || "",
+    const a = contentAcceptance(coord, coordOf(N)), sc = scopeOf(a);
+    const pin = sourcePin(a);                              // the exact version the notary read
+    const snap = cardSnapshot(a);
+    const copy = snap || { ...ev, id: pin || ev.id, content: sc.content || "",
       tags: ev.tags.filter(t => t[0] !== "title" && t[0] !== "summary")
         .concat([["title", sc.title || tag(ev,"title") || d]], sc.summary ? [["summary", sc.summary]] : []) };
     const box = `<div class="revbox" data-c="${esc(coord)}" title="${live
@@ -3165,7 +3233,7 @@ async function publishDraft(btn){
     // it, open to all. The only automatic notary; a deliberate one is minted elsewhere.
     if (!notaryOf(c)){
       const n = await s.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
-                               tags: [["d", c], ["title", c.replaceAll("-"," ")], ["t", MARKER], ["passes", "auto"]] });
+                               tags: [["d", c], ["title", c.replaceAll("-"," ")], ["t", MARKER]] });
       ingestNotary(n); publish(n);
     }
     const N = notaryOf(c);
@@ -3179,7 +3247,7 @@ async function publishDraft(btn){
     publish(ev);
     // your own manual notary: the act rides with the card, same click — no owner special
     // case in the rule, just no chore. Under `auto` nothing is needed.
-    if (N.pubkey === ev.pubkey && tag(N,"passes") !== "auto") acceptCard(ev.pubkey, tmpl.tags[0][1]);
+    if (N.pubkey === ev.pubkey) acceptCard(ev.pubkey, tmpl.tags[0][1]);
   } catch (ex){
     err.textContent = (ex && ex.message) || "signer declined — try again";
     err.classList.remove("hid");
@@ -3197,10 +3265,7 @@ function handoffDraft(){
   location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
 }
 
-// ── the accept act (kind 8828): stand behind THIS exact version of a card.
-//    content is a byte-exact replica of it — the signature is over the text itself —
-//    and a prior current acceptance of the same coord gets a supersede pointer, so
-//    switching versions is one click and history keeps both ──
+// ── the accept act (kind 8828): select all six registers from this exact snapshot.
 async function acceptCard(pk, d, btn){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
@@ -3218,24 +3283,32 @@ async function acceptCard(pk, d, btn){
       let mine = notariesOf(c).find(n => n.pubkey === s.pubkey);
       if (!mine){
         mine = await s.sign({ kind: NOTARY_KIND, created_at: Math.floor(Date.now() / 1000), content: "",
-          tags: [["d", c], ["title", tag(N,"title") || c], ["t", MARKER], ["passes", "manual"], ["a", coordOf(N)]] });
+          tags: [["d", c], ["title", tag(N,"title") || c], ["t", MARKER], ["a", coordOf(N)]] });
+        ingestNotary(mine); publish(mine);
+      } else if (!notarySources(mine).includes(coordOf(N))){
+        // Curating a second lens expands an unordered discovery set. Preserve every
+        // non-source configuration tag and union the source coordinates; do not encode
+        // a preferred parent or implicit delegation in tag order.
+        const tags = mine.tags.filter(t => !(t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")));
+        for (const src of [...new Set(notarySources(mine).concat(coordOf(N)))].sort())
+          tags.push(["a", src]);
+        mine = await s.sign({ kind: NOTARY_KIND,
+          created_at: Math.max(Math.floor(Date.now() / 1000), mine.created_at + 1),
+          content: mine.content || "", tags });
         ingestNotary(mine); publish(mine);
       }
       activeN = coordOf(mine);
       history.replaceState(null, "", timelineUrl());
     }
-    const tags = [["a", coord], ["e", ev.id], ["p", ev.pubkey]];
-    // field scope: copy each field the card carries, the way it carries it — presence =
-    // scope. The button accepts the whole card; narrower scopes are the lab's chips still.
-    for (const f of ["title", "summary"])
-      if (tag(ev, f)) tags.push([f, tag(ev, f)]);
+    const context = activeN || (N ? coordOf(N) : "");
+    if (!context) throw new Error("choose a notary timeline before accepting");
+    const tags = [["a", context, "", "context"], ["e", ev.id, "", "source"],
+      ["snapshot", JSON.stringify(ev)], ["select", "card"], ["p", ev.pubkey, "", "credit"]];
     const prior = acceptances(coord, ev.id).find(a => a.pubkey === s.pubkey);
-    if (prior) tags.push(["e", prior.id, "", "supersede"]);
-    // strictly newer than the superseded act, so newest-per-key derivation can't tie
     const act = await s.sign({
       kind: ACT_KIND,
       created_at: Math.max(Math.floor(Date.now() / 1000), (prior ? prior.created_at : 0) + 1),
-      content: ev.content,
+      content: "",
       tags
     });
     rememberPk(act.pubkey);
@@ -3263,7 +3336,7 @@ async function withdrawCard(pk, d, btn){
       kind: ACT_KIND,
       created_at: Math.max(Math.floor(Date.now() / 1000), mine.created_at + 1),
       content: "",
-      tags: [["e", mine.id, "", "revoke"]]
+      tags: [["a", contextForView(), "", "context"], ["e", mine.id, "", "revoke"]]
     });
     rememberPk(act.pubkey);
     ingestAct(act);
@@ -3275,28 +3348,58 @@ async function withdrawCard(pk, d, btn){
 }
 
 // no extension: the act crosses to add.html, whose bunker/nsec ladder takes over. The
-// EXACT version travels — id and byte-exact content — so a replacement racing the hop
-// cannot swap what gets accepted. Consume-once on the other side, like wtc:draft.
-// `w` = withdraw: add.html finds YOUR current act on the coord itself (it can't know
-// your key until you sign in there) and signs the revoke instead.
+// EXACT version travels — the complete signed 30828 in the byte-exact JSON spelling that
+// BECOMES the snapshot tag — so a replacement racing the hop cannot swap what gets
+// accepted, and the other side never has to re-spell what it did not compose.
+// Consume-once on the other side, like wtc:draft.
+//
+// v2 carries what the kind-8828 grammar has tags for and NOTHING else. v1 shipped byte
+// copies of title/summary/content and a scope-by-presence flag; that grammar is retired,
+// and a record carrying those fields can only be rebuilt into the retired shape. So they
+// are gone from the record rather than merely unread on the far side — and add.html
+// rejects a v1 record visibly instead of emitting it.
+//
+// `w` = withdraw: add.html resolves YOUR current acceptance on this context and slot
+// itself (it cannot know your key until you sign in there) and signs the revoke instead.
 function handoffAct(pk, d, w){
   const ev = events.get(pk + ":" + d);
   if (!ev) return;
-  // t/s = byte copies of the card's title/summary for the act's field tags (scope is
-  // presence); `title` is display only and falls back to d, so it can't serve as the copy
-  const N = activeF && notaryOf(activeF.slice(2));
-  const rec = { v: 1, at: Date.now(), coord: KIND + ":" + pk + ":" + d,
-                e: ev.id, p: ev.pubkey, content: ev.content, w: w ? 1 : 0,
-                t: tag(ev,"title") || "", s: tag(ev,"summary") || "",
-                title: tag(ev,"title") || d,
-                c: collectionSlug(ev) || "",     // the way back: ?c= deep link home
-                n: N ? coordOf(N) : "" };        // the notary on screen — CURATE mints against it
+  const c = (activeF && activeF.startsWith("c:") ? activeF.slice(2) : "") || collectionSlug(ev) || "";
+  const ctx = contextForView();                    // the notary on screen: chip, ?k=, or default
+  const CN = (ctx && notaries.get(ctx)) || (c ? notaryOf(c) : null) || null;
+  const rec = { v: 2, at: Date.now(),
+                k: w ? "revoke" : "accept",
+                coord: KIND + ":" + pk + ":" + d,
+                slot: d,                           // the register key — cross-checked against the snapshot's d
+                e: ev.id,                          // the source event id: marked `e`, and the snapshot's own id
+                p: ev.pubkey,                      // marked `p` credit
+                snap: JSON.stringify(ev),          // EXACT spelling of the snapshot tag value
+                c,                                 // the way back: ?c= deep link home
+                // the notary on screen. Mine → it IS the context. Someone else's → CURATE
+                // mints my own notary for the name against it, exactly as acceptCard does.
+                n: ctx || (CN ? coordOf(CN) : ""),
+                nPk: CN ? CN.pubkey : "",
+                nTitle: CN ? (tag(CN,"title") || tag(CN,"d") || c) : "" };
   try { localStorage.setItem("wtc:act", JSON.stringify(rec)); } catch {}
-  location.href = "add.html?act=1";
+  location.href = "add.html?act=1" + (c ? "&c=" + encodeURIComponent(c) : "");
 }
 // test hook — headless harness only, no runtime consumer
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,
+                 // Read-only bridge for the companion shelf client. Everything exposed
+                 // here has already passed this client's hash + Schnorr admission gate.
+                 labProjection: () => ({
+                   projections: structuredClone(foldProjection()),
+                   acceptedActs: structuredClone([...validActs.values()]),
+                   rejectedActs: [...rejectedActs].map(([id,x]) => ({id,code:x.code,event:structuredClone(x.event)}))
+                 }),
+                 labSnapshot: () => ({
+                   events: [...events.values()].map(e => structuredClone(e)),
+                   notaries: [...notaries.values()].map(e => structuredClone(e)),
+                   acts: [...acts.values()].map(e => structuredClone(e)),
+                   projections: structuredClone(foldProjection())
+                 }),
+                 labAdmitAct: e => admit(e, ingestAct),
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
                  startDraft, discardDraft, pickCommit, pickBack, pickDone,
                  pickFracSet, pickPageY,

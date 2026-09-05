@@ -4,8 +4,9 @@
 import puppeteer from '/Users/alkemagreg/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js';
 import fs from 'node:fs';
 const SK = fs.readFileSync('/Users/alkemagreg/lab-relay/keys/fable/sk.hex','utf8').trim();
-const BASE='http://127.0.0.1:8778/';
-const TL = BASE+'modular.html?c=us-israel-defense-tech-2026-lab&k=93a2e6405477';
+const BASE=process.env.BASE||'http://127.0.0.1:8778/';
+const PAGE=process.env.PAGE||'modular.html';
+const TL = BASE+PAGE+'?c=us-israel-defense-tech-2026-lab&k=93a2e6405477';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const log=(...a)=>console.log(new Date().toISOString().slice(11,19),...a);
 const b = await puppeteer.launch({headless:true, executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
