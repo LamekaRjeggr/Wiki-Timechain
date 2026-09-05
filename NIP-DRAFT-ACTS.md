@@ -24,12 +24,10 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
   `summary`, `content`, `event_date`, `event_time`, or `g`.
 - **Register** — `(notary coordinate, card d, field block)`, where one notary's current
   field selection is derived.
-- **Whole-card acceptance** — one act installing a complete exact card as the projection
-  baseline.
+- **Whole-card acceptance** — one act selecting all six field blocks from one complete
+  exact card.
 - **Partial-card selection** — one act selecting an explicit set of field blocks from
   one exact source-card version.
-- **Baseline** — the complete signed source envelope installed by a whole-card act.
-- **Overlay** — a partial-card act changing only the registers it names.
 - **Projection** — the current field map derived by folding a notary's acts.
 - **Provenance** — the exact signed source envelope from which selected bytes are read.
 - **Credit** — optional public attribution, separate from provenance.
@@ -89,10 +87,10 @@ The act's `content` remains empty so there is only one value channel.
 ["select", "card"]
 ```
 
-This installs the complete signed source envelope as a fresh baseline and clears every
-older overlay in the slot. The six core registers are read from that snapshot, including
-absence. Unfamiliar and structural tags remain preserved in the envelope without becoming
-partial-selection registers.
+This writes all six core registers from the snapshot, including absence. It is shorthand
+for selecting every allowed field block in one act; reducers require no separate baseline
+or overlay state. Unfamiliar and structural tags remain preserved in the envelope without
+becoming partial-selection registers.
 
 One whole-card acceptance creates one `8828` and zero new `30828` events. Materializing
 the projection later is a separate optional operation.
@@ -157,11 +155,12 @@ A revoke has empty `content`, the same context as its target, and one target:
 }
 ```
 
-The target MUST be signed by the same key and have the same context. The revoke's slot is
-the target's slot. In the
-deterministic order below, the revoke MUST sort after its target. It clears all and only
-registers whose current source is still the targeted act. Registers changed by an
-intervening act are unaffected. A prior value does not return.
+The target MUST be a valid acceptance signed by the same key and have the same context.
+The revoke's slot is the target's slot. The target-id edge is causal: a valid revoke
+applies immediately after its target even when the revoke has an earlier `created_at`.
+It clears all and only registers whose current source is still the targeted act.
+Registers changed by a later acceptance in deterministic order are unaffected. A prior
+value does not return.
 
 A revoke contains no source, snapshot, selector, or credit tag.
 
@@ -191,27 +190,30 @@ For an act to affect a notary projection:
 4. it MUST be exactly one valid acceptance shape or one valid revoke shape;
 5. an acceptance snapshot and its source `e` MUST pass Snapshot validation;
 6. acceptance selectors MUST be allowed, distinct, and structurally valid;
-7. a revoke target MUST pass the same-key, context, and ordering checks above.
+7. a revoke target MUST be a valid acceptance and pass the same-key and context checks
+   above.
 
 Current source-card replacement, present notary-graph reachability, optional credit, and
 observed plurality are not validity requirements.
 
 ## Deterministic derivation
 
-There is one writer for a notary context: the pubkey in its `30829` coordinate. Its valid
-acts are folded in ascending order by:
+There is one writer for a notary context: the pubkey in its `30829` coordinate. Valid
+acceptances are folded in ascending order by:
 
 ```text
 (created_at, event id)
 ```
 
-The event id is the tie-breaker. Relay arrival order is irrelevant. Clients with the
-same valid event set MUST derive the same projection.
+The event id is the tie-breaker. Each valid revoke is applied immediately after its
+target acceptance, irrespective of the revoke's own timestamp; multiple revokes of one
+target are equivalent to one. Relay arrival order is irrelevant. Clients with the same
+valid event set MUST derive the same projection.
 
 For each `(context, slot)`:
 
-1. `select:card` installs its snapshot as the new baseline and clears every prior
-   overlay in that slot.
+1. `select:card` writes all six registers from its snapshot and records that act as each
+   register's current source.
 2. A partial acceptance sets each named register to the value in its snapshot and records
    that act as the register's current source. Registers it does not name remain unchanged.
 3. A revoke unsets only registers whose current source is its target. It never reveals or
