@@ -1184,31 +1184,12 @@ function collectionSlug(ev){
   return a ? a[1].split(":").slice(2).join(":") : "";
 }
 const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d");
-const submitsTo = (ev, coord) => ev.tags.some(t => t[0] === "a" && t[1] === coord);
 // A notary has an unordered SET of discovery sources. Position, tag order, graph depth,
 // and the number of routes confer no rank or authority; only this notary's own 8828s
 // decide its projection.
 const notarySources = N => N ? [...new Set(N.tags
   .filter(t => t[0] === "a" && /^30829:[0-9a-f]{64}:.+/.test(t[1] || ""))
   .map(t => t[1]))] : [];
-// CANDIDATES (notary NIP, Chaining): a card submitted here, or passed by a notary this one
-// submits to — each link checks the bytes for itself. Coordinates are names and can loop;
-// the walk stops at any it has seen.
-function candidate(ev, N, seen = new Set([coordOf(N)])){
-  if (submitsTo(ev, coordOf(N))) return true;
-  // Once this notary has signed its own decision, that decision is sufficient local
-  // candidacy. An upstream revoke or source revision changes provenance status; it must
-  // not silently erase the downstream projection.
-  const cardCoord = KIND + ":" + ev.pubkey + ":" + tag(ev,"d");
-  if (acceptances(cardCoord, ev.id, coordOf(N)).some(a => a.pubkey === N.pubkey)) return true;
-  return notarySources(N).some(src => {
-    if (seen.has(src)) return false;
-    const U = notaries.get(src); if (!U) return false;
-    // Each branch gets its own visited set. A failed route in a convergent graph must
-    // not suppress another route that reaches the same source with valid evidence.
-    return candidate(ev, U, new Set(seen).add(src)) && tierOf(ev, U) === 0;
-  });
-}
 // every notary holding a name, oldest first. That order is only a DEFAULT — the chips show
 // all of them and one tap switches — so a backdated notary can steal a first look, never a line.
 function notariesOf(c){
@@ -1754,13 +1735,16 @@ function scheduleRender(){
 function matching(f){
   return [...events.values()].filter(ev => matchesF(ev, f));
 }
+// CANDIDATES: every card submitted to this notary or to any notary in its discovery set —
+// all of it on the line as submitted (blue, left), so there is something to pick from — plus
+// what this notary already accepted, so an upstream revoke or source revision cannot erase
+// the downstream projection. Discovery is a pool, not a gate: only this notary's own 8828s
+// decide what passes.
 function candidatesOf(N){
-  return N ? [...events.values()].filter(ev => candidate(ev, N)) : [];
-}
-function discoveryPool(N){
   if (!N) return [];
   const coords = new Set(reachableNotaryCoords([coordOf(N)]));
-  return [...events.values()].filter(ev => ev.tags.some(t => t[0] === "a" && coords.has(t[1])));
+  return [...events.values()].filter(ev => ev.tags.some(t => t[0] === "a" && coords.has(t[1])) ||
+    acceptances(KIND + ":" + ev.pubkey + ":" + tag(ev,"d"), ev.id, coordOf(N)).some(a => a.pubkey === N.pubkey));
 }
 // where a card stands under the notary on screen: 0 = on the line (passed). 1 = passed, waiting
 // on the notary's re-read. 2 = submitted, not passed — behind the fold. Never deleted, only resisted.
