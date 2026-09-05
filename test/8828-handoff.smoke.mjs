@@ -54,7 +54,8 @@ await sleep(3000);
 let bs = await buttons(); log('   buttons:', JSON.stringify(bs.slice(0,6)), 'total', bs.length);
 log('   projection before:', JSON.stringify(await projection()));
 
-const acc = bs.find(x=>x.pk && !x.dis);
+const TARGET = process.env.D;
+const acc = bs.find(x=>x.pk && !x.dis && (!TARGET || x.d===TARGET));
 if (!acc) { log('NO accept button — stop'); await b.close(); process.exit(1); }
 log('3. accept', acc.d);
 await Promise.all([p.waitForNavigation({waitUntil:'domcontentloaded'}), p.evaluate(d=>document.querySelector(`.abtn[data-pk][data-d="${d}"]`).click(), acc.d)]);
