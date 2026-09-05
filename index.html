@@ -600,12 +600,14 @@
   @media (max-width:899px){
     #drum{width:40px}
     #drum .band{right:0}
-    #drum .axle{left:3px}
-    #drum .head .ln{width:26px;left:3px}
-    #drum .tick,#drum .tick.sub{left:8px;right:auto}   /* no room left of the axle: fill carries it */
-    #drum .tick.gapmark{left:3px}
+    #drum .axle{left:19px}
+    #drum .head .ln{width:34px;left:3px}
+    /* same sides as the page: blue left of the axle, gold right. 16px a side, so long ticks shrink */
+    #drum .tick{left:22px;max-width:16px}
+    #drum .tick.sub{left:auto;right:calc(100% - 17px)}
+    #drum .tick.gapmark{left:17px}
     #drum .tab{display:none}
-    #drum .now{left:2px;width:34px}
+    #drum .now{left:2px;width:36px}
     #drum .now i{display:none}
     .limb{left:4px;font-size:12px;padding:3px 7px}
     .limb .yr{display:none}
