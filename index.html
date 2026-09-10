@@ -950,7 +950,7 @@ const RELAYS = [
 const KIND = 30828;
 const ACT_KIND = 8828;          // Timeline Acts (draft NIP): regular events, accept/revoke
 const NOTARY_KIND = 30829;      // Timeline Notaries (draft NIP): the collection as its own event
-const MARKER = "wikitimechain"; // global membership marker: ["t","wikitimechain"] — every card carries it
+const MARKER = "wikitimechain"; // corpus marker; lives on the notary, not the card
 
 // ═══════════════ state ═══════════════
 const events   = new Map();     // pubkey:d → newest card (replaceable per author)
