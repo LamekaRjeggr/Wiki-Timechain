@@ -1090,6 +1090,17 @@ const DAY_RE  = /^\d{4}-\d{2}-\d{2}$/;
 const dateOk  = s => { const [a, b = a, c] = String(s).split("/");
   return !c && DAY_RE.test(a) && DAY_RE.test(b) && a <= b; };
 const showDate = s => String(s).replace("/", " – ");   // a range reads with an en dash
+// YYYY | YYYY-MM | YYYY-MM-DD → event_date value. Coarse input widens to the span it names
+// (a year is 01-01/12-31, a month runs to its real last day); a day is itself. "" if malformed.
+function spanOf(raw){
+  const m = String(raw || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!m) return "";
+  const [, y, mo, d] = m;
+  const day = s => new Date(s + "T00:00:00Z").toJSON()?.slice(0, 10) === s ? s : "";
+  if (d) return day(`${y}-${mo}-${d}`);
+  const a = `${y}-${mo || "01"}-01`, b = `${y}-${mo || "12"}-${new Date(Date.UTC(+y, +(mo || 12), 0)).getUTCDate()}`;
+  return day(a) && day(b) ? a + "/" + b : "";
+}
 // a card's collection = the d of the notary it submits to (["a","30829:<pubkey>:<d>"])
 const collOf  = ev => {
   const a = ev.tags.find(t => t[0] === "a" && String(t[1] || "").startsWith(NOTARY_KIND + ":"));
@@ -1399,7 +1410,7 @@ function buildTemplate(){
   const summary  = val("f-summary");
   const eventDate= val("f-date");
   const extraRaw = val("f-extra");
-  let content    = fixLinkTargets($("f-content").value || "");
+  const content  = fixLinkTargets($("f-content").value || "");
 
   const d = wikiSlug(dRaw || title);
   const c = wikiSlug(category);
@@ -1407,37 +1418,14 @@ function buildTemplate(){
   if (!c) throw new Error("a collection is required — every card joins a timeline");
 
   // Type what you know: YYYY, YYYY-MM, YYYY-MM-DD, or a closed range YYYY-MM-DD/YYYY-MM-DD.
-  // The TAG is always full dates, because the membership gate needs a concrete point on the
-  // spine; a coarse input is placed on day 01 and the precision is recorded where the
-  // convention puts it, in the content. A range says the span outright and needs no line.
+  // The precision IS the range — a year widens to 01-01/12-31, a month to its first/last
+  // day. No placeholder day, no line in the content: the tag says the span outright.
   const range = eventDate.split("/");
-  const dm = range[0].match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
-  if (!dm || range.length > 2 || (range.length === 2 && !dm[3]))
+  const fullDate = range.length === 1 ? spanOf(range[0])
+    : range.length === 2 && /^\d{4}-\d{2}-\d{2}$/.test(range[0]) && spanOf(range[0]) && spanOf(range[1]) && range[0] <= range[1]
+      ? range[0] + "/" + range[1] : "";
+  if (!fullDate)
     throw new Error("event date must be YYYY, YYYY-MM, YYYY-MM-DD or a range YYYY-MM-DD/YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14, 2003-07-01/2003-09-30)");
-  const [, wy, wmIn, wdIn] = dm;
-  const wm = wmIn || "01";
-  const realDay = s => new Date(s + "T00:00:00Z").toJSON()?.slice(0, 10) === s;
-  const start = `${wy}-${wm}-${wdIn || "01"}`, end = range[1] || start;
-  if (!realDay(start) || !realDay(end) || end < start)
-    throw new Error(`${eventDate} is not a real date`);
-  const fullDate = range[1] ? start + "/" + end : start;
-
-  // A full date defers to the canonical line, because that line is all a card read back off
-  // a relay carries — the field always shows the placed date, never the precision it took.
-  let prec = wdIn ? "day" : wmIn ? "month" : "year";
-  if (prec === "day"){
-    if      (/APPROXIMATE DATE:\s*known to the year/i.test(content))  prec = "year";
-    else if (/APPROXIMATE DATE:\s*known to the month/i.test(content)) prec = "month";
-  }
-  // Write the line the coarse input implies — unless the content already declares a date, so
-  // a hand-written period ("Summer 2026") is never stomped. A card with no content keeps none.
-  if (!wdIn && content.trim() && !/APPROXIMATE DATE:/i.test(content)){
-    const line = `APPROXIMATE DATE: known to the ${prec} — placed at ${fullDate}.`;
-    const src  = content.search(/^Sources?:/m);
-    content = src === -1
-      ? content.trimEnd() + "\n\n" + line
-      : content.slice(0, src).trimEnd() + "\n\n" + line + "\n\n" + content.slice(src);
-  }
 
   const tags = [["d", d]];
   if (title) tags.push(["title", title]);
@@ -1769,8 +1757,7 @@ function tryRevise(){
 // ?draft=1: a card composed on the viewer's timeline, crossing here to be signed (no
 // NIP-07 there). Consume-once — the key is deleted on read, and gated twice (query param
 // + freshness) so a leftover never surprises a direct visit. The date arrives as the RAW
-// precision string and the content RAW: buildTemplate owns the padding and the
-// APPROXIMATE DATE line, exactly as if it had been typed here.
+// precision string: buildTemplate widens it to a range, exactly as if it had been typed here.
 if (new URLSearchParams(location.search).get("draft") === "1"){
   try {
     const rec = JSON.parse(localStorage.getItem("wtc:draft") || "null");

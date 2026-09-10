@@ -18,32 +18,22 @@ handles.
 One fact, stated plainly, then its provenance. A card is not an article: it carries the
 smallest thing that is true on its own and links out for the rest.
 
-## Approximate dates — one canonical, greppable line
+## Approximate dates — the precision is the range
 
-`event_date` is always a full `YYYY-MM-DD`, because the spine needs a concrete point.
-When the real date is coarser, place the card on a canonical day and record the true
-precision in **one canonical line** in the body — fixed prefix, controlled precision
-clause, then `— placed at <the event_date value>`. The fixed prefix is what makes every
-contributor's caveat grep with a single pattern later.
+`event_date` is a day `YYYY-MM-DD` or a closed range `YYYY-MM-DD/YYYY-MM-DD`. When the
+real date is coarser than a day, the range says so; nothing is placed on a placeholder
+day and no line in the body records it.
 
-Form: `APPROXIMATE DATE: <precision clause> — placed at <YYYY-MM-DD>.`
+| Case | `event_date` |
+|---|---|
+| Day known | `2003-07-14` |
+| Month known, day unknown | `2003-07-01/2003-07-31` |
+| Year known only | `2003-01-01/2003-12-31` |
+| Source names a period ("Summer 2026") | `2026-06-01/2026-08-31` — the source's words go in the body, quoted verbatim |
 
-| Case | Canonical line | Placement | Buckets emitted |
-|---|---|---|---|
-| Month known, day unknown | `APPROXIMATE DATE: known to the month — placed at 2003-07-01.` | day `01` | `2003`, `2003-07` |
-| Year known only | `APPROXIMATE DATE: known to the year — placed at 2003-01-01.` | `01-01` | `2003` only |
-| Source names a period | `APPROXIMATE DATE: "Summer 2026" — placed at 2026-07-01.` | first day of the chosen month | `2026`, `2026-07` |
-
-Rules:
-- The prefix is exactly `APPROXIMATE DATE:` (uppercase, trailing colon) — the grep anchor.
-- The date after `placed at` is *identical* to the `event_date` tag value.
-- A named source period is **quoted verbatim** in double quotes (`"Summer 2026"`,
-  `"Q3 2011"`); a bare precision uses the controlled clauses
-  (`known to the month` / `known to the year`).
-- **Buckets encode the *known* precision, never the placeholder day** — this one is
-  normative, and the spec says so. The line in the body is how a reader learns it; the
-  missing bucket is how a query does.
-- An exactly-known date carries **no** `APPROXIMATE DATE:` line at all.
+The publish pages widen `2003` and `2003-07` to these ranges; a hand-written range must
+be full dates, start ≤ end. A range MUST encode only known precision — never widen to
+hedge, never narrow to look exact.
 
 ## Sourcing
 
@@ -116,8 +106,8 @@ card's `d` with a qualifier.
 
 ## Things that have not happened yet
 
-`APPROXIMATE DATE:` covers a *past* event whose date is coarse. An **anticipated** event
-is the opposite problem — a date and contents that are guesses — and it must say so:
+A date range covers a *past* event whose date is coarse. An **anticipated** event is the
+opposite problem — a date and contents that are guesses — and it must say so:
 
 ```
 Status: anticipated - this card records an expectation, not an event.
@@ -140,10 +130,9 @@ because an absence cannot be dropped.
 **A summary may be wrong; it may not be invented.** A guess about *what happened* can
 stand. A guess about *why* is a story.
 
-**The date range goes in the summary, in words,** and `event_date` sits on the first day
-of the range — the same placement rule approximate dates use. `APPROXIMATE DATE:` lives
-in the body. When a source turns up, the range moves into the body as a proper
-`APPROXIMATE DATE:` line — or the source pins a day and the hedge goes away.
+**The expected window is the `event_date` range,** and the summary says in words that it
+is an expectation. When a source turns up, the range narrows to what it supports — or the
+source pins a day and the hedge goes away.
 
 **A claim that proves false gets a body too.** It records what was claimed and what
 disproved it, cited to the disproof. That is a body with a source: a record. Nothing is
@@ -208,9 +197,9 @@ that did not happen.
 
 Style calls that are settled. The wire-format decisions are frozen in the spec instead.
 
-- Approximate dates: one canonical `APPROXIMATE DATE: … — placed at <event_date>.` line,
-  uppercase prefix as the grep anchor; controlled precision clauses or a quoted source
-  period; placement day `01` for month-known, `01-01` for year-only.
+- Approximate dates: the `event_date` range carries the precision; no line in the body,
+  no placeholder day. (The old `APPROXIMATE DATE: … — placed at …` line is history —
+  cards that carry it predate ranges.)
 - Sourcing: `Source:` for one, one `Sources:` line scoped per claim for several; a source
   with a URL *is* a link; embed an image only on the card it is about, link it elsewhere.
 - Scheduled events: `When:` / `Where:` immediately above the source line, timezone always

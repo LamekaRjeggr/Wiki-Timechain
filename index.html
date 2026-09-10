@@ -1385,6 +1385,17 @@ const dateOk  = s => { const [a, b = a, c] = String(s).split("/");
 const dateOf  = ev => tag(ev,"event_date");
 const startOf = ev => dateOf(ev).split("/")[0];
 const showDate = s => String(s).replace("/", " – ");
+// YYYY | YYYY-MM | YYYY-MM-DD → event_date value. Coarse input widens to the span it names
+// (a year is 01-01/12-31, a month runs to its real last day); a day is itself. "" if malformed.
+function spanOf(raw){
+  const m = String(raw || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!m) return "";
+  const [, y, mo, d] = m;
+  const day = s => new Date(s + "T00:00:00Z").toJSON()?.slice(0, 10) === s ? s : "";
+  if (d) return day(`${y}-${mo}-${d}`);
+  const a = `${y}-${mo || "01"}-01`, b = `${y}-${mo || "12"}-${new Date(Date.UTC(+y, +(mo || 12), 0)).getUTCDate()}`;
+  return day(a) && day(b) ? a + "/" + b : "";
+}
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
 const timeOf = ev => tag(ev,"event_time") || "";
@@ -2954,55 +2965,32 @@ function inheritedTags(c){
   return [...common.values()];
 }
 
-// draft.date is the RAW precision string (YYYY | YYYY-MM | YYYY-MM-DD) — the padding to a
-// full event_date and the APPROXIMATE DATE line happen here, exactly as add.html's
-// buildTemplate does them. Throws on anything membership would drop.
+// draft.date is the RAW precision string (YYYY | YYYY-MM | YYYY-MM-DD). The precision IS
+// the range: a year becomes 01-01/12-31, a month its first/last day, a day itself — exactly
+// as add.html's buildTemplate does it. Throws on anything membership would drop.
 // draft.pubkey = the signer: a slug no notary holds is submitted to one minted under that key.
 function buildDraftTemplate(draft){
   const now     = Math.floor(Date.now() / 1000);
   const title   = (draft.title || "").trim();
   const summary = (draft.summary || "").trim();
   const c       = wikiSlug(draft.coll || "");
-  let  content  = fixLinkTargets(draft.content || "");
+  const content = fixLinkTargets(draft.content || "");
 
   if (!c) throw new Error("a collection is required — every card joins a timeline");
   const d = `${c}-${draft.dsuf || mintSuffix()}`;
   if (!title) throw new Error("a title is required — it is what the card says happened");
 
-  const dm = String(draft.date || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
-  if (!dm) throw new Error("pick a date on the drum — a year is enough");
-  const [, wy, wmIn, wdIn] = dm;
-  const wm = wmIn || "01";
-  const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
-  const dchk = new Date(fullDate + "T00:00:00Z");
-  if (isNaN(dchk) || dchk.toISOString().slice(0, 10) !== fullDate)
-    throw new Error(`${draft.date} is not a real date`);
+  const fullDate = spanOf(draft.date);
+  if (!fullDate) throw new Error("pick a date on the drum — a year is enough");
   const wt = (draft.time || "").trim();
   if (wt && !TIME_RE.test(wt))
     throw new Error(`${wt} is not a real time — HH:MM or HH:MM:SS, 24-hour UTC`);
-
-  // A coarse date is placed on day 01 and the precision recorded where the convention puts
-  // it, in the content — unless the content already declares a date, which is never stomped.
-  let prec = wdIn ? "day" : wmIn ? "month" : "year";
-  if (prec === "day"){
-    if      (/APPROXIMATE DATE:\s*known to the year/i.test(content))  prec = "year";
-    else if (/APPROXIMATE DATE:\s*known to the month/i.test(content)) prec = "month";
-  }
-  if (!wdIn && content.trim() && !/APPROXIMATE DATE:/i.test(content)){
-    const line = `APPROXIMATE DATE: known to the ${prec} — placed at ${fullDate}.`;
-    const src  = content.search(/^Sources?:/m);
-    content = src === -1
-      ? content.trimEnd() + "\n\n" + line
-      : content.slice(0, src).trimEnd() + "\n\n" + line + "\n\n" + content.slice(src);
-  }
 
   const tags = [["d", d]];
   if (title) tags.push(["title", title]);
   tags.push(["published_at", String(now)]);
   tags.push(["event_date", fullDate]);
-  // prec, not wdIn: a content line declaring a coarser date wins, and a time on a
-  // placeholder day would be a lie
-  if (wt && prec === "day") tags.push(["event_time", wt]);
+  if (wt && !fullDate.includes("/")) tags.push(["event_time", wt]);   // a time on a span would be a lie
   tags.push(["a", NOTARY_KIND + ":" + (notaryOf(c) || draft).pubkey + ":" + c]);
   if (summary) tags.push(["summary", summary]);
   const have = new Set(tags.map(t => JSON.stringify(t)));
@@ -3233,8 +3221,7 @@ async function publishDraft(btn){
 }
 
 // no extension: the draft crosses to add.html, whose bunker/nsec ladder takes over.
-// RAW precision string and RAW content — add.html's builder owns the padding and the
-// APPROXIMATE DATE line; baking them here would write the line twice.
+// RAW precision string — add.html's builder owns the widening to a range.
 function handoffDraft(){
   const rec = { v: 1, at: Date.now(), coll: activeF.slice(2), date: draftDate(),
                 time: draft.time, title: draft.title, summary: draft.summary, content: draft.content };
