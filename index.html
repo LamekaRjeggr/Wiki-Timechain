@@ -868,12 +868,8 @@ kind: 30828
 tags:
   d           my-entry-slug               (identity — one entry, editable by you; no date in it)
   title       Short entry name            (no leading year — the rail already shows the date)
-  event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail)
-  t           wikitimechain               (the discovery marker — every card carries it)
+  event_date  2026-07-20                  (YYYY-MM-DD — where it sits on the rail; a span is 2026-07-01/2026-09-30)
   a           30829:&lt;notary-pubkey&gt;:&lt;collection-slug&gt;   (which timeline — the notary it submits to)
-  L           timeline.date
-  l           2026                timeline.date
-  l           2026-07             timeline.date
 content:
   One factual sentence about what happened.
 
@@ -883,9 +879,6 @@ content:
         who published every card — your entry stands on your signature. There is no
         registration step for a timeline beyond the notary itself (kind 30829, one event):
         composing here under a slug no notary holds mints one under your key.</p>
-      <p>The label namespaces are <code>timeline.*</code>. The <code>t</code> marker is not
-        part of that naming — it names this timeline, not a version, and every card carries
-        it.</p>
 
       <h3>Build your own reader</h3>
       <p>This page is one client, not the record. One request boots another:
@@ -1384,13 +1377,14 @@ function depthMark(ev, d){
     rung("b", c.body, v.body, "record") + `</button>`;
 }
 
-function dateOf(ev){
-  const ed = tag(ev,"event_date");
-  if (ed) return ed;
-  const pa = parseInt(tag(ev,"published_at"),10);
-  const ts = isNaN(pa) ? (ev.created_at||0) : pa;
-  return new Date(ts*1000).toISOString().slice(0,10);
-}
+// event_date is YYYY-MM-DD or a closed range YYYY-MM-DD/YYYY-MM-DD (start ≤ end); the gate
+// in ingest drops anything else. Sort by the start; a range reads with an en dash.
+const DAY_RE  = /^\d{4}-\d{2}-\d{2}$/;
+const dateOk  = s => { const [a, b = a, c] = String(s).split("/");
+  return !c && DAY_RE.test(a) && DAY_RE.test(b) && a <= b; };
+const dateOf  = ev => tag(ev,"event_date");
+const startOf = ev => dateOf(ev).split("/")[0];
+const showDate = s => String(s).replace("/", " – ");
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
 const timeOf = ev => tag(ev,"event_time") || "";
@@ -1398,7 +1392,7 @@ const timeOf = ev => tag(ev,"event_time") || "";
 // normalizes through the offset; the tag value itself is never rewritten. No time → -1,
 // so a timeless card still sits ahead of its timed same-day neighbours.
 function timeMin(t){
-  const m = String(t).match(/^(\d\d):(\d\d)(?::(\d\d))?(?:([+-])(\d\d):(\d\d))?$/);
+  const m = String(t).split("/")[0].match(/^(\d\d):(\d\d)(?::(\d\d))?(?:([+-])(\d\d):(\d\d))?$/);
   if (!m) return -1;
   let v = +m[1]*60 + +m[2] + (+m[3]||0)/60;
   if (m[4]) v += (m[4]==="-" ? 1 : -1) * (+m[5]*60 + +m[6]);
@@ -1407,15 +1401,16 @@ function timeMin(t){
 // a time never appears without its zone — the record is UTC and a bare 14:30 reads as local.
 // An offset form IS local at the source; the numeric offset is confusing on the face, so the
 // word "local" stands in and the raw value rides the hover.
-const stamp  = ev => { const t = timeOf(ev); if (!t) return esc(dateOf(ev));
-  const m = t.match(/^([\d:]+)([+-]\d\d:\d\d)$/);
-  return esc(dateOf(ev)) + (m
-    ? ` <span class="tt" title="${esc(t)}">${esc(m[1])}</span><span class="tz"> local</span>`
-    : ` <span class="tt">${esc(t)}</span><span class="tz"> UTC</span>`); };
+const stamp  = ev => { const t = timeOf(ev); if (!t) return esc(showDate(dateOf(ev)));
+  const m = t.split("/")[0].match(/^([\d:]+)([+-]\d\d:\d\d)$/);
+  const face = t.split("/").map(h => h.replace(/[+-]\d\d:\d\d$/, "")).join(" – ");
+  return esc(showDate(dateOf(ev))) + (m
+    ? ` <span class="tt" title="${esc(t)}">${esc(face)}</span><span class="tz"> local</span>`
+    : ` <span class="tt">${esc(face)}</span><span class="tz"> UTC</span>`); };
 const byWhen = (a,b) => (readDesc ? -1 : 1) *
   ((a.frac - b.frac) || (timeMin(a.time) - timeMin(b.time)));
 function yearFrac(dateStr){
-  const p = String(dateStr).split("-").map(Number);
+  const p = String(dateStr).split("/")[0].split("-").map(Number);
   return (p[0]||1970) + ((p[1]?p[1]-1:0)/12) + ((p[2]?p[2]-1:0)/365);
 }
 
@@ -1537,8 +1532,8 @@ function ingestNotary(ev){
 
 function ingest(ev){
   if (!ev || ev.kind !== KIND) return;
-  const d = tag(ev,"d"); if (!d) return;
-  // the gate: a card is visible only through a notary we hold — relays are not trusted to filter
+  const d = tag(ev,"d"); if (!d || !dateOk(dateOf(ev))) return;   // the spec's gate: a parseable event_date
+  // and a card is visible only through a notary we hold — relays are not trusted to filter
   const sub = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
   if (!sub || !notaries.has(sub[1])) return;
   const key = ev.pubkey + ":" + d;
@@ -1783,7 +1778,7 @@ function entriesOf(f){
   // cold downstream load would need an upstream act in order to decide to fetch it.
   if (N) reachableNotaryCoords([coordOf(N)]).forEach(wantContextActs);
   const cut = c && hideFold.has(c) ? 1 : 2;                // a shut fold drops the unpassed
-  const ord = (a,b) => (dateOf(a) < dateOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
+  const ord = (a,b) => (startOf(a) < startOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of pool){
     const d = tag(ev,"d");
@@ -2195,11 +2190,11 @@ function renderTimeline(entries){
     if (main.length > 1){
       html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${parHtml}${rivalsHtml}` +
         `<div class="contest"><div class="cbrace"></div>` +
-        `<div class="cbadge">${esc(e.date)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
+        `<div class="cbadge">${esc(showDate(e.date))} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
         main.map((ev0, vi) => { const { show: ev, box } = goldOf(ev0, e.d); return
           `<div class="vcard"><div class="byline">` +
           `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLink(ev.pubkey)} · ${esc(dateOf(ev))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
+          `${authorLink(ev.pubkey)} · ${esc(showDate(dateOf(ev)))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
           `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
         ).join("") + `</div></div>`;
     } else {
@@ -2920,7 +2915,6 @@ function rememberPk(pk){
 // ═══════════════ authoring core — ported from add.html, so a draft composed here builds
 // the SAME event the writer would. Trimmed on purpose: no fork tags and no extra-tags box
 // (add.html stays the revision tool); d is minted under the collection, frozen at publish. ══
-const NS_DATE = "timeline.date";
 function wikiSlug(s){
   return String(s).toLowerCase()
     .replace(/\s+/g, "-")
@@ -2961,8 +2955,8 @@ function inheritedTags(c){
 }
 
 // draft.date is the RAW precision string (YYYY | YYYY-MM | YYYY-MM-DD) — the padding to a
-// full event_date, the APPROXIMATE DATE line, and the date-bucket labels all happen here,
-// exactly as add.html's buildTemplate does them. Throws on anything membership would drop.
+// full event_date and the APPROXIMATE DATE line happen here, exactly as add.html's
+// buildTemplate does them. Throws on anything membership would drop.
 // draft.pubkey = the signer: a slug no notary holds is submitted to one minted under that key.
 function buildDraftTemplate(draft){
   const now     = Math.floor(Date.now() / 1000);
@@ -3009,10 +3003,7 @@ function buildDraftTemplate(draft){
   // prec, not wdIn: a content line declaring a coarser date wins, and a time on a
   // placeholder day would be a lie
   if (wt && prec === "day") tags.push(["event_time", wt]);
-  tags.push(["t", MARKER]);
   tags.push(["a", NOTARY_KIND + ":" + (notaryOf(c) || draft).pubkey + ":" + c]);
-  tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
-  if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
   if (summary) tags.push(["summary", summary]);
   const have = new Set(tags.map(t => JSON.stringify(t)));
   for (const t of inheritedTags(c))
@@ -3028,7 +3019,7 @@ function buildDraftTemplate(draft){
 function draftCollision(d, pk){
   if (pk && events.has(pk + ":" + d)){
     const hit = events.get(pk + ":" + d);
-    return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${dateOf(hit)}) — publishing would replace it. Discard this draft and start another; the new one mints a different address.` };
+    return { block: true, text: `"${d}" is already your card "${tag(hit,"title") || d}" (${showDate(dateOf(hit))}) — publishing would replace it. Discard this draft and start another; the new one mints a different address.` };
   }
   const rival = [...events.values()].find(e => tag(e,"d") === d && e.pubkey !== pk);
   if (rival) return { block: false, text: `another author already holds the d "${d}" — publishing makes yours a rival version of theirs, which shows as two submitted. That is allowed; just make sure you meant it.` };

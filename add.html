@@ -411,7 +411,8 @@
   <section id="sec-card">
     <h2><i>2</i>the card</h2>
     <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
-      existing one or type a new slug, which is all it takes to start one.</p>
+      existing one or type a new slug, which is all it takes to start one — it is minted as a
+      notary under your key when you publish.</p>
 
     <div id="mine-row">
       <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
@@ -440,7 +441,7 @@
       </div>
     </div>
 
-    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07 or 2003-07-14.</span></label>
+    <label for="f-date">event date <span class="h">— when it happened. Required. Type what you know: 2003, 2003-07, 2003-07-14 — or a span 2003-07-01/2003-09-30.</span></label>
     <input id="f-date" placeholder="2003-07-14" autocomplete="off">
 
     <label for="f-summary">summary <span class="h">— optional, your plain-words gloss; the viewer can show this instead of the record</span></label>
@@ -541,10 +542,7 @@ const NOTARY_KIND = 30829;   // Timeline Notaries (draft NIP): the collection as
 // "an act is crossing", so a bare ?act=1 with nothing behind it still gets a visible answer.
 const actMode = new URLSearchParams(location.search).get("act") === "1";
 const CITE   = new Set(["cite","fork","adopt"]);   // spec marker + the two words it superseded (read only)
-const MARKER = "wikitimechain";   // the corpus marker: discovery bait, not proof
-// The spec's namespaces.
-const NS_COLL = "timeline.collection";
-const NS_DATE = "timeline.date";
+const MARKER = "wikitimechain";   // the corpus marker; lives on the notary, not the card
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -1087,17 +1085,22 @@ let eosed = 0, settled = false;
 const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
 const dOf     = ev => tagOf(ev, "d");
 const dateOf  = ev => tagOf(ev, "event_date");
+// event_date is YYYY-MM-DD or a closed range YYYY-MM-DD/YYYY-MM-DD (start ≤ end)
+const DAY_RE  = /^\d{4}-\d{2}-\d{2}$/;
+const dateOk  = s => { const [a, b = a, c] = String(s).split("/");
+  return !c && DAY_RE.test(a) && DAY_RE.test(b) && a <= b; };
+const showDate = s => String(s).replace("/", " – ");   // a range reads with an en dash
+// a card's collection = the d of the notary it submits to (["a","30829:<pubkey>:<d>"])
 const collOf  = ev => {
-  const l = ev.tags.find(t => t[0] === "l" && t[2] === NS_COLL);
-  return l ? l[1] : "";
+  const a = ev.tags.find(t => t[0] === "a" && String(t[1] || "").startsWith(NOTARY_KIND + ":"));
+  return a ? a[1].split(":").slice(2).join(":") : "";
 };
 
-// The membership gate, exactly as the spec states it: the marker is squattable, so a card
-// counts only if it ALSO carries a collection label and a parseable YYYY-MM-DD event_date.
+// The membership gate, exactly as the spec states it: a card counts only if it submits to a
+// notary and carries a parseable event_date. The marker is discovery bait, not proof.
 function passes(ev){
   if (ev.kind !== KIND) return false;
-  if (!ev.tags.some(t => t[0] === "t" && t[1] === MARKER)) return false;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOf(ev))) return false;
+  if (!dateOk(dateOf(ev))) return false;
   return !!collOf(ev) && !!dOf(ev);
 }
 function ingest(ev){
@@ -1121,7 +1124,8 @@ function connect(url){
   relayUp.set(url, "connecting");
   ws.onopen = () => {
     relayUp.set(url, "up"); renderRelays();
-    ws.send(JSON.stringify(["REQ", "tsieve", { kinds:[KIND], "#t":[MARKER], limit:500 }]));
+    ws.send(JSON.stringify(["REQ", "tsieve", { kinds:[KIND], limit:500 }]));   // markerless: passes() gates shape
+    ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }]));   // a card submits to one of these
     // Only when an act is actually crossing. The notaries are what a context can legally
     // be; the acts are what the six registers currently hold. A revoke cannot be resolved
     // without both, so this read is a precondition of signing, not decoration.
@@ -1132,6 +1136,7 @@ function connect(url){
   ws.onmessage = m => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     if (data[0] === "EVENT" && data[1] === "tsieve") ingest(data[2]);
+    if (data[0] === "EVENT" && data[1] === "ntry") admit(data[2], ingestNotary);
     if (data[0] === "EVENT" && data[1] === "asieve" && data[2]){
       // Everything here is a claim until the bytes check out — the same gate the viewer
       // puts in front of its own act ingest, for the same reason.
@@ -1296,7 +1301,7 @@ function renderMine(){
         .sort((a,b) => (dateOf(a) < dateOf(b) ? 1 : -1))
     : [];
   sel.innerHTML = '<option value="">— new card —</option>' + mine.map(e =>
-    `<option value="${esc(dOf(e))}">${esc(tagOf(e,"title") || dOf(e))} · ${esc(dateOf(e))} · ${esc(collOf(e))}</option>`
+    `<option value="${esc(dOf(e))}">${esc(tagOf(e,"title") || dOf(e))} · ${esc(showDate(dateOf(e)))} · ${esc(collOf(e))}</option>`
   ).join("");
   $("b-load").disabled = !mine.length;
 }
@@ -1330,7 +1335,8 @@ function loadMine(){
   const owned = new Set(["d","title","summary","published_at","event_date","t","L","l"]);
   const forkPk = coord[1] || "";
   $("f-extra").value = ev.tags
-    .filter(t => !owned.has(t[0]) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk))
+    .filter(t => !owned.has(t[0]) && !CITE.has(t[3]) && !(t[0] === "p" && t[1] === forkPk)
+              && !(t[0] === "a" && String(t[1] || "").startsWith(NOTARY_KIND + ":")))
     .map(t => t.join(" ")).join("\n");
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
@@ -1400,17 +1406,21 @@ function buildTemplate(){
   if (!d) throw new Error("a title (or a d slug) is required — it is the card's address");
   if (!c) throw new Error("a collection is required — every card joins a timeline");
 
-  // Type what you know: YYYY, YYYY-MM or YYYY-MM-DD. The TAG is always a full date, because
-  // the membership gate needs a concrete point on the spine; a coarse input is placed on
-  // day 01 and the precision is recorded where the convention puts it, in the content.
-  const dm = eventDate.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
-  if (!dm) throw new Error("event date must be YYYY, YYYY-MM or YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14)");
+  // Type what you know: YYYY, YYYY-MM, YYYY-MM-DD, or a closed range YYYY-MM-DD/YYYY-MM-DD.
+  // The TAG is always full dates, because the membership gate needs a concrete point on the
+  // spine; a coarse input is placed on day 01 and the precision is recorded where the
+  // convention puts it, in the content. A range says the span outright and needs no line.
+  const range = eventDate.split("/");
+  const dm = range[0].match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (!dm || range.length > 2 || (range.length === 2 && !dm[3]))
+    throw new Error("event date must be YYYY, YYYY-MM, YYYY-MM-DD or a range YYYY-MM-DD/YYYY-MM-DD (e.g. 2003, 2003-07, 2003-07-14, 2003-07-01/2003-09-30)");
   const [, wy, wmIn, wdIn] = dm;
   const wm = wmIn || "01";
-  const fullDate = `${wy}-${wm}-${wdIn || "01"}`;
-  const dchk = new Date(fullDate + "T00:00:00Z");
-  if (isNaN(dchk) || dchk.toISOString().slice(0, 10) !== fullDate)
+  const realDay = s => new Date(s + "T00:00:00Z").toJSON()?.slice(0, 10) === s;
+  const start = `${wy}-${wm}-${wdIn || "01"}`, end = range[1] || start;
+  if (!realDay(start) || !realDay(end) || end < start)
     throw new Error(`${eventDate} is not a real date`);
+  const fullDate = range[1] ? start + "/" + end : start;
 
   // A full date defers to the canonical line, because that line is all a card read back off
   // a relay carries — the field always shows the placed date, never the precision it took.
@@ -1433,12 +1443,10 @@ function buildTemplate(){
   if (title) tags.push(["title", title]);
   tags.push(["published_at", loadedPubAt || String(now)]);
   tags.push(["event_date", fullDate]);
-  // Marker + NIP-32 self-labels. Date buckets encode KNOWN precision: a year-only card emits
-  // no month bucket, because the placeholder month is not a fact about the world.
-  tags.push(["t", MARKER]);
-  tags.push(["L", NS_COLL], ["l", c, NS_COLL]);
-  tags.push(["L", NS_DATE], ["l", wy, NS_DATE]);
-  if (prec !== "year") tags.push(["l", wy + "-" + wm, NS_DATE]);
+  // The submission names the collection's notary — yours, minted at publish, when the slug
+  // has none yet (the signer is the pubkey then).
+  const N = notaryOf(c);
+  tags.push(["a", N ? coordOf(N) : `${NOTARY_KIND}:${signer ? signer.pubkey : ""}:${c}`]);
   if (summary) tags.push(["summary", summary]);
 
   // Fork. Both halves or neither: the a coordinate survives an edit of the target, the e id
@@ -1488,7 +1496,7 @@ function inheritedTags(c){
   if (!list.length) return [];
   const cand = t =>
     (t[0] === "t" && t[1] !== MARKER) ||
-    ((t[0] === "L" || t[0] === "l") &&
+    ((t[0] === "L" || t[0] === "l") &&   // legacy timeline.* buckets on old cards are not inherited
       !/^timeline\./.test(t[0] === "L" ? (t[1] || "") : (t[2] || "")));
   let common = null;   // key -> original tag array, so a value with a space survives
   for (const ev of list){
@@ -1590,8 +1598,8 @@ function renderInherit(){
 
 function previewHtml(tmpl){
   const t  = k => (tmpl.tags.find(x => x[0] === k) || [])[1] || "";
-  const date = t("event_date");
-  const future = date > new Date().toISOString().slice(0, 10);
+  const date = showDate(t("event_date"));
+  const future = t("event_date").split("/")[0] > new Date().toISOString().slice(0, 10);
   const who = signer ? npub(signer.pubkey).slice(0, 12) + "…" : "unsigned";
   const isRev = tmpl.tags.some(x => x[0] === "a" && CITE.has(x[3]));
   return `<div class="pv${future ? " future" : ""}">
@@ -1622,8 +1630,17 @@ async function publish(){
   let signed;
   $("b-pub").disabled = true;
   pubMsg("signing…");
+  // A new slug is a new notary: minted under your key, sent BEFORE the card so the
+  // submission never points at nothing. Two signatures, same click.
+  let ntry = null;
   try {
-    signed = await signer.sign(buildTemplate());
+    const tmpl = buildTemplate(), c = collOf(tmpl);
+    if (!notaryOf(c)){
+      ntry = await signer.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
+        tags: [["d", c], ["title", c.replaceAll("-", " ")], ["t", MARKER]] });
+      if (!ntry || !ntry.sig) throw new Error("the signer returned nothing for the new collection's notary — was the request approved?");
+    }
+    signed = await signer.sign(tmpl);
     if (!signed || !signed.sig) throw new Error("the signer returned nothing — was the request approved?");
   } catch(e){
     pubMsg(msgOf(e), "bad"); $("b-pub").disabled = false; return;
@@ -1632,8 +1649,8 @@ async function publish(){
   if (!open.length){ pubMsg("no relay is connected", "bad"); $("b-pub").disabled = false; return; }
 
   tallies.set(signed.id, { ok: 0, no: 0, why: "" });
-  const msg = JSON.stringify(["EVENT", signed]);
-  open.forEach(ws => { try { ws.send(msg); } catch {} });
+  if (ntry){ ingestNotary(ntry); actPublish(ntry); }
+  actPublish(signed);
 
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];
@@ -1823,6 +1840,8 @@ function notariesOf(c){
   return [...notaries.values()].filter(n => tagOf(n,"d") === c)
     .sort((a,b) => (a.created_at - b.created_at) || (a.pubkey < b.pubkey ? -1 : 1));
 }
+// the notary a card submits to: yours if you hold one for the name, else the default (oldest)
+const notaryOf = c => notariesOf(c).find(n => signer && n.pubkey === signer.pubkey) || notariesOf(c)[0] || null;
 const evShape = (x, kind) => x && typeof x === "object" && /^[0-9a-f]{64}$/.test(x.id || "") &&
   /^[0-9a-f]{64}$/.test(x.pubkey || "") && Number.isSafeInteger(x.created_at) && x.created_at >= 0 &&
   x.kind === kind && Array.isArray(x.tags) && typeof x.content === "string" && /^[0-9a-f]{128}$/.test(x.sig || "");
