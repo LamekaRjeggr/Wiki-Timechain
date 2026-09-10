@@ -228,13 +228,16 @@ Clients SHOULD disclose incomplete queries or later recomputation; they MUST NOT
 the specified order with arrival order.
 
 The projection is derived state. It is not stored in `30829` and is not itself evidence;
-the signed acts and snapshots are.
+the signed acts and snapshots are. A projection whose `tag:event_date` register is absent
+has no position on the timeline.
 
 ## Revision, synthesis, and materialization
 
 A **revision** is a new `30828` derived mainly from one earlier card with changed fields.
 A **synthesis** is a new `30828` assembled from fields selected from multiple sources.
 Both are ordinary cards; these words describe provenance, not distinct event kinds.
+A slot is the snapshot's `d`, so fields from cards with different `d` never meet in one
+slot: combining them is a synthesis card.
 
 A notary MAY materialize its projection as a new signed `30828` submitted to another
 notary. The card SHOULD identify, per field, the exact source event and selection act.
@@ -275,9 +278,3 @@ only for `OK` by event id and MUST surface a `NOTICE` as a failed publish.
 An ignorant client sees unknown kind `8828` events and leaves the underlying `30828`
 cards intact. A partially implementing client SHOULD show an unsupported act rather than
 reinterpret it using older live-consent or causal-head rules.
-
-## Open wire questions
-
-Before promotion beyond draft, this document still needs confirmation of the provisional
-`snapshot` and `select` tag names. The derivation intentionally requires no `scope`, `value`, `prev`, or `supersede`
-machinery.

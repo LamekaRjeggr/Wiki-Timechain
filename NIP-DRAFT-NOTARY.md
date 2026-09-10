@@ -45,8 +45,8 @@ A `30829` carries no card decisions. A client MUST NOT derive acceptance from a 
 address placed on the notary event. Replacing a `30829` changes current identity,
 description, and discovery configuration; it does not rewrite historical decisions.
 
-There is no `passes` mode. Absence of a decision always means absence of acceptance.
-A live client MAY inspect signals and sign decisions automatically, but the resulting
+Absence of a decision is absence of acceptance. A live client MAY inspect signals and
+sign decisions automatically, but the resulting
 wire event is the same explicit `8828` another client would ask a person to sign.
 
 ## Submission and event slots
@@ -83,7 +83,8 @@ A notary's candidate pool is the union of:
 2. material discoverable through its source set, subject to client traversal budgets.
 
 Discovering a card or an upstream decision does not accept it. Every field in a notary's
-projection requires an effective `8828` signed by that notary's key. A client that
+projection requires an effective `8828` signed by that notary's key. A notary MAY accept
+any candidate; submission to that notary is not required. A client that
 follows another notary live does so by observing it and signing new local acts; there is
 no delegation mode on the wire.
 
@@ -143,8 +144,10 @@ Notary-source graphs do not make Sybil resistance. Multiple keys, paths, or matc
 values may be controlled by one actor. Clients MUST NOT translate path count or
 plurality into truth.
 
-A notary is presently identified by its key and `d`. Key succession and delegation are
-not defined by this draft.
+A notary is its key and `d`. Key succession is out of scope: a lost or compromised key
+ends that notary; a successor is a new notary signing its own acts.
+
+Any filtering beyond the choice of notary — web of trust, mutes — is client policy.
 
 ## Example
 

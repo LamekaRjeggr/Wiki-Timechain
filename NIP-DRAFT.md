@@ -44,13 +44,12 @@ a card to a notary its author did not choose.
 | Tag | Example | Meaning |
 |---|---|---|
 | `d` | `["d","proposition-number-assigned"]` | addressable identifier; republishing under the same `d` replaces |
-| `event_date` | `["event_date","2026-07-01"]` | the date the card is *about*, `YYYY-MM-DD` |
+| `event_date` | `["event_date","2026-07-01"]` `["event_date","2016-07-01/2016-09-30"]` | the date the card is *about*: `YYYY-MM-DD`, or a closed range `YYYY-MM-DD/YYYY-MM-DD` when the day is unknown |
 
-`event_date` MUST be a full `YYYY-MM-DD` date and is the card's position on the
-timeline. It is distinct from the event's `created_at`, which records when this version
-was signed, and from the OPTIONAL `published_at`; see *Optional tags*. Where the true
-date is coarser than a day, the placeholder components are the publisher's convention
-and a client MUST NOT read precision from them.
+`event_date` is the card's position on the timeline. A single date is a one-day range.
+A range MUST encode only known precision; how a client draws a range is its own. It is
+distinct from `created_at`, which records when this version was signed, and from the
+OPTIONAL `published_at`.
 
 **`d` is opaque.** How a publisher mints it is their business; a client MUST NOT
 derive meaning from it, whatever it appears to encode.
@@ -59,11 +58,11 @@ derive meaning from it, whatever it appears to encode.
 
 | Tag | Example | Rule |
 |---|---|---|
-| `a` | `["a","30829:<pubkey>:<d>"]` | submission: the notary this card belongs to. At most two. A card carrying none belongs to no notary and is found only by the whole-kind filter. Distinguished from a citation by the kind prefix; no marker. |
+| `a` | `["a","30829:<pubkey>:<d>"]` | submission: the notary this card belongs to. Repeatable. A card carrying none belongs to no notary and is found only by the whole-kind filter. Distinguished from a citation by the kind prefix; no marker. |
 | `g` | `["g","xn76urx6"]` `["g","xn76"]` `["g","xn7"]` | geohash, point events only. Emitted as prefix rungs for proximity queries. MUST NOT be a jurisdiction's centroid. A card carrying none takes its notary's. |
 | `t` | `["t","taproot"]` | freeform topic. Unspecified by design: no registry, no controlled vocabulary. A corpus marker MAY ride here too; see *Discovery*. |
 | `published_at` | `["published_at","1784681375"]` | original publication time as in [NIP-23](23.md). SHOULD be preserved across replacements of the same `d`, while `created_at` changes with each. |
-| `event_time` | `["event_time","14:30"]` `["event_time","06:15:00-07:00"]` | time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour. A bare value is UTC. A trailing ISO 8601 offset (`±HH:MM`) marks local civil time at the event as the source stated it; `event_date` is then that local calendar day and the value MUST NOT be converted. MUST encode only known precision. Clients MAY normalize through the offset for sub-day ordering. MUST NOT affect discovery or dedup. |
+| `event_time` | `["event_time","14:30"]` `["event_time","06:15:00-07:00"]` | time of day refining `event_date`. `HH:MM` or `HH:MM:SS`, 24-hour; a range `HH:MM/HH:MM` refines each end of a date range. A bare value is UTC. A trailing ISO 8601 offset (`±HH:MM`) marks local civil time at the event as the source stated it; `event_date` is then that local calendar day and the value MUST NOT be converted. MUST encode only known precision. Clients MAY normalize through the offset for sub-day ordering. MUST NOT affect discovery or dedup. |
 
 ## Text fields
 
@@ -103,12 +102,12 @@ purpose, a kind `30828` has exactly six core modular field blocks:
 
 | Block | Exact bytes |
 |---|---|
-| `title` | the complete ordered list of every `title` tag |
-| `summary` | the complete ordered list of every `summary` tag |
+| `tag:title` | the complete ordered list of every `title` tag |
+| `tag:summary` | the complete ordered list of every `summary` tag |
 | `content` | the exact `content` string |
-| `event_date` | the complete ordered list of every `event_date` tag |
-| `event_time` | the complete ordered list of every `event_time` tag |
-| `g` | the complete ordered list of every geohash `g` tag |
+| `tag:event_date` | the complete ordered list of every `event_date` tag |
+| `tag:event_time` | the complete ordered list of every `event_time` tag |
+| `tag:g` | the complete ordered list of every geohash `g` tag |
 
 The complete `g` list is one block. A selector MUST NOT mix individual geohash rungs
 from different source cards. An empty list or empty content string is that source card's
@@ -127,8 +126,8 @@ new blocks merely from an unfamiliar tag name.
 Filling a card in under its own `d` — adding the `content` a `summary` anticipated —
 is an ordinary replacement per [NIP-01](01.md), not a revision: no `cite` marker is
 involved, because the recorded event never changed. A publisher MUST NOT reuse a `d`
-for an unrelated card: reactions and comments address `30828:<pubkey>:<d>` and would
-silently reattach.
+for an unrelated card: citations address `30828:<pubkey>:<d>` and would silently
+reattach.
 
 ## Citations
 
@@ -194,12 +193,11 @@ document (no normalization, no trimming; `content` only) and the source was repl
 the fork cited it. The words agreeing is the whole evidence: no act, no tag. The owner
 takes a revision by replacing their own card with the corrected text in clean words.
 
-A taken fork MUST NOT hold a slot of its own: behind the source, or a mark on it, at the
-client's choice. It stays addressable, and the source MUST credit the fork's author (its
-`p` tag or pubkey) — the credit is the reader's route to it, and the point of the rule.
+A client SHOULD fold a taken fork behind its source and credit the fork's author by
+pubkey; the fork stays addressable.
 
 A citing card is an ordinary card: it passes the gate on its own tags and deduplicates,
-replaces and displays like any other. A reaction ([NIP-25](25.md)) is not a citation.
+replaces and displays like any other.
 
 ## Discovery
 
@@ -219,10 +217,10 @@ it.
 **The membership gate.** A client MUST apply the following test to every event it
 receives, whatever the source, and MUST discard events that fail it:
 
-> a parseable `YYYY-MM-DD` `event_date`.
+> a parseable `event_date`.
 
-Whether the card is *shown* is the notary's decision, per its `passes` rule; the gate
-only discards what cannot be placed on a timeline.
+Whether the card is *shown* is the notary's decision ([Timeline Acts]); the gate only
+discards what cannot be placed on a timeline.
 
 ## Client behavior
 
@@ -240,12 +238,6 @@ only discards what cannot be placed on a timeline.
   carrying a `cite` marker — a bare `#p` match is a mention. Reputation from these edges
   is computed at read time; nothing is stored or declared.
 
-### Marginalia is addressed by kind
-
-Reactions ([NIP-25](25.md)) and comments ([NIP-22](22.md)) address a card at
-`30828:<pubkey>:<d>`. Republishing the same content under a different kind changes the
-address and silently orphans every existing reaction and comment.
-
 ## Publishing
 
 A publisher signs a kind `30828` with the required tags and sends it to any relay. A
@@ -257,11 +249,11 @@ to show is outside this NIP.
 **Submission is self-asserted.** Any key may name any notary; the gate discards an
 unusable card on shape and establishes neither authorship nor good faith. What a reader
 sees is the notary's decision, and choosing a notary is the reader's whole trust
-decision. Under `passes: auto` everything submitted is shown, junk included.
+decision.
 
 **There is no author allowlist.** A key costs nothing, so a card may be published under
-a key used once; the signature is the whole credit and nothing else is required. Reaction
-and citation counts MUST NOT be treated as authority: keys are free to mint.
+a key used once; the signature is the whole credit and nothing else is required. Citation
+counts MUST NOT be treated as authority: keys are free to mint.
 
 **Citation edges are self-asserted.** A key may cite its own cards under other keys;
 copying without a `cite` tag is undetectable. A cited `e` id
