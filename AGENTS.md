@@ -50,8 +50,9 @@ codex exec -m gpt-5.6-sol -c model_reasoning_effort=low --approve-for-me "Read A
 ```
 
 `< /dev/null` or it stalls on stdin. `-s` and `--full-auto` do not combine with `--approve-for-me`.
-The lead's own auto mode refuses to launch it; the CEO launches, or the lead drops out of auto
-mode for the launch only.
+The user's `~/.claude/settings.json` has a narrow `autoMode.allow` exception for this sandboxed,
+automatically reviewed launch. Auto mode may dispatch it directly; approval- or sandbox-disabling
+Codex flags remain outside that exception.
 
 ## The record
 
