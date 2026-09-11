@@ -1,7 +1,10 @@
 // Two-client agreement: lab modular.html (:8778) and the ported index.html (:8779, relay-
 // swapped copy from test/serve-port.sh) fold the same lab relay; the node reducer is the third,
 // the blind reducer (rule 7, written from the spec alone) the fourth. All must print one hash.
-import puppeteer from '/Users/alkemagreg/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js';
+import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
+// puppeteer lives in the user's home node_modules, not the repo; Chrome path is the macOS cask.
+const puppeteer = (await import(createRequire(homedir()+'/').resolve('puppeteer'))).default;
 import { fold8828 } from '../lib/fold-8828.mjs';
 import { foldBlind } from '../lib/fold-8828-blind.mjs';
 import { createHash } from 'node:crypto';

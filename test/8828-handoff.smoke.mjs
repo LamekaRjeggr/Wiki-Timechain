@@ -1,9 +1,12 @@
 // Real-browser handoff smoke test against the LAB relay only: modular.html → add.html → back.
 // Needs relay :7777 + viewer :8778 up (lab-relay/README.md). Leaves two signed 8828s in lab history.
 
-import puppeteer from '/Users/alkemagreg/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js';
+import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
+// puppeteer lives in the user's home node_modules, not the repo; Chrome path is the macOS cask.
+const puppeteer = (await import(createRequire(homedir()+'/').resolve('puppeteer'))).default;
 import fs from 'node:fs';
-const SK = fs.readFileSync('/Users/alkemagreg/lab-relay/keys/fable/sk.hex','utf8').trim();
+const SK = fs.readFileSync(homedir()+'/lab-relay/keys/fable/sk.hex','utf8').trim();
 const BASE=process.env.BASE||'http://127.0.0.1:8778/';
 const PAGE=process.env.PAGE||'modular.html';
 const TL = BASE+PAGE+'?c=us-israel-defense-tech-2026-lab&k=93a2e6405477';
