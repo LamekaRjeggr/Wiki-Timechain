@@ -2172,8 +2172,9 @@ function renderTimeline(entries){
     const since = t => "+" + humanSpan((t - ev.created_at) / 31557600).replace(/ (\w)\w+/, "$1");
     const nameOf = c => { const N = notaries.get(c); return N ? tag(N,"title") || tag(N,"d") : c.split(":")[2]; };
     const named = pk => { if (!profiles.has(pk)){ profiles.set(pk, { name:null, fetched:false }); scheduleProfileFetch(); } return authorLabel(pk); };
-    const passed = (pk, dd) => foldProjection().some(p => p.slot === dd && AFIELDS.some(f => {
-      const a = p.registers[f]; return a.state === "selected" && a.snapshot.pubkey === pk; }));
+    // where a citing card stands: the first notary holding a live register read from ITS key
+    const passedAt = (pk, dd) => (foldProjection().find(p => p.slot === dd && AFIELDS.some(f => {
+      const a = p.registers[f]; return a.state === "selected" && a.snapshot.pubkey === pk; })) || {}).context;
     const back = ev.tags.filter(t => t[0] === "a" && CITE.has(t[3]) && t[1].startsWith(KIND + ":")).map(t => {
       const [, pk, ...dp] = t[1].split(":"), src = events.get(pk + ":" + dp.join(":"));
       const mk = (creditsOf(ev).find(([k]) => k === pk) || [])[1] || "cites";
@@ -2188,14 +2189,17 @@ function renderTimeline(entries){
       const pin = fs.every(f => p.registers[f].sourceEventId === ev.id) ? "" : " · pinned earlier";
       return `<span class="xp acc${whole ? "" : " fld"}">✓ ${whole ? "" : "fields: " + esc(fs.join(",")) + " · "}${esc(nameOf(p.context))} · ${named(a.pubkey)} · ${esc(since(a.created_at))}${pin}</span>`;
     }).filter(Boolean);
+    // citing cards: both halves of the citation (marked a + marked e), the spec's form. Same d
+    // = a fork of this card; another d = a card that cites it. Carrying the bytes = a credit.
     for (const c of events.values()){
-      if (c.pubkey === ev.pubkey || skip.has(c.pubkey + ":" + tag(c,"d"))) continue;
-      if (!c.tags.some(t => t[0] === "a" && t[1] === coord && CITE.has(t[3]))) continue;
-      const mk = (creditsOf(c).find(([k]) => k === ev.pubkey) || [])[1], cd = tag(c,"d");
-      fwd.push(mk === "carries"
+      const cd = tag(c,"d");
+      if (c === ev || skip.has(c.pubkey + ":" + cd)) continue;
+      if (!c.tags.some(t => t[0] === "a" && t[1] === coord && CITE.has(t[3])) || !c.tags.some(t => t[0] === "e" && CITE.has(t[3]))) continue;
+      const kind = cd === d ? "fork" : "cites", at = passedAt(c.pubkey, cd);
+      fwd.push(cleanOf(c.content) === ev.content
         ? `<span class="xp cr">carries · ${headTitle(c, cd)} · ${authorLabel(c.pubkey)}</span>`
-        : passed(c.pubkey, cd) ? `<span class="xp acc">✓ fork · ${headTitle(c, cd)} · ${authorLabel(c.pubkey)}</span>`
-        : `<span class="xp pend">fork · pending · ${authorLabel(c.pubkey)} · ${esc(since(c.created_at))}</span>`);
+        : at ? `<span class="xp acc">✓ ${kind} · ${esc(nameOf(at))} · ${authorLabel(c.pubkey)}</span>`
+        : `<span class="xp pend">${kind} · pending · ${authorLabel(c.pubkey)} · ${esc(since(c.created_at))}</span>`);
     }
     return { back, fwd, n: back.length + fwd.length };
   };
