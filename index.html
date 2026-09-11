@@ -480,7 +480,7 @@
   .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:color-mix(in srgb,var(--accent) 12%,transparent);
     border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
-  .mtl .peek{cursor:pointer;display:block;border:1px dashed var(--accent);color:var(--accent);border-radius:20px;
+  .mtl .peek{cursor:pointer;display:block;width:fit-content;max-width:100%;border:1px dashed var(--accent);color:var(--accent);border-radius:20px;
     padding:5px 11px;margin-top:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em}
   .mtl .peek i{font-style:normal;color:var(--dim)}
   .mtl .vcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
@@ -2237,7 +2237,7 @@ function renderTimeline(entries){
         const diff = ev === first ? "" : cr ? cr[1] + " 1st" : cleanOf(ev.content) === cleanOf(first.content) ? "same words"
                    : "differs: " + (dateOf(ev) !== dateOf(first) ? "event_date" : "content");
         return [authorLabel(ev.pubkey), `<i>${esc(gap)}</i>`, `<i>${cleanOf(ev.content).length} chars</i>`,
-                src ? `<i>${src} src</i>` : "", actBadge(ev, e.d), diff ? `<i>${esc(diff)}</i>` : ""].filter(Boolean).join(" · ");
+                `<i>${src} src</i>`, actBadge(ev, e.d), diff ? `<i>${esc(diff)}</i>` : ""].filter(Boolean).join(" · ");
       };
       html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${parHtml}${rivalsHtml}<div class="contest">` +
         `<div class="cbadge">${esc(showDate(e.date))} · ${headTitle(first, e.d)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
