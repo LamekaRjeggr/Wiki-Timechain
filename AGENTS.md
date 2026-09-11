@@ -77,7 +77,7 @@ Round number N is the lead's count.
 
 ```
 git diff main...HEAD > DIFF-<task>
-claude -p "Read AGENTS.md, TASK-<task>.md and DIFF-<task>. Review the diff against the task's done-when, the spec lines it names, and test/*.test.mjs. Do not edit anything. Output exactly one section starting '## Review round N' whose first line is 'verdict: merge' or 'verdict: again', then findings as bullets, each naming file:line. Under 300 words." --model sonnet --allowedTools "Read,Grep,Glob" < /dev/null >> TASK-<task>.md
+claude -p "Read AGENTS.md, TASK-<task>.md and DIFF-<task>. Review the diff against the task's done-when, the spec lines it names, and test/*.test.mjs. Run node --test 'test/*.test.mjs' and report the pass/fail counts. Do not edit anything. Output exactly one section starting '## Review round N' whose first line is 'verdict: merge' or 'verdict: again', then findings as bullets, each naming file:line. Under 300 words." --model sonnet --allowedTools "Read,Grep,Glob,Bash(node --test*)" < /dev/null >> TASK-<task>.md
 ```
 
 For a Claude-built branch swap the reviewer for
