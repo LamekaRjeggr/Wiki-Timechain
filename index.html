@@ -307,6 +307,10 @@
   .mtl .dot{position:absolute;right:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;border-radius:50%;
     background:var(--bg);border:2px solid var(--past);z-index:2}
   .mtl .dot.future{border-color:var(--future)}      /* hollow ring already; cyan + text reinforce */
+  .mtl .dot.span{right:calc(var(--gut) - .5px);width:3px;height:12px;border:0;border-radius:2px;
+    background:var(--past)}
+  .mtl .node.acc .dot.span{right:auto;left:calc(var(--gut) - .5px);background:var(--rail)}
+  .mtl .dot.span.future{background:var(--future)}
   /* export range picker: the spine dims to the axle's 60%, the chosen run stays bright,
      an endpoint doubles its dot with a ring. Brightness + ring — no new colour. */
   .picking .mtl .node,.picking .mtl .gap-c{opacity:.6}
@@ -553,9 +557,9 @@
   /* tick vocabulary — size carries note length, shape carries kind, FILL answers "accepted?"
      Hollow blue = submitted. Gold fill = the notary's own key holds a live acceptance
      (manual notaries only — under auto every tick is hollow). Fill and shape, never hue alone. */
-  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;
+  #drum .tick{position:absolute;left:28px;height:3px;border-radius:2px;color:var(--accent);
     background:transparent;border:1px solid var(--accent)}
-  #drum .tick.end{background:var(--rail);border-color:var(--rail)}
+  #drum .tick.end{color:var(--rail);background:var(--rail);border-color:var(--rail)}
   #drum .tick.sub{left:auto;right:calc(100% - 22px)}   /* submitted: left of the axle, like the page */
   #drum .tick.face{box-shadow:0 0 7px var(--past-glow)}
   #drum .tick.several{width:9px!important;height:9px;border-radius:0}
@@ -564,8 +568,13 @@
     /* layered in LIGHTNESS, not a second hue */
     background:linear-gradient(180deg,var(--rail) 0 62%,var(--rail-dim) 62% 100%)}
   /* ahead of now: a dashed ring — shape says it, no cyan (blue is taken by "submitted") */
-  #drum .tick.future{background:transparent;border:2px dashed var(--dim);border-radius:50%;
+  #drum .tick.future{color:var(--dim);background:transparent;border:2px dashed var(--dim);border-radius:50%;
     width:8px!important;height:8px}
+  #drum .tick.span{background:color-mix(in srgb,currentColor 55%,transparent)!important;border:0;border-radius:1px}
+  #drum .tick.span::before,#drum .tick.span::after{content:"";position:absolute;left:0;width:100%;height:2px;
+    background:currentColor}
+  #drum .tick.span::before{top:0}
+  #drum .tick.span::after{bottom:0}
   #drum .tick.gapmark{background:repeating-linear-gradient(180deg,var(--faint) 0 3px,transparent 3px 7px);
     width:2px!important;height:14px;left:23px;border-radius:0;border:none}
   /* the draft being composed: hollow amber — the app's own chrome, not yet a note */
@@ -1409,6 +1418,15 @@ function spanOf(raw, raw2 = null){
   const m2 = String(raw2).match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/), b = m2 && bounds(m2);
   return b && a[0] <= b[1] ? a[0] + "/" + b[1] : "";
 }
+// In start order, a range covers every later card whose start lies on or before its end.
+function rangeCover(dates, i){
+  const raw = String(dates[i] || ""), slash = raw.indexOf("/");
+  if (slash < 0) return i;
+  const end = raw.slice(slash + 1);
+  let last = i;
+  while (last + 1 < dates.length && String(dates[last + 1]).split("/")[0] <= end) last++;
+  return last;
+}
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
 const timeOf = ev => tag(ev,"event_time") || "";
@@ -2193,7 +2211,7 @@ function renderTimeline(entries){
     const yr = String(e.date).slice(0,4);
     // the node carries its year, address and date-fraction as data, and its side as the
     // class: the drum reads them without scraping text or holding act state of its own.
-    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}"`;
+    const nodeAttrs = ` data-yr="${esc(yr)}" data-d="${esc(e.d)}" data-frac="${e.frac}" data-date="${esc(e.date)}"`;
     const cls = "node" + (acc ? " acc" : "");
     if (e.draft){                // the card being composed — markup lives in the write side
       html += draftNodeHtml(e, future); prevSide = side; return;
@@ -2223,7 +2241,7 @@ function renderTimeline(entries){
         ).join("") + `</div></div>`;
     } else {
       const { show: ev, box } = goldOf(main[0], e.d);
-      html += `<div class="${cls}"${nodeAttrs}><span class="dot${future?" future":""}"></span>${parHtml}${rivalsHtml}` +
+      html += `<div class="${cls}"${nodeAttrs}><span class="dot${String(e.date).includes("/")?" span":""}${future?" future":""}"></span>${parHtml}${rivalsHtml}` +
         `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
@@ -2282,20 +2300,31 @@ function drumMeasure(){
   [...drumTicks, ...drumGaps, ...drumTabs].forEach(t => t.el.remove());
   drumTicks = []; drumGaps = []; drumTabs = []; drumNowY = null;
 
-  areaEl.querySelectorAll(".mtl .node").forEach(n => {
+  const nodes = [...areaEl.querySelectorAll(".mtl .node")];
+  const dated = nodes.filter(n => n.dataset.date);
+  // The page can read in either direction; rangeCover's input remains ordered by start.
+  const ordered = [...dated].sort((a, b) => a.dataset.date.split("/")[0].localeCompare(b.dataset.date.split("/")[0]));
+  const dates = ordered.map(n => n.dataset.date);
+  nodes.forEach(n => {
     const several   = !!n.querySelector(".cdot");           // more than one submitted under this d
     const future    = !!n.querySelector(".dot.future");
     const rev       = !!n.querySelector(".dbar");           // this card carries edit marks
+    const span      = !!n.dataset.date?.includes("/");
     const chars = [...n.querySelectorAll(".cbody")].reduce((a, b) => a + b.textContent.length, 0);
     const len = chars > 600 ? 3 : chars > 240 ? 2 : 1;      // size = note length
     const isDraft = n.classList.contains("draft");   // claim-in-progress, not yet record
     const acc = n.classList.contains("acc");         // the page's side is the drum's side
     const el = document.createElement("div");
     el.className = "tick" + (isDraft ? " draft" : several ? " several" : rev ? " rev" : future ? " future" : "")
+                 + (span ? " span" : "")
                  + (!isDraft && !future && acc ? " end" : "") + (acc || isDraft ? "" : " sub");
-    if (!several && !future && !isDraft) el.style.width = (8 + len * (rev ? 5 : 6)) + "px";
+    if ((!several && !future && !isDraft) || span)
+      el.style.setProperty("width", (8 + len * (rev ? 5 : 6)) + "px", span ? "important" : "");
     drumEl.appendChild(el);
-    drumTicks.push({ el, y: pageTop(n) + n.offsetHeight / 2, several, yr: n.dataset.yr || "",
+    const y = pageTop(n) + n.offsetHeight / 2;
+    const oi = span ? ordered.indexOf(n) : -1, cover = oi < 0 ? oi : rangeCover(dates, oi);
+    const y2 = span ? (cover === oi ? y + 6 : pageTop(ordered[cover]) + ordered[cover].offsetHeight / 2) : null;
+    drumTicks.push({ el, y, y2, several, span, yr: n.dataset.yr || "",
                      frac: n.dataset.frac ? +n.dataset.frac : null, draft: isDraft });
   });
   areaEl.querySelectorAll(".mtl .gap-c").forEach(g => {
@@ -2346,7 +2375,8 @@ function drumFrame(){
 
   for (const t of drumTicks){
     const p = project(t.y, D, headTh, R, cy);
-    if (p.hide){
+    const p2 = t.span ? project(t.y2, D, headTh, R, cy) : null;
+    if (p.hide && (!p2 || (p2.hide && p2.hide === p.hide))){
       t.el.style.display = "none"; t.el.classList.remove("face");
       if (p.hide < 0){ past++; pastYr = pastYr ?? t.yr; } else { ahead++; aheadYr = t.yr; }
       continue;
@@ -2354,15 +2384,25 @@ function drumFrame(){
     const d = Math.abs(t.y / D - headTh);
     if (d < faceD){ faceD = d; face = t; }
     t.el.style.display = "";
-    t.el.style.top = (p.y - 2) + "px";
-    t.el.style.opacity = (.2 + .8 * p.a).toFixed(2);
-    t.el.style.transform = `scale(${(.55 + .45 * p.a).toFixed(2)})` + (t.several ? " rotate(45deg)" : "");
+    if (p2){
+      const y1 = p.hide ? cy + p.hide * R : p.y;
+      const y2 = p2.hide ? cy + p2.hide * R : p2.y;
+      t.el.style.top = Math.min(y1, y2) + "px";
+      t.el.style.height = Math.max(6, Math.abs(y2 - y1)) + "px";
+      const a = p.a ?? p2.a ?? 1;
+      t.el.style.opacity = (.2 + .8 * a).toFixed(2);
+      t.el.style.transform = "";
+    } else {
+      t.el.style.top = (p.y - 2) + "px";
+      t.el.style.opacity = (.2 + .8 * p.a).toFixed(2);
+      t.el.style.transform = `scale(${(.55 + .45 * p.a).toFixed(2)})` + (t.several ? " rotate(45deg)" : "");
+    }
   }
   // the card facing you reads full-strength — information about where you are, not a control
   for (const t of drumTicks) t.el.classList.toggle("face", t === face);
   if (face){
     face.el.style.opacity = "1";
-    face.el.style.transform = "scale(1.15)" + (face.several ? " rotate(45deg)" : "");
+    if (!face.span) face.el.style.transform = "scale(1.15)" + (face.several ? " rotate(45deg)" : "");
   }
   for (const g of drumGaps){
     const p = project(g.y, D, headTh, R, cy);
