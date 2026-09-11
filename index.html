@@ -701,6 +701,10 @@
     color:var(--ink);background:var(--rail);border-color:var(--rail);
     box-shadow:0 0 10px var(--past-glow)}
   #drum .pnext:hover{color:var(--ink);filter:brightness(1.12)}
+  #drum .pto{top:calc(50% + 34px);left:88px}
+  #drum .pto:not(.show){display:none}
+  #drum .pto.show{display:block}
+  #drum .pnext.off{opacity:.38;cursor:not-allowed;filter:none}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit.
      86px, not 132: the column only has to hold the widest VALUE ("2026" at the head's 1.9×,
@@ -723,6 +727,7 @@
     #drum.pick .pchip{position:fixed;top:auto;bottom:14px;z-index:8;font-size:12px;padding:7px 13px}
     #drum.pick .pback{left:12px}
     #drum.pick .pnext{left:auto;right:12px;font-size:13px;padding:8px 15px}
+    #drum .pto{left:auto;right:12px}
   }
 </style>
 <script>
@@ -1387,14 +1392,22 @@ const startOf = ev => dateOf(ev).split("/")[0];
 const showDate = s => String(s).replace("/", " – ");
 // YYYY | YYYY-MM | YYYY-MM-DD → event_date value. Coarse input widens to the span it names
 // (a year is 01-01/12-31, a month runs to its real last day); a day is itself. "" if malformed.
-function spanOf(raw){
+function spanOf(raw, raw2 = null){
   const m = String(raw || "").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
   if (!m) return "";
-  const [, y, mo, d] = m;
   const day = s => new Date(s + "T00:00:00Z").toJSON()?.slice(0, 10) === s ? s : "";
-  if (d) return day(`${y}-${mo}-${d}`);
-  const a = `${y}-${mo || "01"}-01`, b = `${y}-${mo || "12"}-${new Date(Date.UTC(+y, +(mo || 12), 0)).getUTCDate()}`;
-  return day(a) && day(b) ? a + "/" + b : "";
+  const bounds = match => {
+    const [, y, mo, d] = match;
+    if (d){ const exact = day(`${y}-${mo}-${d}`); return exact && [exact, exact]; }
+    const lo = `${y}-${mo || "01"}-01`;
+    const hi = `${y}-${mo || "12"}-${new Date(Date.UTC(+y, +(mo || 12), 0)).getUTCDate()}`;
+    return day(lo) && day(hi) ? [lo, hi] : null;
+  };
+  const a = bounds(m);
+  if (!a) return "";
+  if (raw2 == null) return a[0] === a[1] ? a[0] : a[0] + "/" + a[1];
+  const m2 = String(raw2).match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/), b = m2 && bounds(m2);
+  return b && a[0] <= b[1] ? a[0] + "/" + b[1] : "";
 }
 // event_time is optional and never invented: no tag means "day only", not midnight, so a
 // timeless card sits ahead of its timed same-day neighbours rather than at 00:00 among them.
@@ -2400,6 +2413,8 @@ addEventListener("resize", drumMeasure);
 // That is why there are no instant paths left. There used to be six writers to the position
 // and easing one of them is why it still felt abrupt.
 let pickStage = null;              // 'year' | 'month' | 'day' while picking; null = gauge mode
+let pickPass = 1;                  // 1 = start, 2 = end
+let pickY2 = null, pickM2 = null, pickDay2 = null;
 let pickUnits = [], pickEls = [], pickFade = [];
 let pickPos = 0;                   // continuous index into pickUnits — THE position, in units
 let pickVel = 0, pickTo = null, pickDrag = false, pickIdle = 0, pickRaf = 0, pickTouchY = null;
@@ -2417,7 +2432,9 @@ const pickBackEl = Object.assign(document.createElement("button"),
   { className: "pchip pback", type: "button", textContent: "‹ back" });
 const pickNextEl = Object.assign(document.createElement("button"),
   { className: "pchip pnext", type: "button" });
-drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl);
+const pickToEl = Object.assign(document.createElement("button"),
+  { className: "pchip pto", type: "button", textContent: "to ▸" });
+drumEl.appendChild(pickBackEl); drumEl.appendChild(pickNextEl); drumEl.appendChild(pickToEl);
 
 const pickClamp = p => Math.max(0, Math.min(Math.max(0, pickUnits.length - 1), p));
 const pickFace  = () => Math.round(pickClamp(pickPos));
@@ -2427,6 +2444,12 @@ function pickEnter(stage){
   pickGrab(true);                   // the wheel takes the viewport's gesture for as long as it's out
   pickSpan = pickSpanTo = BAND;     // a fresh pick starts already at rest, with no zoom to play
   pickZoom(stage || "year");
+}
+function pickEnterEnd(){
+  if (!draft || draft.stage !== "set" || draft.date2 != null) return;
+  pickToEl.classList.remove("show");
+  pickPass = 2; pickY2 = pickM2 = pickDay2 = null;
+  pickEnter("year");
 }
 function pickExit(){
   pickStage = null;
@@ -2458,18 +2481,20 @@ function pickZoom(level){
     // scope = the collection's own years, with room either side for what isn't written yet
     const yrs = drumTicks.map(t => +t.yr).filter(Boolean);
     const nowY = new Date().getFullYear();
-    const y0 = (yrs.length ? Math.min(...yrs) : nowY) - 10, y1 = nowY + 10;
+    const y0 = pickPass === 2 ? +draft.y : (yrs.length ? Math.min(...yrs) : nowY) - 10;
+    const y1 = Math.max(nowY + 10, y0 + 10);
     pickUnits = []; for (let y = y0; y <= y1; y++) pickUnits.push(String(y));
-    start = Math.max(0, pickUnits.indexOf(draft.y || draft.seedYr));
+    start = Math.max(0, pickUnits.indexOf(pickPass === 2 ? draft.y : (draft.y || draft.seedYr)));
   } else if (level === "month"){
     // WHOLE sits above january: "stop at the year" is a value on the wheel, not a chip beside
     // it. It is never the default — the head opens one notch past it, on January…
     pickUnits = [WHOLE, ...MONTHS.map((_, i) => String(i + 1).padStart(2, "0"))];
-    start = draft.m ? +draft.m : 1;
+    start = pickPass === 2 && pickY2 === draft.y && draft.m ? +draft.m : 1;
   } else {
-    const n = new Date(Date.UTC(+draft.y, +draft.m, 0)).getUTCDate();   // real month lengths, leap years included
+    const py = pickPass === 2 ? pickY2 : draft.y, pm = pickPass === 2 ? pickM2 : draft.m;
+    const n = new Date(Date.UTC(+py, +pm, 0)).getUTCDate();   // real month lengths, leap years included
     pickUnits = [WHOLE, ...Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"))];
-    start = draft.day ? +draft.day : 1;         // …and that month opens on the 1st
+    start = pickPass === 2 && py === draft.y && pm === draft.m && draft.day ? +draft.day : 1;
   }
   pickPos = start; pickTo = null; pickVel = 0; pickIdle = 0; pickDrawn = null;
   pickEls = pickUnits.map(v => {
@@ -2524,12 +2549,29 @@ function pickNudge(du){
 }
 
 // what WHOLE stands for at this level: the date already committed, kept as the claim
-const pickWholeText = () => pickStage === "month" ? draft.y : MONTHS[+draft.m - 1];
+const pickWholeText = () => pickStage === "month" ? (pickPass === 2 ? pickY2 : draft.y)
+  : MONTHS[+(pickPass === 2 ? pickM2 : draft.m) - 1];
+
+const pickDate2 = () => pickY2 && (pickY2 + (pickM2 ? "-" + pickM2 + (pickDay2 ? "-" + pickDay2 : "") : ""));
+function pickFacingDate(){
+  const v = pickUnits[pickFace()];
+  if (pickStage === "year") return v;
+  if (pickStage === "month") return v === WHOLE ? pickY2 : pickY2 + "-" + v;
+  return v === WHOLE ? pickY2 + "-" + pickM2 : pickY2 + "-" + pickM2 + "-" + v;
+}
+const pickEndValid = raw => !!spanOf(draftDate(), raw);
 
 // the commit chip always names the facing value — the intentional way forward
 function pickNextLabel(){
   const v = pickUnits[pickFace()];
   if (v == null) return;
+  if (pickPass === 2){
+    const raw = pickFacingDate();
+    pickNextEl.textContent = draftDate() + " → " + raw + (pickStage === "day" || v === WHOLE ? " ✓" : " ›");
+    pickNextEl.classList.toggle("off", !pickEndValid(raw));
+    return;
+  }
+  pickNextEl.classList.remove("off");
   pickNextEl.textContent =
     v === WHOLE           ? draftDate() + " ✓" :
     pickStage === "year"  ? v + " ›" :
@@ -2578,7 +2620,8 @@ function pickFrame(){
 let pickGhostEl = null;
 function pickGhost(){
   const track = areaEl.querySelector(".mtl .track");
-  const f = pickStage ? pickFracSet() : null;
+  const facing = pickPass === 2 && pickStage ? spanOf(pickFacingDate()) : "";
+  const f = facing ? yearFrac(facing.split("/").at(-1)) : (pickStage ? pickFracSet() : null);
   if (f == null || !track) return pickGhostClear();
   if (!pickGhostEl || pickGhostEl.parentNode !== track){
     pickGhostEl = Object.assign(document.createElement("div"), { className: "pghost" });
@@ -2586,7 +2629,13 @@ function pickGhost(){
   }
   const y = pickPageY(f);
   pickGhostEl.style.display = y == null ? "none" : "";
-  if (y != null) pickGhostEl.style.top = (y - pageTop(track)) + "px";
+  if (y != null && pickPass === 2){
+    const sy = pickPageY(yearFrac(spanOf(draftDate()).split("/")[0]));
+    pickGhostEl.style.top = (Math.min(sy ?? y, y) - pageTop(track)) + "px";
+    pickGhostEl.style.height = Math.max(12, Math.abs(y - (sy ?? y))) + "px";
+  } else if (y != null){
+    pickGhostEl.style.top = (y - pageTop(track)) + "px"; pickGhostEl.style.height = "12px";
+  }
 }
 function pickGhostClear(){ if (pickGhostEl){ pickGhostEl.remove(); pickGhostEl = null; } }
 
@@ -2647,7 +2696,16 @@ function pickTraverse(){
 // commit the value facing the head, and zoom in — year → month → day → done
 function pickCommit(){
   const v = pickUnits[pickFace()];
+  if (pickPass === 2){
+    const raw = pickFacingDate();
+    if (!pickEndValid(raw)) return;
+    if (v === WHOLE){ draft.date2 = raw; return pickDone(); }
+    if (pickStage === "year"){ pickY2 = v; pickM2 = pickDay2 = null; return pickZoom("month"); }
+    if (pickStage === "month"){ pickM2 = v; pickDay2 = null; return pickZoom("day"); }
+    pickDay2 = v; draft.date2 = pickDate2(); return pickDone();
+  }
   if (v === WHOLE) return pickDone();           // stop at the scope you're already in
+  draft.date2 = null;
   if (pickStage === "year"){ draft.y = v; draft.m = draft.day = null; pickZoom("month"); }
   else if (pickStage === "month"){ draft.m = v; draft.day = null; pickZoom("day"); }
   else { draft.day = v; pickDone(); }
@@ -2655,10 +2713,16 @@ function pickCommit(){
 // stop here — what's committed so far IS the claim (2017, 2017-08, or the full day)
 function pickDone(){
   draft.stage = "set";
+  pickPass = 1;
   pickExit();
   draftPlaced();
 }
 function pickBack(){
+  if (pickPass === 2){
+    if (pickStage === "day"){ pickDay2 = null; return pickZoom("month"); }
+    if (pickStage === "month"){ pickM2 = pickDay2 = null; return pickZoom("year"); }
+    draft.date2 = null; pickPass = 1; pickExit(); return draftPlaced();
+  }
   if (pickStage === "day"){ draft.day = null; pickZoom("month"); }
   else if (pickStage === "month"){ draft.m = null; draft.day = null; pickZoom("year"); }
   else { draft.stage = draft.y ? "set" : "idle"; pickExit(); draftPlaced(); }   // cancel the pick, not the draft
@@ -2700,6 +2764,7 @@ function pickGrab(on){
     (on ? addEventListener : removeEventListener)(k, fn, { passive: k === "touchstart" });
 }
 drumEl.addEventListener("click", e => {
+  if (e.target === pickToEl) return pickEnterEnd();
   if (!pickStage) return;
   if (e.target === pickBackEl) return pickBack();
   if (e.target === pickNextEl) return pickCommit();
@@ -2980,7 +3045,7 @@ function buildDraftTemplate(draft){
   const d = `${c}-${draft.dsuf || mintSuffix()}`;
   if (!title) throw new Error("a title is required — it is what the card says happened");
 
-  const fullDate = spanOf(draft.date);
+  const fullDate = spanOf(draft.date, draft.date2);
   if (!fullDate) throw new Error("pick a date on the drum — a year is enough");
   const wt = (draft.time || "").trim();
   if (wt && !TIME_RE.test(wt))
@@ -3037,7 +3102,7 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", time:"", y:null, m:null, day:null, dsuf: mintSuffix(),
+  draft = { title:"", summary:"", content:"", time:"", y:null, m:null, day:null, date2:null, dsuf: mintSuffix(),
             stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
   pickEnter("year");            // before render, so the spine renders the ghost, not a card
   render();
@@ -3046,6 +3111,7 @@ function startDraft(){
 function discardDraft(){
   if (!draft) return;
   draft = null;
+  pickToEl.classList.remove("show");
   if (pickStage) pickExit();
   render();
 }
@@ -3056,6 +3122,7 @@ function discardDraft(){
 // already put the page where the ghost is
 function draftPlaced(){
   if (pickStage) return;
+  pickToEl.classList.toggle("show", !!draft && draft.stage === "set" && draft.date2 == null);
   render();
   const n = areaEl.querySelector(".node.draft");
   if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -3164,7 +3231,7 @@ areaEl.addEventListener("focusout", e => {
 areaEl.addEventListener("click", e => {
   if (!draft) return;
   if (e.target.closest(".dx"))   return discardDraft();
-  if (e.target.closest(".dtab")) { if (!pickStage) pickEnter("year"); return; }
+  if (e.target.closest(".dtab")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
   const b = e.target.closest(".dpub");
   if (b) b.classList.contains("dhand") ? handoffDraft() : publishDraft(b);
 });
@@ -3365,7 +3432,7 @@ window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eve
                  }),
                  labAdmitAct: e => admit(e, ingestAct),
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
-                 startDraft, discardDraft, pickCommit, pickBack, pickDone,
+                 startDraft, discardDraft, pickCommit, pickBack, pickDone, spanOf,
                  pickFracSet, pickPageY,
                  draftDate, draftTabText,
                  draftGet: () => draft, draftSet: p => { draft = { ...draft, ...p }; } };
