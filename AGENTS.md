@@ -10,6 +10,8 @@ Read this before touching anything. Codex reads it natively; `CLAUDE.md` opens w
 | Lead | the Claude Code session that opens the repo | `main`, merges, task split, `AGENTS.md`, `CLAUDE.md` | everything |
 | Builder A | Codex, branch `codex/<task>`, own worktree | code on its branch, only the files the task names | this file, the task, the specs |
 | Builder B | Claude Code on Ollama cloud, branch `ollama/<task>` (unverified on this machine) | same as A | same as A |
+| Scout | smallest local Ollama that can read the repo | `SCOUT-<task>.md`, untracked: candidate files + the spec lines that bind; dies when the TASK file is written | branches, keys, verdicts |
+| Gatekeeper | a different model than the builder, never the builder's session | `## Review round N` in the TASK file: verdict `merge` or `again`, plus findings | edits, merges, main |
 | Grunt | local Ollama model | `review.md`, untracked, deleted after the lead reads it | one file or one diff |
 | Hands | Haiku subagents inside a session | nothing durable | what the lead hands them |
 
@@ -36,11 +38,16 @@ Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.
    `NIP-DRAFT-ACTS.md` only and does not open `lib/fold-8828.mjs`.
 8. **Tests before "done."** `node --test 'test/*.test.mjs'` (a bare `test/` dir is not accepted by this node). Browser tests need Chrome and are lead-only.
 9. **Grunts have no keys.** A grunt finding enters the record only through the lead's commit body.
+10. **Three rounds, then the lead decides.** A task gets at most three review rounds. On `merge`
+   the lead merges. On `again` the builder reruns on the appended TASK file. After round 3 without
+   `merge` the lead either takes the branch over or deletes it; either way the commit body on main
+   says which and why. A branch is never left open past round 3.
 
 ## Dispatching a builder
 
 The task is an untracked `TASK-<task>.md` in the builder's worktree: goal, the files it may
-touch, the spec lines that bind it, done-when. Review rounds are appended to the same file as
+touch, the spec lines that bind it, done-when, and a header line `effort: low|medium|high`.
+Effort is a dial on the builder, not a role. A Scout pass may precede the TASK file and feeds it. Review rounds are appended to the same file as
 `## Review round N` and the builder is run again on it. The file dies with the worktree.
 
 Builder A launch, from inside the worktree (Codex 0.154):
@@ -70,3 +77,4 @@ Two timelines on the lab relay, written by git hooks, read in the viewer.
 - 2026-09-10 Precision is the range. Year and month picks widen to a closed span. No placeholder day.
 - 2026-09-10 The tracker is the relay via git hooks. No issues, no TASKS.md.
 - 2026-09-10 Specs are CEO-only. Grunts have no keys. Process changes get their own timeline.
+- 2026-09-10 Scout and Gatekeeper added. Three review rounds, then the lead takes over or kills the branch.
