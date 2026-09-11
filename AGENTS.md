@@ -10,7 +10,7 @@ Read this before touching anything. Codex reads it natively; `CLAUDE.md` opens w
 | Lead | the Claude Code session that opens the repo | `main`, merges, task split, `AGENTS.md`, `CLAUDE.md` | everything |
 | Builder A | Codex, branch `codex/<task>`, own worktree | code on its branch, only the files the task names | this file, the task, the specs |
 | Builder B | Claude Code on Ollama cloud, branch `ollama/<task>` (unverified on this machine) | same as A | same as A |
-| Scout | `qwen2.5-coder-64k:7b` on local Ollama | `SCOUT-<task>.md`, untracked: candidate files + the spec lines that bind; dies when the TASK file is written | branches, keys, verdicts |
+| Scout | `qwen2.5-coder:32b-64k` on local Ollama | `SCOUT-<task>.md`, untracked: candidate files + the spec lines that bind; dies when the TASK file is written | branches, keys, verdicts |
 | Gatekeeper | the other house: Sonnet reviews a `codex/` branch, Codex reviews a Claude branch; never the builder's session | `## Review round N` in the TASK file: verdict `merge` or `again`, plus findings | edits, merges, main |
 | Grunt | local Ollama model | `review.md`, untracked, deleted after the lead reads it | one file or one diff |
 | Hands | Haiku subagents inside a session | nothing durable | what the lead hands them |
@@ -66,7 +66,7 @@ Codex flags remain outside that exception.
 From the repo root. Output is a draft; the lead prunes it into the TASK file and the draft dies.
 
 ```
-{ echo "You are a Scout. Read-only. Output ONLY: (1) candidate files a builder would touch, (2) the spec headings that bind the task. Under 120 words."; echo "TASK: <one sentence>"; echo FILES:; git ls-files; echo "SPEC HEADINGS:"; grep -n '^#' NIP-DRAFT*.md CONVENTION.md; } | ollama run qwen2.5-coder-64k:7b --nowordwrap > SCOUT-<task>.md
+{ echo "You are a Scout. Read-only. Output ONLY: (1) candidate files a builder would touch, (2) the spec headings that bind the task. Under 120 words."; echo "TASK: <one sentence>"; echo FILES:; git ls-files; echo "SPEC HEADINGS:"; grep -n '^#' NIP-DRAFT*.md CONVENTION.md; } | ollama run qwen2.5-coder:32b-64k --nowordwrap > SCOUT-<task>.md
 ```
 
 ## Gatekeeper, after the builder stops
@@ -104,3 +104,4 @@ Two timelines on the lab relay, written by git hooks, read in the viewer.
 - 2026-09-10 Scout and Gatekeeper added. Three review rounds, then the lead takes over or kills the branch.
 - 2026-09-10 Scout is qwen2.5-coder-64k:7b. Gatekeeper is the other house from the builder.
 - 2026-09-10 The lab relay is never tidied. Superseded, conflicting, and stray events stay; real relays are not clean, and the fold must survive them.
+- 2026-09-11 Scout is qwen2.5-coder:32b-64k. Benched against the 7b, devstral:24b and gpt-oss:120b-cloud on three tasks with known answers: the recipe was already right, the 7b was the misfire. The 32b costs ~30 s a task.
