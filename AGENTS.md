@@ -32,7 +32,7 @@ Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.
    A hook publishes it verbatim. Nothing else is a log: no issues, no TASKS.md.
 7. **The second client is built blind.** Whoever writes the independent reducer works from
    `NIP-DRAFT-ACTS.md` only and does not open `lib/fold-8828.mjs`.
-8. **Tests before "done."** `node --test test/`. Browser tests need Chrome and are lead-only.
+8. **Tests before "done."** `node --test 'test/*.test.mjs'` (a bare `test/` dir is not accepted by this node). Browser tests need Chrome and are lead-only.
 9. **Grunts have no keys.** A grunt finding enters the record only through the lead's commit body.
 
 ## The record
