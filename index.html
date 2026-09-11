@@ -3139,7 +3139,11 @@ function draftEntry(){
 
 // the date tab shows the claim committed so far. It never has to speak mid-spin: the card
 // isn't on the spine while the wheel is out — the ghost is.
-const draftTabText = () => draftDate() || "pick a date";
+const draftTabText = () => {
+  const date = draftDate();
+  if (!date) return "pick a date";
+  return draft.date2 != null ? showDate(spanOf(date, draft.date2)) : date;
+};
 
 function draftNodeHtml(e, future){
   const yr = String(e.date).slice(0, 4);
@@ -3154,7 +3158,7 @@ function draftNodeHtml(e, future){
     `<div class="card draftcard">` +
     `<div class="ctab"><span class="td dtab" role="button" title="pick the date on the drum">${esc(draftTabText())}</span>` +
     // time rides the date, typed after it — the slot exists only once a full day is committed
-    (draft.day ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
+    (draft.day && draft.date2 == null ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
       ` spellcheck="false" title="time, if known — HH:MM UTC, or HH:MM±HH:MM local">${esc(draft.time)}</span>` +
       `<span class="tz">UTC</span>` : "") +
     `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
