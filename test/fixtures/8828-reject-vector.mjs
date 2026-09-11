@@ -83,7 +83,6 @@ export const invalid = [
     name: "acceptance signer differs from context notary",
     event: acceptance(id(16), event => {
       event.pubkey = OTHER_NOTARY;
-      event.created_at = 0;
     }),
     spec: "NIP-DRAFT-ACTS.md:189",
   },
@@ -145,5 +144,21 @@ export const invalid = [
       event.tags.push(["slot", "slot-x"]);
     }),
     spec: "NIP-DRAFT-ACTS.md:76",
+  },
+  {
+    name: "revoke signer differs from target signer",
+    event: {
+      id: id(24),
+      pubkey: OTHER_NOTARY,
+      created_at: 800,
+      kind: 8828,
+      tags: [
+        ["a", CONTEXT, "", "context"],
+        ["e", acts.A.id, "", "revoke"],
+      ],
+      content: "",
+      sig: "aa".repeat(64),
+    },
+    spec: "NIP-DRAFT-ACTS.md:158",
   },
 ];
