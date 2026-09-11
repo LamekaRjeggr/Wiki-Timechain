@@ -320,8 +320,8 @@
   /* the vocabulary: BLUE = submitted (the author's signature, always), GOLD = accepted (the
      notary's signature, manual notaries only). No gold without blue. Fill + hue, never hue alone. */
   .mtl .node.acc .dot,.mtl .node.acc .cdot{background:var(--rail);border-color:var(--rail)}
-  .mtl .node.acc .cbrace,.mtl .node.acc .cbadge{border-color:var(--rail);color:var(--rail);
-    background:color-mix(in srgb,var(--rail) 12%,transparent)}
+  .mtl .node.acc .cbadge,.mtl .node.acc .peek{border-color:var(--rail);color:var(--rail)}
+  .mtl .node.acc .cbadge{background:color-mix(in srgb,var(--rail) 12%,transparent)}
   /* the two boxes. Across the line = another key: a rival submission, folded to a blue box
      in the gutter beside the accepted card; tap and it takes a row of its own below (the
      line bends round it). Inside the card = the same key: the author revised after the
@@ -472,25 +472,21 @@
   .mtl .gap-c .lab{grid-column:1;padding:11px 0;color:var(--dim);
     font-family:var(--mono);font-size:12px}
   .mtl .gap-c .lab .go{color:var(--accent);margin-left:7px}
-  /* several submitted under one d: diamond node + blue brace + count — shape+label carry it */
+  /* several under one d: diamond node, head pill, one dashed peek pill per key — nobody fills the row */
   .mtl .cdot{position:absolute;right:calc(var(--gut) - 5px);top:17px;width:12px;height:12px;background:var(--bg);
     border:2px solid var(--accent);transform:rotate(45deg);z-index:2}
   .mtl .contest{position:relative;grid-column:1;margin:8px 6px 8px 0}
   .mtl .node.acc .contest{margin:8px 0 8px 6px}
-  .mtl .cbrace{position:absolute;right:-16px;top:6px;bottom:6px;width:8px;
-    border:2px solid var(--accent);border-left:none;border-radius:0 6px 6px 0}
-  .mtl .node.acc .cbrace{right:auto;left:-16px;border-left:2px solid;border-right:none;border-radius:6px 0 0 6px}
   .mtl .cbadge{display:inline-flex;align-items:center;gap:7px;background:color-mix(in srgb,var(--accent) 12%,transparent);
     border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:4px 11px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;margin-bottom:6px}
+  .mtl .peek{cursor:pointer;display:block;border:1px dashed var(--accent);color:var(--accent);border-radius:20px;
+    padding:5px 11px;margin-top:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em}
+  .mtl .peek i{font-style:normal;color:var(--dim)}
   .mtl .vcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:12px 14px;margin-top:8px}
-  .mtl .vcard:first-of-type{margin-top:0}
   .mtl .byline{display:flex;align-items:center;gap:8px;font-family:var(--mono);
     font-size:10.5px;color:var(--dim);margin-bottom:7px}
-  .mtl .vtag{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;
-    border-radius:5px;background:var(--panel-2);border:1px solid var(--border);
-    color:var(--text);font-size:10px;flex:none}
   .mtl .vcard h4{margin:0;font-size:15px;line-height:1.3;font-weight:600;color:var(--text)}
   .mtl .vcard .cbody{margin-top:6px;font-size:13px;color:var(--dim)}
 
@@ -2021,7 +2017,7 @@ function bindTaps(){                                      // gap expanders + acc
     }
     const dm = e.target.closest(".dmk");
     if (dm){ stepOpen(dm, true); return; }
-    const rv = e.target.closest(".rival,.rclose,.revbox");   // the two boxes: toggle, repaint
+    const rv = e.target.closest(".rival,.rclose,.revbox,.peek");   // the boxes + peek pills: toggle, repaint
     if (rv){
       const set = rv.classList.contains("revbox") ? showLive : openRivals, c = rv.dataset.c;
       set.has(c) ? set.delete(c) : set.add(c);
@@ -2230,14 +2226,25 @@ function renderTimeline(entries){
     const rivalsHtml = boxes.length ? `<div class="rivals">${boxes.join("")}</div>` : "";
     const tail = ev => (beyond(ev, e.d) ? actRow(ev, e.d) : "") + `</div>`;
     if (main.length > 1){
-      html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${parHtml}${rivalsHtml}` +
-        `<div class="contest"><div class="cbrace"></div>` +
-        `<div class="cbadge">${esc(showDate(e.date))} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
-        main.map((ev0, vi) => { const { show: ev, box } = goldOf(ev0, e.d); return
-          `<div class="vcard"><div class="byline">` +
-          `<span class="vtag">${String.fromCharCode(65+vi)}</span>` +
-          `${authorLink(ev.pubkey)} · ${esc(showDate(dateOf(ev)))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-          `<h4>${headTitle(ev, e.d)}</h4>` + creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
+      // several under one d: nobody fills the row. A head pill names the station; each key gets a peek
+      // line (author, order, weight, sources, accepts, how it differs from the first) — enough to choose
+      // which card to pay for. Tap opens that one, the rest stay folded.
+      const first = main.reduce((a, b) => b.created_at < a.created_at ? b : a);
+      const peek = ev => {
+        const gap = ev === first ? "1st" : "+" + humanSpan((ev.created_at - first.created_at) / 31557600).replace(/ (\w)\w+/, "$1");
+        const src = (ev.content.match(/https?:\/\//g) || []).length;
+        const cr  = creditsOf(ev).find(([pk]) => pk === first.pubkey);
+        const diff = ev === first ? "" : cr ? cr[1] + " 1st" : cleanOf(ev.content) === cleanOf(first.content) ? "same words"
+                   : "differs: " + (dateOf(ev) !== dateOf(first) ? "event_date" : "content");
+        return [authorLabel(ev.pubkey), `<i>${esc(gap)}</i>`, `<i>${cleanOf(ev.content).length} chars</i>`,
+                src ? `<i>${src} src</i>` : "", actBadge(ev, e.d), diff ? `<i>${esc(diff)}</i>` : ""].filter(Boolean).join(" · ");
+      };
+      html += `<div class="${cls}"${nodeAttrs}><span class="cdot"></span>${parHtml}${rivalsHtml}<div class="contest">` +
+        `<div class="cbadge">${esc(showDate(e.date))} · ${headTitle(first, e.d)} · ◆ ${main.length} ${acc ? "accepted" : "submitted"}</div>` +
+        main.map(ev0 => { const { show: ev, box } = goldOf(ev0, e.d), c = coordOfC(ev0, e.d);
+          if (!openRivals.has(c)) return `<div class="peek" data-c="${esc(c)}" title="open this card">${peek(ev)}</div>`;
+          return `<div class="vcard"><div class="byline">${authorLink(ev.pubkey)} · ${esc(showDate(dateOf(ev)))}${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
+            `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(c)}" title="fold it back to its peek line">hide</span></h4>` + creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
         ).join("") + `</div></div>`;
     } else {
       const { show: ev, box } = goldOf(main[0], e.d);
