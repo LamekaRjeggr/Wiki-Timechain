@@ -103,3 +103,4 @@ Two timelines on the lab relay, written by git hooks, read in the viewer.
 - 2026-09-10 Specs are CEO-only. Grunts have no keys. Process changes get their own timeline.
 - 2026-09-10 Scout and Gatekeeper added. Three review rounds, then the lead takes over or kills the branch.
 - 2026-09-10 Scout is qwen2.5-coder-64k:7b. Gatekeeper is the other house from the builder.
+- 2026-09-10 The lab relay is never tidied. Superseded, conflicting, and stray events stay; real relays are not clean, and the fold must survive them.
