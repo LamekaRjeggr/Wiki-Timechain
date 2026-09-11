@@ -299,7 +299,7 @@
      drum over the cards. The 0 floor says the column is the column, whatever the content wants. */
   .mtl .node,.mtl .gap-c{position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--gut);column-gap:var(--cgap)}
   .mtl .node.acc,.mtl .gap-c.l{grid-template-columns:var(--gut) minmax(0,1fr)}
-  .mtl .node.acc>.card,.mtl .node.acc>.contest,.mtl .gap-c.l .lab{grid-column:2}   /* not the dot: grid placement would move an absolute child's containing block */
+  .mtl .node.acc>.xrow,.mtl .node.acc>.contest,.mtl .gap-c.l .lab{grid-column:2}   /* not the dot: grid placement would move an absolute child's containing block */
   /* the first column is deliberately EMPTY. The date used to live here and is now on the
      card's own tab; the column stays because the spine, the dots, the gap dashline and the
      now-chip are all keyed to it — and because the empty gutter is where the drum goes. */
@@ -345,9 +345,9 @@
   .mtl .revbox{cursor:pointer;display:inline-block;margin:8px 0 0;padding:3px 8px;border-radius:7px;
     border:1px solid var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
     font-family:var(--mono);font-size:10px;letter-spacing:.03em}
-  .mtl .card{grid-column:1;position:relative;background:var(--panel);border:1px solid var(--accent);border-radius:12px;
+  .mtl .card{position:relative;background:var(--panel);border:1px solid var(--accent);border-radius:12px;
     padding:13px 15px;margin:8px 0}
-  .mtl .node.acc>.card{border-color:var(--rail)}   /* the border says the side: blue left of the line, gold right */
+  .mtl .node.acc .xrow>.card{border-color:var(--rail)}   /* the border says the side: blue left of the line, gold right */
   /* ── the Rolodex tab: date · author, flush with the card's top-left corner ──
      part-width on purpose — a tab, not a header band. Negative margins bleed it out to the
      card's own padding edge so it reads as cut from the card rather than sat inside it.
@@ -483,6 +483,33 @@
   .mtl .peek{cursor:pointer;display:block;width:fit-content;max-width:100%;border:1px dashed var(--accent);color:var(--accent);border-radius:20px;
     padding:5px 11px;margin-top:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em}
   .mtl .peek i{font-style:normal;color:var(--dim)}
+  /* THE EXPANDED ROW. The line folds sideways at ONE row: the card keeps its place on the
+     spine, and what points at it lies across — back (what it cites) to the left, forward
+     (other notaries' acts, forks, credits) to the right. Neighbours never move: the arms
+     scroll inside the row, the same S-curve as the crossing turned on its side. */
+  .mtl .xrow{grid-column:1;min-width:0}
+  .mtl .node.bent>.xrow{display:flex;align-items:center;gap:0;overflow-x:auto;scrollbar-width:thin;
+    scroll-snap-type:x proximity;padding-bottom:4px}
+  .mtl .node.bent>.xrow>.card{flex:none;width:clamp(240px,62%,420px);max-width:100%;box-sizing:border-box;scroll-snap-align:center}
+  .mtl .xarm{flex:none;display:flex;align-items:center;gap:8px;padding:0 26px;position:relative}
+  .mtl .xarm.back{flex-direction:row-reverse}
+  /* the fold: one quarter-ellipse out of the card's edge, one into the first pill — no straight run */
+  .mtl .xarm::before,.mtl .xarm::after{content:"";position:absolute;top:calc(50% - 14px);height:14px;width:13px;
+    border:0 solid var(--past-dim);opacity:.6}
+  .mtl .xarm.fwd::before{left:0;border-top-width:2px;border-left-width:2px;border-top-left-radius:100% 100%;top:50%}
+  .mtl .xarm.fwd::after{left:13px;border-bottom-width:2px;border-right-width:2px;border-bottom-right-radius:100% 100%}
+  .mtl .xarm.back::before{right:0;border-top-width:2px;border-right-width:2px;border-top-right-radius:100% 100%;top:50%}
+  .mtl .xarm.back::after{right:13px;border-bottom-width:2px;border-left-width:2px;border-bottom-left-radius:100% 100%}
+  .mtl .node.acc .xarm::before,.mtl .node.acc .xarm::after{border-color:var(--rail-dim)}
+  .mtl .xp{flex:none;white-space:nowrap;border:1px dashed var(--accent);color:var(--accent);border-radius:20px;
+    padding:5px 11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;background:var(--panel)}
+  .mtl .xp.back{cursor:pointer}
+  .mtl .xp.acc{border-style:solid;border-color:var(--rail);color:var(--rail);background:color-mix(in srgb,var(--rail) 12%,transparent)}
+  .mtl .xp.fld{border-style:double;border-width:3px;padding:3px 9px}
+  .mtl .xp.cr{border-color:var(--future-dim);color:var(--future)}
+  .mtl .xp.none{border-color:var(--faint);color:var(--faint)}
+  .mtl .xbadge{cursor:pointer;margin-left:8px;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.03em;color:var(--dim);white-space:nowrap}
+  .mtl .xbadge.on,.mtl .xbadge:hover{color:var(--text)}
   .mtl .vcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:12px;
     padding:12px 14px;margin-top:8px}
   .mtl .byline{display:flex;align-items:center;gap:8px;font-family:var(--mono);
@@ -622,7 +649,7 @@
     /* the drum overlays the left 40px. An accepted row keeps its empty gutter there; a
        submitted row has its card there, so only that side pays — and the rival box, whose
        gutter the drum now covers, stands up as a tab along the line instead */
-    .mtl .node:not(.acc)>.card,.mtl .node:not(.acc)>.contest,.mtl .gap-c:not(.l) .lab{margin-left:40px}
+    .mtl .node:not(.acc)>.xrow,.mtl .node:not(.acc)>.contest,.mtl .gap-c:not(.l) .lab{margin-left:40px}
     .mtl .rivals{left:calc(var(--gut) - 24px);width:16px}
     .mtl .rival{writing-mode:vertical-rl;padding:6px 1px;border-radius:5px}
     .mtl .rival i{display:none}
@@ -1015,6 +1042,8 @@ const wanted = new Set();                // slugs whose cards were asked for —
 let actTimer = null;
 const expandedGaps = new Set();          // long-gap keys the visitor expanded to full height
 const openRivals   = new Set();          // card coords: a rival submission opened out of its box
+const expanded     = new Set();          // card coords bent sideways: everything that points at that d, laid across the row
+const citedA       = new Set();          // card coords whose citing cards we've asked for (#a) — grow-only
 const showLive     = new Set();          // card coords: a lapsed gold card showing the live revision
 const hideFold     = new Set();          // slugs whose fold the visitor shut (open by default)
 // A timeline is ONE notary. Several keys may hold the same name; the chips switch between
@@ -1552,7 +1581,15 @@ function memberFilters(){
   const coords = reachableNotaryCoords(roots);
   const f = coords.length ? [{ kinds:[KIND], "#a": coords }] : [];
   if (wantedF && axisOf(wantedF) !== "c") f.push({ kinds:[KIND], ["#" + axisOf(wantedF)]: [valOf(wantedF)] });
+  if (citedA.size) f.push({ kinds:[KIND], "#a":[...citedA] });
   return f;
+}
+// expanding a row asks, once, for what points at the card: its citing cards (#a over the card's
+// coord) and every notary's act on this version (#e over its id — the same sub the revokes ride)
+function wantPointers(ev, d){
+  const coord = KIND + ":" + ev.pubkey + ":" + d;
+  if (!citedA.has(coord)){ citedA.add(coord); scheduleMemberFetch(); }
+  if (!actE.has(ev.id)){ actE.add(ev.id); scheduleActFetch(); }
 }
 function wantSlug(c){ if (c && !wanted.has(c)){ wanted.add(c); scheduleMemberFetch(); } }
 
@@ -1721,16 +1758,19 @@ function foldProjection(){
   return [...out.values()].sort((a,b) => a.context.localeCompare(b.context)||a.slot.localeCompare(b.slot));
 }
 function contextForView(){ const N = activeF && notaryOf(activeF.slice(2)); return activeN || (N && coordOf(N)) || ""; }
+// a slot is the d, and a fork keeps its parent's d — so a register counts for THIS card only
+// when the snapshot it was read from is this key's. Slot alone would hand a fork under
+// another key its parent's acceptance, and call it lapsed.
 function acceptances(coord, heldId, context = contextForView()){
-  const slot = coord.split(":").slice(2).join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
+  const [, pk, ...dp] = coord.split(":"), slot = dp.join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
   if (!p) return [];
-  const ids = new Set(AFIELDS.map(f => p.registers[f].sourceActId).filter(Boolean));
+  const ids = new Set(AFIELDS.map(f => p.registers[f]).filter(r => r.snapshot && r.snapshot.pubkey === pk).map(r => r.sourceActId));
   return [...ids].map(id => acts.get(id)).filter(Boolean).sort((a,b) => a.created_at-b.created_at || a.id.localeCompare(b.id));
 }
 function contentAcceptance(coord, context = contextForView()){
-  const slot = coord.split(":").slice(2).join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
-  const id = p && p.registers.content.sourceActId;
-  return id ? acts.get(id) : null;
+  const [, pk, ...dp] = coord.split(":"), slot = dp.join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
+  const r = p && p.registers.content;
+  return r && r.snapshot && r.snapshot.pubkey === pk ? acts.get(r.sourceActId) : null;
 }
 function scopeOf(a){
   const n = validActs.get(a && a.id), s = {};
@@ -2017,6 +2057,14 @@ function bindTaps(){                                      // gap expanders + acc
     }
     const dm = e.target.closest(".dmk");
     if (dm){ stepOpen(dm, true); return; }
+    const xb = e.target.closest(".xbadge");                // bend the row sideways, and ask for what points here
+    if (xb){
+      const c = xb.dataset.c, [, pk, ...dp] = c.split(":"), ev = events.get(pk + ":" + dp.join(":"));
+      if (expanded.has(c)) expanded.delete(c); else { expanded.add(c); if (ev) wantPointers(ev, dp.join(":")); }
+      render(); return;
+    }
+    const xp = e.target.closest(".xp.back");                // a cited card: jump the page to it if it's on this spine
+    if (xp){ const n = document.querySelector(`.node[data-d="${CSS.escape(xp.dataset.c.split(":").slice(2).join(":"))}"]`); if (n) n.scrollIntoView({ behavior:"smooth", block:"center" }); return; }
     const rv = e.target.closest(".rival,.rclose,.revbox,.peek");   // the boxes + peek pills: toggle, repaint
     if (rv){
       const set = rv.classList.contains("revbox") ? showLive : openRivals, c = rv.dataset.c;
@@ -2113,6 +2161,57 @@ function renderTimeline(entries){
     }).length;
     return n ? `<span class="abadge" title="keys with at least one field-copy live on this card">✓ ${n} accepted</span>` : "";
   };
+  // the expanded row: everything that points at this d, laid ACROSS the row — the notary line
+  // folds sideways here and nowhere else. Back = what the card cites. Forward = every other
+  // notary's act on it (named by the signing notary; field-scope = double border) and every
+  // card citing it (a fork not yet passed = hollow; one carrying the bytes = a credit).
+  // The count is the cheap signal at rest; the pills are one tap in. Known data only — the
+  // tap asks the relays for the rest (wantPointers), so the count grows once they answer.
+  const spreadOf = (ev, d, skip) => {
+    const coord = coordOfC(ev, d), ctx = contextForView();
+    const since = t => "+" + humanSpan((t - ev.created_at) / 31557600).replace(/ (\w)\w+/, "$1");
+    const nameOf = c => { const N = notaries.get(c); return N ? tag(N,"title") || tag(N,"d") : c.split(":")[2]; };
+    const named = pk => { if (!profiles.has(pk)){ profiles.set(pk, { name:null, fetched:false }); scheduleProfileFetch(); } return authorLabel(pk); };
+    // where a citing card stands: the first notary holding a live register read from ITS key
+    const passedAt = (pk, dd) => (foldProjection().find(p => p.slot === dd && AFIELDS.some(f => {
+      const a = p.registers[f]; return a.state === "selected" && a.snapshot.pubkey === pk; })) || {}).context;
+    const pinned = c => c.tags.find(t => t[0] === "e" && CITE.has(t[3]));   // the marked e — half of a citation
+    const back = !pinned(ev) ? [] : ev.tags.filter(t => t[0] === "a" && CITE.has(t[3]) && t[1].startsWith(KIND + ":")).map(t => {
+      const [, pk, ...dp] = t[1].split(":"), src = events.get(pk + ":" + dp.join(":"));
+      const mk = (creditsOf(ev).find(([k]) => k === pk) || [])[1] || "cites";
+      return `<span class="xp back" data-c="${esc(t[1])}">${mk} · ${src ? headTitle(src, dp.join(":")) : esc(dp.join(":"))} · ${authorLabel(pk)}</span>`;
+    });
+    const fwd = foldProjection().filter(p => p.slot === d && p.context !== ctx).map(p => {
+      const ids = new Set(AFIELDS.map(f => p.registers[f]).filter(r => r.state === "selected" && r.snapshot.pubkey === ev.pubkey).map(r => r.sourceActId));
+      if (!ids.size) return "";
+      const a = acts.get([...ids][0]), whole = [...ids].some(id => validActs.get(id).wholeCard);
+      const fs = AFIELDS.filter(f => ids.has(p.registers[f].sourceActId));
+      // the pin is named when it isn't this version — the same word the acts row uses
+      const pin = fs.every(f => p.registers[f].sourceEventId === ev.id) ? "" : " · pinned earlier";
+      return `<span class="xp acc${whole ? "" : " fld"}">✓ ${whole ? "" : "fields: " + esc(fs.join(",")) + " · "}${esc(nameOf(p.context))} · ${named(a.pubkey)} · ${esc(since(a.created_at))}${pin}</span>`;
+    }).filter(Boolean);
+    // citing cards: both halves of the citation (marked a + marked e), the spec's form. Same d
+    // = a fork of this card; another d = a card that cites it. Carrying the bytes = a credit.
+    for (const c of events.values()){
+      const cd = tag(c,"d");
+      if (c === ev || skip.has(c.pubkey + ":" + cd)) continue;
+      const pin = pinned(c);
+      if (!pin || !c.tags.some(t => t[0] === "a" && t[1] === coord && CITE.has(t[3]))) continue;
+      const kind = cd === d ? "fork" : "cites", at = passedAt(c.pubkey, cd);
+      // same bytes: pinned to this version = carries it; pinned earlier = this card took it (NIP-DRAFT "Taking a revision")
+      fwd.push(cleanOf(c.content) === ev.content
+        ? `<span class="xp cr">${pin[1] === ev.id ? "carries" : "taken"} · ${headTitle(c, cd)} · ${authorLabel(c.pubkey)}</span>`
+        : at ? `<span class="xp acc">✓ ${kind} · ${esc(nameOf(at))} · ${authorLabel(c.pubkey)}</span>`
+        : `<span class="xp pend">${kind} · pending · ${authorLabel(c.pubkey)} · ${esc(since(c.created_at))}</span>`);
+    }
+    return { back, fwd, n: back.length + fwd.length };
+  };
+  const xBadge = (sp, coord) => `<span class="xbadge${expanded.has(coord) ? " on" : ""}" data-c="${esc(coord)}"` +
+    ` title="what points at this card — cites, other notaries' acts, forks">⌐${sp.n ? ` ${sp.n} expanded` : ""}</span>`;
+  // the arms: pills laid left and right of the card, the line bending out to each side
+  const xArms = (sp, coord) => !expanded.has(coord) ? ["", ""] :
+    [`<div class="xarm back">${sp.back.join("") || `<span class="xp none">cites nothing</span>`}</div>`,
+     `<div class="xarm fwd">${sp.fwd.join("") || `<span class="xp none">nothing yet</span>`}</div>`];
   // a proposed card is the SAME card — same tab, same body, same acts row. What differs is
   // where it sits (inset, dashed) and that it says so.
   // the inbound credit: this card's text absorbed a fork. Named from the fork's own key
@@ -2217,6 +2316,7 @@ function renderTimeline(entries){
     // rivals: other keys' submissions under a d the notary passed. Folded = a blue box
     // across the line; opened = a row of their own on the submitted side, below
     const rivals = held ? e.prop : [];
+    const onRow  = new Set([...main, ...rivals].map(ev => ev.pubkey + ":" + e.d));
     // the parent: a rival the shown card cites — lineage, not competition; a stub, not a box
     const cited  = new Set(main.flatMap(ev => creditsOf(ev).map(([pk]) => pk)));
     const par    = rivals.find(ev => cited.has(ev.pubkey) && !openRivals.has(coordOfC(ev, e.d)));
@@ -2247,23 +2347,25 @@ function renderTimeline(entries){
             `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(c)}" title="fold it back to its peek line">hide</span></h4>` + creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev); }
         ).join("") + `</div></div>`;
     } else {
-      const { show: ev, box } = goldOf(main[0], e.d);
-      html += `<div class="${cls}"${nodeAttrs}><span class="dot${String(e.date).includes("/")?" span":""}${future?" future":""}"></span>${parHtml}${rivalsHtml}` +
-        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+      const { show: ev, box } = goldOf(main[0], e.d), xc = coordOfC(main[0], e.d);
+      const sp = spreadOf(main[0], e.d, onRow), [xb, xf] = xArms(sp, xc);
+      html += `<div class="${cls}${xb ? " bent" : ""}"${nodeAttrs}><span class="dot${String(e.date).includes("/")?" span":""}${future?" future":""}"></span>${parHtml}${rivalsHtml}` +
+        `<div class="xrow">${xb}<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}` +
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
-        `${future ? `<span class="upcoming">upcoming</span>` : ""}</h4>` +
-        creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `</div>`;
+        `${future ? `<span class="upcoming">upcoming</span>` : ""}${xBadge(sp, xc)}</h4>` +
+        creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `${xf}</div></div>`;
     }
     prevSide = side;
     // an opened rival takes a row of its own on the submitted side — the line bends round it
     rivals.filter(ev => openRivals.has(coordOfC(ev, e.d))).forEach(ev => {
-      html += gapHtml(0, "r") + `<div class="node"${nodeAttrs}><span class="dot"></span>` +
-        `<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
+      const xc = coordOfC(ev, e.d), sp = spreadOf(ev, e.d, onRow), [xb, xf] = xArms(sp, xc);
+      html += gapHtml(0, "r") + `<div class="node${xb ? " bent" : ""}"${nodeAttrs}><span class="dot"></span>` +
+        `<div class="xrow">${xb}<div class="card"><div class="ctab"><span class="td">${stamp(ev)}</span>` +
         `<span class="sl">/</span><span class="by">by ${authorLink(ev.pubkey)}</span>${actBadge(ev, e.d)}</div>${depthMark(ev, e.d)}` +
-        `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(coordOfC(ev, e.d))}" title="back into its box beside the accepted card">submitted · hide</span></h4>` +
-        creditRow(ev) + cardBody(ev, e.d) + tail(ev) + `</div>`;
+        `<h4>${headTitle(ev, e.d)}<span class="ptag rclose" data-c="${esc(coordOfC(ev, e.d))}" title="back into its box beside the accepted card">submitted · hide</span>${xBadge(sp, xc)}</h4>` +
+        creditRow(ev) + cardBody(ev, e.d) + tail(ev) + `${xf}</div></div>`;
       prevSide = "r";
     });
   });
@@ -2273,6 +2375,8 @@ function renderTimeline(entries){
   if (nowShown) html += readDesc ? `</div>` + nowDiv() : `</div>`;
   html += `</div></div>`;
   areaEl.innerHTML = html;
+  // a bent row opens centred on its card — the arms are reached by scrolling the row, not the page
+  areaEl.querySelectorAll(".node.bent>.xrow").forEach(x => { const c = x.querySelector(".card"); x.scrollLeft = c.offsetLeft - (x.clientWidth - c.offsetWidth) / 2; });
   bindTaps();
   if (pick) paintPick();          // a rebuild drops the classes — relight the run
   drumMeasure();
