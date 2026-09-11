@@ -2175,7 +2175,8 @@ function renderTimeline(entries){
     // where a citing card stands: the first notary holding a live register read from ITS key
     const passedAt = (pk, dd) => (foldProjection().find(p => p.slot === dd && AFIELDS.some(f => {
       const a = p.registers[f]; return a.state === "selected" && a.snapshot.pubkey === pk; })) || {}).context;
-    const back = ev.tags.filter(t => t[0] === "a" && CITE.has(t[3]) && t[1].startsWith(KIND + ":")).map(t => {
+    const pinned = c => c.tags.find(t => t[0] === "e" && CITE.has(t[3]));   // the marked e — half of a citation
+    const back = !pinned(ev) ? [] : ev.tags.filter(t => t[0] === "a" && CITE.has(t[3]) && t[1].startsWith(KIND + ":")).map(t => {
       const [, pk, ...dp] = t[1].split(":"), src = events.get(pk + ":" + dp.join(":"));
       const mk = (creditsOf(ev).find(([k]) => k === pk) || [])[1] || "cites";
       return `<span class="xp back" data-c="${esc(t[1])}">${mk} · ${src ? headTitle(src, dp.join(":")) : esc(dp.join(":"))} · ${authorLabel(pk)}</span>`;
@@ -2194,10 +2195,12 @@ function renderTimeline(entries){
     for (const c of events.values()){
       const cd = tag(c,"d");
       if (c === ev || skip.has(c.pubkey + ":" + cd)) continue;
-      if (!c.tags.some(t => t[0] === "a" && t[1] === coord && CITE.has(t[3])) || !c.tags.some(t => t[0] === "e" && CITE.has(t[3]))) continue;
+      const pin = pinned(c);
+      if (!pin || !c.tags.some(t => t[0] === "a" && t[1] === coord && CITE.has(t[3]))) continue;
       const kind = cd === d ? "fork" : "cites", at = passedAt(c.pubkey, cd);
+      // same bytes: pinned to this version = carries it; pinned earlier = this card took it (NIP-DRAFT "Taking a revision")
       fwd.push(cleanOf(c.content) === ev.content
-        ? `<span class="xp cr">carries · ${headTitle(c, cd)} · ${authorLabel(c.pubkey)}</span>`
+        ? `<span class="xp cr">${pin[1] === ev.id ? "carries" : "taken"} · ${headTitle(c, cd)} · ${authorLabel(c.pubkey)}</span>`
         : at ? `<span class="xp acc">✓ ${kind} · ${esc(nameOf(at))} · ${authorLabel(c.pubkey)}</span>`
         : `<span class="xp pend">${kind} · pending · ${authorLabel(c.pubkey)} · ${esc(since(c.created_at))}</span>`);
     }
