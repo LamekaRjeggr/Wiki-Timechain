@@ -703,7 +703,7 @@
   #drum .pnext:hover{color:var(--ink);filter:brightness(1.12)}
   #drum .pto{top:calc(50% + 34px);left:88px}
   #drum .pto:not(.show){display:none}
-  #drum .pto.show{display:block}
+  #drum .pto.show{display:block;pointer-events:auto;cursor:pointer}
   #drum .pnext.off{opacity:.38;cursor:not-allowed;filter:none}
   /* below 900px the wheel needs its label room back — a TRANSIENT overlay while picking,
      not the rolled-back persistent widening: the gutter goes quiet again on exit.
