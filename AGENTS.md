@@ -36,7 +36,7 @@ Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.
    escaped string. Nothing else is a log: no issues, no TASKS.md.
 7. **The second client is built blind.** Whoever writes the independent reducer works from
    `NIP-DRAFT-ACTS.md` only and does not open `lib/fold-8828.mjs`.
-8. **Tests before "done."** `node --test 'test/*.test.mjs'` (a bare `test/` dir is not accepted by this node). Browser tests need Chrome and are lead-only.
+8. **Tests before "done."** `node --test 'test/*.test.mjs'` (a bare `test/` dir is not accepted by this node). Browser tests live in `~/lab-relay/browser-tests`, need this machine, and are lead-only.
 9. **Grunts have no keys.** A grunt finding enters the record only through the lead's commit body.
 10. **Three rounds, then the lead decides.** A task gets at most three review rounds. On `merge`
    the lead merges. On `again` the builder reruns on the appended TASK file. After round 3 without
