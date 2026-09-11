@@ -8,7 +8,7 @@ Read this before touching anything. Codex reads it natively; `CLAUDE.md` opens w
 |---|---|---|---|
 | CEO | the human owner | specs, decisions | everything |
 | Lead | the Claude Code session that opens the repo | `main`, merges, task split, `AGENTS.md`, `CLAUDE.md` | everything |
-| Builder A | Codex (`codex exec`), branch `codex/<task>`, own worktree | code on its branch, only the files the task names | this file, the task, the specs |
+| Builder A | Codex, branch `codex/<task>`, own worktree | code on its branch, only the files the task names | this file, the task, the specs |
 | Builder B | Claude Code on Ollama cloud, branch `ollama/<task>` (unverified on this machine) | same as A | same as A |
 | Grunt | local Ollama model | `review.md`, untracked, deleted after the lead reads it | one file or one diff |
 | Hands | Haiku subagents inside a session | nothing durable | what the lead hands them |
@@ -24,16 +24,34 @@ Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.
 2. **The task names the files.** A builder claims nothing. Needing a file outside the task
    means stop and report, not touch it.
 3. **Branch per task, prefix = role.** `codex/`, `ollama/`, `haiku/`, `sonnet/`, `opus/`.
-   The prefix picks the relay identity. No prefix means lead.
+   The prefix picks the relay identity. No prefix means lead. A builder works in its own
+   worktree, `../wiki-timechain-<task>`, cut from main.
 4. **`main` is lead-only.** Builders never commit to or merge into main.
 5. **No PII.** Author is the GitHub noreply id. No nostr pubkeys, no absolute home paths,
    in files or history.
 6. **The commit body is the record.** Subject = what. Body = why, and what was left undone.
-   A hook publishes it verbatim. Nothing else is a log: no issues, no TASKS.md.
+   A hook publishes it verbatim, so write it with real newlines (`git commit -F`), never an
+   escaped string. Nothing else is a log: no issues, no TASKS.md.
 7. **The second client is built blind.** Whoever writes the independent reducer works from
    `NIP-DRAFT-ACTS.md` only and does not open `lib/fold-8828.mjs`.
 8. **Tests before "done."** `node --test 'test/*.test.mjs'` (a bare `test/` dir is not accepted by this node). Browser tests need Chrome and are lead-only.
 9. **Grunts have no keys.** A grunt finding enters the record only through the lead's commit body.
+
+## Dispatching a builder
+
+The task is an untracked `TASK-<task>.md` in the builder's worktree: goal, the files it may
+touch, the spec lines that bind it, done-when. Review rounds are appended to the same file as
+`## Review round N` and the builder is run again on it. The file dies with the worktree.
+
+Builder A launch, from inside the worktree (Codex 0.154):
+
+```
+codex exec -m gpt-5.6-sol -c model_reasoning_effort=low --approve-for-me "Read AGENTS.md, then do TASK-<task>.md" < /dev/null
+```
+
+`< /dev/null` or it stalls on stdin. `-s` and `--full-auto` do not combine with `--approve-for-me`.
+The lead's own auto mode refuses to launch it; the CEO launches, or the lead drops out of auto
+mode for the launch only.
 
 ## The record
 
