@@ -1,8 +1,9 @@
 // Two-client agreement: lab modular.html (:8778) and the ported index.html (:8779, relay-
-// swapped copy from test/serve-port.sh) fold the same lab relay; the node reducer is the third.
-// All three must print one projection hash.
+// swapped copy from test/serve-port.sh) fold the same lab relay; the node reducer is the third,
+// the blind reducer (rule 7, written from the spec alone) the fourth. All must print one hash.
 import puppeteer from '/Users/alkemagreg/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js';
-import { fold8828 } from '/Users/alkemagreg/Documents/Playground/wiki-timechain/lib/fold-8828.mjs';
+import { fold8828 } from '../lib/fold-8828.mjs';
+import { foldBlind } from '../lib/fold-8828-blind.mjs';
 import { createHash } from 'node:crypto';
 const b = await puppeteer.launch({headless:true, executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
 const Q='?c=us-israel-defense-tech-2026-lab&k=93a2e6405477';
@@ -15,11 +16,10 @@ const norm = pr => pr.map(x=>({context:x.context,slot:x.slot,registers:Object.fr
 console.log('lab   projections', A.proj.length, 'hash', h(norm(A.proj)), 'acts', A.acts.length, 'rejected', A.rej.length);
 console.log('port  projections', B.proj.length, 'hash', h(norm(B.proj)), 'acts', B.acts.length, 'rejected', B.rej.length);
 console.log('rejected sets equal:', JSON.stringify(A.rej)===JSON.stringify(B.rej));
-// third client: the node reducer over the same raw acts (signature already vetted by client A's gate)
-for (const [name,acts] of [['lab',A.acts],['port',B.acts]]) {
-  const r = fold8828(acts, {verifyEvent:()=>true});
+// third + fourth client: both node reducers over the same raw acts (signature already vetted by client A's gate)
+for (const [rname,fold] of [['node ',fold8828],['blind',foldBlind]]) for (const [name,acts] of [['lab',A.acts],['port',B.acts]]) {
+  const r = fold(acts, {verifyEvent:()=>true});
   const pj = r.projections;
-  console.log('node reducer over', name, 'acts → projections', pj.length, 'hash', h(norm(pj)), 'rejected', r.rejectedActs.length);
-  globalThis['R_'+name]=r;
+  console.log(rname, 'reducer over', name, 'acts → projections', pj.length, 'hash', h(norm(pj)), 'rejected', r.rejectedActs.length);
 }
 await b.close();
