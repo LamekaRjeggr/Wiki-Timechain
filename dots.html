@@ -37,8 +37,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 .lhost::before{content:" ⟨"} .lhost::after{content:"⟩"}
 
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
-header select{font:inherit;min-width:0;max-width:min(100%,40ch);color:var(--t0);background:var(--panel);border:1px solid var(--line);padding:1px 6px}
-header .ntry{color:var(--t2)} header .ntry b{color:var(--acc);font-weight:400}
+header .ntry{color:var(--t2)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:100%;margin:0 auto}
@@ -57,6 +56,7 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 .dot.future{background:transparent}
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tie{position:absolute;width:1px;background:var(--line);transform:translateX(-50%)}
+.tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 
 #ledger{height:22px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -74,6 +74,8 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 #card .vers button{border:1px dashed var(--line);padding:1px 8px;font-size:12px;color:var(--t1)}
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
+#card .tl{margin:-14px -16px 14px;padding:12px 16px;border-bottom:1px solid var(--line)} #card .tl .meta{margin:0}
+#card .go{margin-top:8px;border:1px solid var(--t1);padding:2px 10px;color:var(--t0)}
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
@@ -92,7 +94,6 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 <body>
 
 <header>
-  <select id="pick" aria-label="timeline"></select>
   <span class="ntry" id="ntry"></span>
   <span class="st" id="st">connecting…</span>
 </header>
@@ -122,7 +123,7 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
-let want = Q.get("c"), coord = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null;
+let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null;
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -148,8 +149,8 @@ function ingestNotary(ev){
   const c = NOTARY_KIND + ":" + ev.pubkey + ":" + d, cur = notaries.get(c);
   if (cur && cur.created_at >= ev.created_at) return;
   notaries.set(c, ev);
-  if (!coord && (!want || want === d)) choose(c);
-  schedule();
+  if (!coord && want === d) choose(c);
+  clearTimeout(askT); askT = setTimeout(ask, 300); schedule();
 }
 function ingestCard(ev){
   const d = tag(ev, "d"); if (!d) return;
@@ -180,10 +181,10 @@ function askProfile(pk){
 
 // ── relays ──
 const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)));
-function ask(){
-  if (!coord) return;
-  send(["REQ", "wtc", { kinds:[KIND], "#a":[coord] }]);
-  send(["REQ", "act", { kinds:[ACT_KIND], "#a":[coord] }, ...(actE.size ? [{ kinds:[ACT_KIND], "#e":[...actE] }] : [])]);
+function ask(){   // one sub over every timeline known so far; same sub id = the relay swaps the filter
+  const cs = [...notaries.keys()]; if (!cs.length) return;
+  send(["REQ", "wtc", { kinds:[KIND], "#a":cs }]);
+  send(["REQ", "act", { kinds:[ACT_KIND], "#a":cs }, ...(actE.size ? [{ kinds:[ACT_KIND], "#e":[...actE] }] : [])]);
 }
 let up = 0;
 function connect(url){
@@ -202,11 +203,11 @@ function connect(url){
 }
 const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays`; };
 
-function choose(c){
-  coord = c; open = null; win = spanOf(Q.get("y"));
-  const slug = c.split(":").slice(2).join(":");
-  history.replaceState(null, "", "?c=" + encodeURIComponent(slug) + (Q.get("relay") ? "&relay=" + encodeURIComponent(Q.get("relay")) : "") + (Q.get("add") ? "&add=" + encodeURIComponent(Q.get("add")) : ""));
-  ask(); schedule();
+function choose(c){   // c = a notary coord → that timeline; null → the timeline of timelines
+  coord = c; open = null; want = null; win = c ? spanOf(Q.get("y")) : null; card.innerHTML = "";
+  const q = new URLSearchParams(); if (c) q.set("c", c.split(":").slice(2).join(":"));
+  for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
+  history.replaceState(null, "", "?" + q); schedule();
 }
 
 // ── derive + render ──
@@ -241,26 +242,37 @@ function windowOf(whole){                  // win: null = whole record, else any
 }
 
 function render(){
-  // picker
-  const slugs = [...notaries.keys()];
-  pick.innerHTML = slugs.map(c => { const n = notaries.get(c), d = tag(n, "d");
-    return `<option value="${esc(c)}"${c === coord ? " selected" : ""}>${esc(tag(n, "title") || d)} · ${esc(who(n.pubkey))}</option>`; }).join("") || "<option>discovering…</option>";
-  if (!coord){ empty.hidden = false; return; }
-
-  const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) });
-  dots = dotsOf(coord, fold.projections, [...cards.values()]);
-  const nAcc = dots.filter(x => x.kind === "acc").length;
-  ntry.innerHTML = `notary <b>${esc(who(coord.split(":")[1]))}</b> · ${dots.length} cards · ${nAcc} accepted${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
+  const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
+  if (coord){
+    dots = dotsOf(coord, fold.projections, all);
+    const n = notaries.get(coord), nAcc = dots.filter(x => x.kind === "acc").length;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(tag(n, "title") || tag(n, "d"))} · notary <b>${esc(who(n.pubkey))}</b> · ${dots.length} cards · ${nAcc} accepted${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
+    document.getElementById("back").onclick = () => choose(null);
+  } else {
+    // the timeline of timelines: each notary is a dot at its earliest card, coloured as that card, reaching to its last
+    dots = [];
+    for (const [c, n] of notaries){
+      const dl = dotsOf(c, fold.projections, all); if (!dl.length) continue;
+      dots.push({ ...dl[0], tl:c, card:dl[0], d:c, title:tag(n, "title") || tag(n, "d"), author:n.pubkey, created_at:n.created_at,
+        last:dl[dl.length - 1].date, n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length });
+    }
+    dots.sort((a, b) => a.date.localeCompare(b.date) || a.created_at - b.created_at);
+    ntry.innerHTML = `<b>${dots.length}</b> timelines${notaries.size > dots.length ? ` · ${notaries.size - dots.length} empty` : ""}`;
+  }
   empty.hidden = dots.length > 0;
 
   // the band
   const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
-  band.querySelectorAll(".dot,.tick,.tie,#now").forEach(e => e.remove());
+  band.querySelectorAll(".dot,.tick,.tie,.tail,#now").forEach(e => e.remove());
   const ticks = [];
-  if (span > 864e5 * 400) for (let y = new Date(W0).getUTCFullYear(); Date.UTC(y,0,1) < W1; y++) ticks.push([Date.UTC(y,0,1), String(y)]);
+  if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
+    const per = band.clientWidth / (span / (864e5 * 365.25)), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
+    for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; Date.UTC(y,0,1) < W1; y += step) ticks.push([Date.UTC(y,0,1), String(y)]);
+  }
   else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = Date.UTC(y, m, 1); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12]]); }
   else for (let t = W0; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if (n % 5 === 1) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); }   // days say their month at its start and at the window's first tick
-  for (const [t, label] of ticks){ const e = document.createElement("div"); e.className = "tick"; e.style.left = frac(t, W0, W1) * 100 + "%"; e.textContent = label; band.appendChild(e); }
+  for (const [t, label] of ticks){ const f = frac(t, W0, W1); if (f < 0.015 || f > 0.985) continue;   // a label on the edge would clip
+    const e = document.createElement("div"); e.className = "tick"; e.style.left = f * 100 + "%"; e.textContent = label; band.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
   // zooming in grows the dots: 11px at the whole record, up to 22px at a month
@@ -269,6 +281,8 @@ function render(){
   // one dot per day, accepted first; a second dot one deep only when the day holds more — open it to see what rivals
   const AX = 78, STEP = DOT + 13, byDay = new Map();
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; (byDay.get(x.date) || byDay.set(x.date, []).get(x.date)).push(x); });
+  for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AX + "px";
+    e.style.left = Math.max(0, x.x) + "%"; e.style.width = Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x) + "%"; band.insertBefore(e, band.firstChild); }
   for (const [, ids] of byDay){
     const t = T(ids[0].date); if (t < W0 || t > W1) continue;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
@@ -308,28 +322,29 @@ function line(i){
     const [a, b] = windowOf(), lbl = new Date(a).toISOString().slice(0, 10) + " → " + new Date(b - 864e5).toISOString().slice(0, 10);
     ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = (dots.filter(o => o.date === x.date).length) - 1;
-  ledger.innerHTML = `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${x.kind === "acc" ? "accepted" : "submitted"}</span> · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more this day` : ""}`;
+  ledger.innerHTML = `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${x.kind === "acc" ? "accepted" : "submitted"}</span> · ${esc(who(x.author))}${x.tl ? ` · ${x.n} cards` : vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more this day` : ""}`;
 }
 function show(i){
   open = i; line(i);
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
-  const x = dots[i], vers = dots.filter(o => o.d === x.d || o.date === x.date);   // versions of this card, and whatever else claims the day
-  const day = new Date(x.created_at * 1000).toISOString().slice(0, 10);
+  const x = dots[i], c = x.card || x, ctx = x.tl || coord, vers = dots.filter(o => o.d === x.d || o.date === x.date);   // versions of this card, and whatever else claims the day
+  const day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   card.className = x.kind === "acc" ? "acc" : "";
-  card.innerHTML = `<h2>${esc(x.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(x.date)}${x.time ? " " + esc(x.time) : ""}</b> · ${x.kind === "acc" ? `accepted by <b>${esc(who(coord.split(":")[1]))}</b>` : "submitted"} · by <b>${esc(who(x.author))}</b> · ${day}${x.date > NOW ? " · upcoming" : ""}${isMine(x) ? " · yours" : ""}</div>
-  ${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}
-  ${prose(x.content)}
-  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.title || o.d) + " · "}${esc(who(o.author))} · ${o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
-  <div class="foot">d ${esc(x.d)} · <a href="https://njump.me/${esc(x.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
+  card.innerHTML = `${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">notary <b>${esc(who(x.author))}</b> · ${x.n} cards · ${x.nAcc} accepted · <b>${esc(x.date)}</b> → <b>${esc(x.last)}</b></div><button class="go">open timeline ▸</button></div>` : ""}
+  <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${c.kind === "acc" ? `accepted by <b>${esc(who(ctx.split(":")[1]))}</b>` : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
+  ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
+  ${prose(c.content)}
+  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.title || o.d) + " · "}${esc(who(o.author))} · ${o.tl ? o.n + " cards" : o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
+  <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => show(+b.dataset.i));
+  if (x.tl) card.querySelector(".go").onclick = () => choose(x.tl);
 }
 
 // ── controls ──
-const pick = document.getElementById("pick"), ntry = document.getElementById("ntry"),
+const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub");
-pick.onchange = () => { want = null; choose(pick.value); };
 // wheel over the band: zoom about the day under the pointer, never past the record's years or under a day
 band.addEventListener("wheel", e => {
   e.preventDefault();
