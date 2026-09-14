@@ -117,9 +117,9 @@ import { fold8828 } from "./lib/fold-8828.mjs";
 import { dotsOf } from "./lib/dots-derive.mjs";
 
 const Q = new URLSearchParams(location.search);
-const RELAYS = Q.get("relay") ? Q.get("relay").split(",") : [
-  "wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
+const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
   "wss://relay.nostr.band", "wss://offchain.pub", "wss://nostr.mom"];
+const RELAYS = Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(Q.get("add") || "").split(",").filter(Boolean)];   // relay= replaces the network, add= joins it
 const KIND = 30828, ACT_KIND = 8828, NOTARY_KIND = 30829, MARKER = "wikitimechain";
 
 // ── state ──
@@ -212,7 +212,7 @@ const status = () => { st.textContent = `${sockets.filter(w => w.readyState === 
 function choose(c){
   coord = c; open = null; win = spanOf(Q.get("y"));
   const slug = c.split(":").slice(2).join(":");
-  history.replaceState(null, "", "?c=" + encodeURIComponent(slug) + (Q.get("relay") ? "&relay=" + encodeURIComponent(Q.get("relay")) : ""));
+  history.replaceState(null, "", "?c=" + encodeURIComponent(slug) + (Q.get("relay") ? "&relay=" + encodeURIComponent(Q.get("relay")) : "") + (Q.get("add") ? "&add=" + encodeURIComponent(Q.get("add")) : ""));
   ask(); schedule();
 }
 
