@@ -39,10 +39,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
 header select{font:inherit;min-width:0;max-width:min(100%,40ch);color:var(--t0);background:var(--panel);border:1px solid var(--line);padding:1px 6px}
 header .ntry{color:var(--t2)} header .ntry b{color:var(--acc);font-weight:400}
-header .zoom{margin-left:auto;display:flex;gap:2px;flex-wrap:wrap}
-header .zoom button{padding:0 6px;color:var(--t2)}
-header .zoom button.on{color:var(--t0);border-bottom:1px solid var(--t0)}
-header .st{color:var(--t2);font-size:12px}
+header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #band{position:relative;height:190px;user-select:none}
@@ -87,7 +84,7 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 #scrub .ed{position:absolute;top:15px;font-size:13px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
 #scrub .ed.l{transform:translateX(-100%)} #scrub .ed.in.l{transform:none} #scrub .ed.in.r{transform:translateX(-100%)}
 
-@media (max-width:640px){ header{gap:10px} header .zoom{margin-left:0} }
+@media (max-width:640px){ header{gap:10px} header .st{margin-left:0} }
 </style>
 </head>
 <body>
@@ -95,7 +92,6 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 <header>
   <select id="pick" aria-label="timeline"></select>
   <span class="ntry" id="ntry"></span>
-  <span class="zoom" id="zoom"></span>
   <span class="st" id="st">connecting…</span>
 </header>
 
@@ -255,22 +251,14 @@ function render(){
   ntry.innerHTML = `notary <b>${esc(who(coord.split(":")[1]))}</b> · ${dots.length} cards · ${nAcc} accepted${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
   empty.hidden = dots.length > 0;
 
-  // zoom chips: whole record + each year the record touches; a month chip when zoomed into one
-  const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
-  const zoom = !win ? null : [7, 4].map(n => ISO(W0).slice(0, n)).find(z => { const s = spanOf(z); return s && s[0] === W0 && s[1] === W1; }) || "";   // "" = a free range, no chip lit
-  const years = [...new Set(dots.map(x => x.date.slice(0, 4)))].sort();
-  if (win && !years.includes(ISO(W0).slice(0, 4))) years.push(ISO(W0).slice(0, 4)), years.sort();   // scrubbed into an empty year: still a chip
-  const chips = [["all", null], ...years.map(y => [y, y])];
-  if (zoom && zoom.length === 7) chips.push([MON[+zoom.slice(5) - 1], zoom]);
-  zoomEl.innerHTML = chips.map(([l, v]) => `<button data-z="${v ?? ""}"${v === zoom ? ' class="on"' : ""}>${l}</button>`).join("");
-
   // the band
+  const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
   band.querySelectorAll(".dot,.tick,.tie,#now").forEach(e => e.remove());
   const ticks = [];
   if (span > 864e5 * 400) for (let y = new Date(W0).getUTCFullYear(); Date.UTC(y,0,1) < W1; y++) ticks.push([Date.UTC(y,0,1), String(y), String(y)]);
   else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = Date.UTC(y, m, 1); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12], y + "-" + String(m % 12 + 1).padStart(2, "0")]); }
   else for (let t = W0; t < W1; t += 864e5){ const d = new Date(t); if (d.getUTCDate() % 5 === 1 || d.getUTCDate() === 1) ticks.push([t, String(d.getUTCDate()), null]); }
-  for (const [t, label, z] of ticks){ const e = document.createElement("div"); e.className = "tick" + (z && z !== zoom ? " z" : ""); e.style.left = frac(t, W0, W1) * 100 + "%"; e.textContent = label; if (z) e.dataset.z = z; band.appendChild(e); }
+  for (const [t, label, z] of ticks){ const e = document.createElement("div"); e.className = "tick" + (z ? " z" : ""); e.style.left = frac(t, W0, W1) * 100 + "%"; e.textContent = label; if (z) e.dataset.z = z; band.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
   // zooming in grows the dots: 11px at the whole record, up to 22px at a month
@@ -336,11 +324,10 @@ function show(i){
 }
 
 // ── controls ──
-const pick = document.getElementById("pick"), ntry = document.getElementById("ntry"), zoomEl = document.getElementById("zoom"),
+const pick = document.getElementById("pick"), ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub");
 pick.onchange = () => { want = null; choose(pick.value); };
-zoomEl.onclick = e => { const b = e.target.closest("button"); if (!b) return; win = spanOf(b.dataset.z); render(); };
 band.onclick = e => { const t = e.target.closest(".tick.z"); if (t){ win = spanOf(t.dataset.z); render(); } };
 // wheel over the band: zoom about the day under the pointer, never past the record's years or under a day
 band.addEventListener("wheel", e => {
