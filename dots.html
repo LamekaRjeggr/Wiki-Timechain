@@ -78,7 +78,7 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
 
 footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-width:1100px;width:100%;margin:0 auto}
-#scrub{position:relative;height:28px;border-top:1px solid var(--line);cursor:pointer}
+#scrub{position:relative;height:28px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub .d{position:absolute;top:6px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
 #scrub .win{position:absolute;top:4px;bottom:0;border:1px solid var(--t1);border-bottom:none;background:color-mix(in srgb,var(--t1) 6%,transparent);pointer-events:none}
@@ -105,7 +105,7 @@ footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 <footer>
   <div id="scrub" aria-label="whole record"></div>
-  <div class="hint">tap a dot · ← → step · month names zoom in · scrub bar = the whole record, tap to move the window</div>
+  <div class="hint">tap a dot · ← → step · month names zoom in · scrub bar = the whole record, tap or drag to move the window</div>
 </footer>
 
 <script type="module">
@@ -297,7 +297,7 @@ function render(){
   for (const x of dots){ const e = document.createElement("div"); e.className = "d" + (x.kind === "acc" ? " acc" : "") + (x.date > NOW ? " future" : ""); e.style.left = frac(T(x.date), A0, A1) * 100 + "%"; scrub.appendChild(e); }
   const w = document.createElement("div"); w.className = "win"; w.style.left = frac(W0, A0, A1) * 100 + "%"; w.style.width = (frac(W1, A0, A1) - frac(W0, A0, A1)) * 100 + "%"; scrub.appendChild(w);
   for (let y = new Date(A0).getUTCFullYear() + 1; Date.UTC(y,0,1) < A1; y++){ const e = document.createElement("div"); e.className = "yr"; e.style.left = frac(Date.UTC(y,0,1), A0, A1) * 100 + "%"; e.textContent = y; scrub.appendChild(e); }
-  scrub.onclick = ev => { const f = (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth; zoom = String(new Date(A0 + f * (A1 - A0)).getUTCFullYear()); render(); };
+  scrub.dataset.a0 = A0; scrub.dataset.a1 = A1;
 
   if (open !== null && dots[open]) show(open); else line(null);
 }
@@ -329,8 +329,13 @@ const pick = document.getElementById("pick"), ntry = document.getElementById("nt
 pick.onchange = () => { want = null; choose(pick.value); };
 zoomEl.onclick = e => { const b = e.target.closest("button"); if (!b) return; zoom = b.dataset.z || null; render(); };
 band.onclick = e => { const t = e.target.closest(".tick.z"); if (t){ zoom = t.dataset.z; render(); } };
+// scrub: press or drag anywhere on the bar = the window follows the pointer, one year wide
+const seek = ev => { const f = (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth, z = String(new Date(+scrub.dataset.a0 + f * (+scrub.dataset.a1 - +scrub.dataset.a0)).getUTCFullYear());
+  if (z !== zoom){ zoom = z; render(); } };
+scrub.onpointerdown = ev => { scrub.setPointerCapture(ev.pointerId); seek(ev); };
+scrub.onpointermove = ev => { if (ev.buttons) seek(ev); };
 document.addEventListener("keydown", e => {
-  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea")) return;
   const vis = dots.filter(x => Number.isFinite(x.y)).sort((a, b) => a.x - b.x || b.y - a.y).map(x => x.i);
   if (!vis.length) return;
   const k = vis.indexOf(open); show(vis[Math.max(0, Math.min(vis.length - 1, (k < 0 ? -1 : k) + (e.key === "ArrowRight" ? 1 : -1)))]);
