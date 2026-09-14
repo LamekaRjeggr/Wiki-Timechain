@@ -108,7 +108,7 @@ footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 <footer>
   <div id="scrub" aria-label="whole record"></div>
-  <div class="hint">tap a dot · ← → step · month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize</div>
+  <div class="hint">tap a dot · ← → step · wheel or month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize</div>
 </footer>
 
 <script type="module">
@@ -278,24 +278,21 @@ function render(){
   for (const [t, label, z] of ticks){ const e = document.createElement("div"); e.className = "tick" + (z && z !== zoom ? " z" : ""); e.style.left = frac(t, W0, W1) * 100 + "%"; e.textContent = label; if (z) e.dataset.z = z; band.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
-  // stack per day: accepted on the line, submitted rise, yours hang below
   // zooming in grows the dots: 11px at the whole record, up to 22px at a month
   const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span))));
   band.style.setProperty("--dot", DOT + "px");
+  // one dot per day, accepted first; a second dot one deep only when the day holds more — open it to see what rivals
   const AX = 110, STEP = DOT + 13, byDay = new Map();
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; (byDay.get(x.date) || byDay.set(x.date, []).get(x.date)).push(x); });
   for (const [, ids] of byDay){
     const t = T(ids[0].date); if (t < W0 || t > W1) continue;
-    ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1));
-    let upN = 0, dn = 0;
-    for (const x of ids){
-      if (isMine(x) && x.kind !== "acc"){ dn++; x.y = AX + dn * STEP; }
-      else if (x.kind === "acc" && upN === 0){ x.y = AX; upN++; }
-      else { x.y = AX - upN * STEP; upN++; }
+    ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
+    for (const x of ids.slice(0, 2)){
+      x.y = x === ids[0] ? AX : AX - STEP;
       const e = document.createElement("button");
       e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (x.date > NOW ? " future" : "") + (x.i === open ? " on" : "");
       e.dataset.i = x.i; e.style.left = x.x + "%"; e.style.top = x.y + "px";
-      e.setAttribute("aria-label", x.date + " " + x.title);
+      e.setAttribute("aria-label", x.date + " " + (x === ids[0] ? x.title : `${ids.length - 1} more this day`));
       e.onclick = () => show(x.i); e.onmouseenter = () => line(x.i); e.onmouseleave = () => line(open);
       band.appendChild(e);
     }
@@ -329,14 +326,14 @@ function line(i){
 function show(i){
   open = i; line(i);
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
-  const x = dots[i], vers = dots.filter(o => o.d === x.d);
+  const x = dots[i], vers = dots.filter(o => o.d === x.d || o.date === x.date);   // versions of this card, and whatever else claims the day
   const day = new Date(x.created_at * 1000).toISOString().slice(0, 10);
   card.className = x.kind === "acc" ? "acc" : "";
   card.innerHTML = `<h2>${esc(x.title) || "<i>untitled</i>"}</h2>
   <div class="meta"><b>${esc(x.date)}${x.time ? " " + esc(x.time) : ""}</b> · ${x.kind === "acc" ? `accepted by <b>${esc(who(coord.split(":")[1]))}</b>` : "submitted"} · by <b>${esc(who(x.author))}</b> · ${day}${x.date > NOW ? " · upcoming" : ""}${isMine(x) ? " · yours" : ""}</div>
   ${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}
   ${prose(x.content)}
-  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
+  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.title || o.d) + " · "}${esc(who(o.author))} · ${o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(x.d)} · <a href="https://njump.me/${esc(x.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => show(+b.dataset.i));
 }
@@ -348,6 +345,15 @@ const pick = document.getElementById("pick"), ntry = document.getElementById("nt
 pick.onchange = () => { want = null; choose(pick.value); };
 zoomEl.onclick = e => { const b = e.target.closest("button"); if (!b) return; win = spanOf(b.dataset.z); render(); };
 band.onclick = e => { const t = e.target.closest(".tick.z"); if (t){ win = spanOf(t.dataset.z); render(); } };
+// wheel over the band: zoom about the day under the pointer, never past the record's years or under a day
+band.addEventListener("wheel", e => {
+  e.preventDefault();
+  const [W0, W1] = windowOf(), a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, k = e.deltaY > 0 ? 1.25 : 0.8;
+  const t = W0 + (e.clientX - band.getBoundingClientRect().left) / band.clientWidth * (W1 - W0);
+  let n0 = Math.max(a0, t - (t - W0) * k), n1 = Math.min(a1, t + (W1 - t) * k);
+  if (n1 - n0 < 864e5) return;
+  win = n0 <= a0 && n1 >= a1 ? null : [n0, n1]; render();
+}, { passive:false });
 // scrub, like histography: drag an edge = resize, drag the box = move, press elsewhere = the box jumps there keeping its width; never narrower than a day
 let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a move
 const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
