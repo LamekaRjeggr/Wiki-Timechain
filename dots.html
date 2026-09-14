@@ -49,8 +49,8 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 #axis{position:absolute;left:0;right:0;top:110px;height:1px;background:var(--t2)}
 #now{position:absolute;top:96px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:-16px;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
-.tick{position:absolute;top:140px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
-.tick::before{content:"";position:absolute;top:-30px;left:50%;height:3px;width:1px;background:var(--t2)}
+.tick{position:absolute;top:150px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
+.tick::before{content:"";position:absolute;top:-40px;left:50%;height:3px;width:1px;background:var(--t2)}
 .tick.z{cursor:pointer} .tick.z:hover{color:var(--t0)}
 .dot{position:absolute;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);
   border:1.5px solid var(--sub);background:transparent}
@@ -81,9 +81,11 @@ footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-
 #scrub{position:relative;height:28px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub .d{position:absolute;top:6px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
-#scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t1);border-bottom:none;background:color-mix(in srgb,var(--t1) 6%,transparent);pointer-events:none}
+#scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t1);border-bottom:none;background:color-mix(in srgb,var(--t1) 6%,transparent);cursor:grab}
+#scrub .h{position:absolute;top:-1px;bottom:0;width:9px;cursor:ew-resize} #scrub .h.l{left:-5px} #scrub .h.r{right:-5px}
 #scrub .now{position:absolute;top:2px;bottom:0;border-left:1px dashed var(--t2);pointer-events:none}
-#scrub .yr{position:absolute;top:14px;font-size:10px;color:var(--t2);transform:translateX(-50%);pointer-events:none}
+#scrub .ed{position:absolute;top:13px;font-size:10px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
+#scrub .ed.l{transform:translateX(-100%)} #scrub .ed.in.l{transform:none} #scrub .ed.in.r{transform:translateX(-100%)}
 footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 @media (max-width:640px){ header{gap:10px} header .zoom{margin-left:0} }
@@ -106,7 +108,7 @@ footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 <footer>
   <div id="scrub" aria-label="whole record"></div>
-  <div class="hint">tap a dot · ← → step · month names zoom in · scrub bar = the whole record, tap or drag to move the window</div>
+  <div class="hint">tap a dot · ← → step · month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize</div>
 </footer>
 
 <script type="module">
@@ -127,7 +129,7 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
-let want = Q.get("c"), coord = null, zoom = Q.get("y") || null, open = null, dots = [], renderT = null;
+let want = Q.get("c"), coord = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null;
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -208,7 +210,7 @@ function connect(url){
 const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays`; };
 
 function choose(c){
-  coord = c; open = null; zoom = Q.get("y") || null;
+  coord = c; open = null; win = spanOf(Q.get("y"));
   const slug = c.split(":").slice(2).join(":");
   history.replaceState(null, "", "?c=" + encodeURIComponent(slug) + (Q.get("relay") ? "&relay=" + encodeURIComponent(Q.get("relay")) : ""));
   ask(); schedule();
@@ -233,9 +235,13 @@ const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
 
-function windowOf(){                       // zoom: null = whole record, "YYYY", or "YYYY-MM"
-  if (zoom && /^\d{4}-\d{2}$/.test(zoom)){ const [y, m] = zoom.split("-").map(Number); return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)]; }
-  if (zoom){ const y = +zoom; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
+function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
+  if (z && /^\d{4}-\d{2}$/.test(z)){ const [y, m] = z.split("-").map(Number); return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)]; }
+  if (z && /^\d{4}$/.test(z)){ const y = +z; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
+  return null;
+}
+function windowOf(){                       // win: null = whole record, else any [from, to) the user dragged
+  if (win) return win;
   const ts = dots.map(x => T(x.date)); if (!ts.length) return [Date.UTC(2026,0,1), Date.UTC(2027,0,1)];
   const a = Math.min(...ts), b = Math.max(...ts), pad = Math.max((b - a) * 0.04, 864e5 * 15);
   return [a - pad, b + pad];
@@ -255,14 +261,15 @@ function render(){
   empty.hidden = dots.length > 0;
 
   // zoom chips: whole record + each year the record touches; a month chip when zoomed into one
+  const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
+  const zoom = !win ? null : [7, 4].map(n => ISO(W0).slice(0, n)).find(z => { const s = spanOf(z); return s && s[0] === W0 && s[1] === W1; }) || "";   // "" = a free range, no chip lit
   const years = [...new Set(dots.map(x => x.date.slice(0, 4)))].sort();
-  if (zoom && !years.includes(zoom.slice(0, 4))) years.push(zoom.slice(0, 4)), years.sort();   // scrubbed into an empty year: still a chip
+  if (win && !years.includes(ISO(W0).slice(0, 4))) years.push(ISO(W0).slice(0, 4)), years.sort();   // scrubbed into an empty year: still a chip
   const chips = [["all", null], ...years.map(y => [y, y])];
   if (zoom && zoom.length === 7) chips.push([MON[+zoom.slice(5) - 1], zoom]);
   zoomEl.innerHTML = chips.map(([l, v]) => `<button data-z="${v ?? ""}"${v === zoom ? ' class="on"' : ""}>${l}</button>`).join("");
 
   // the band
-  const [W0, W1] = windowOf(), span = W1 - W0;
   band.querySelectorAll(".dot,.tick,.tie,#now").forEach(e => e.remove());
   const ticks = [];
   if (span > 864e5 * 400) for (let y = new Date(W0).getUTCFullYear(); Date.UTC(y,0,1) < W1; y++) ticks.push([Date.UTC(y,0,1), String(y), String(y)]);
@@ -272,7 +279,7 @@ function render(){
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
   // stack per day: accepted on the line, submitted rise, yours hang below
-  const AX = 110, STEP = 16, byDay = new Map();
+  const AX = 110, STEP = 24, byDay = new Map();
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; (byDay.get(x.date) || byDay.set(x.date, []).get(x.date)).push(x); });
   for (const [, ids] of byDay){
     const t = T(ids[0].date); if (t < W0 || t > W1) continue;
@@ -299,10 +306,10 @@ function render(){
   const A0 = Date.UTC(Math.min(...ys), 0, 1), A1 = Date.UTC(Math.max(...ys) + 1, 0, 1), pct = t => Math.max(0, Math.min(1, frac(t, A0, A1))) * 100 + "%";
   for (const x of [...dots].sort((a, b) => (a.kind === "acc" ? 1 : 0) - (b.kind === "acc" ? 1 : 0))){ const e = document.createElement("div"); e.className = "d" + (x.kind === "acc" ? " acc" : "") + (x.date > NOW ? " future" : ""); e.style.left = pct(T(x.date)); scrub.appendChild(e); }
   if (nowT > A0 && nowT < A1){ const e = document.createElement("div"); e.className = "now"; e.style.left = pct(nowT); scrub.appendChild(e); }
-  const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; scrub.appendChild(w);
-  // year labels thinned to what fits: every 1, 2, 5, 10… years so neighbours sit ≥ 44px apart
-  const nY = (A1 - A0) / (864e5 * 365.25), stepY = [1, 2, 5, 10, 20, 50, 100].find(k => scrub.clientWidth / (nY / k) >= 44) || 100;
-  for (let y = Math.ceil((new Date(A0).getUTCFullYear() + 1) / stepY) * stepY; Date.UTC(y,0,1) < A1; y += stepY){ const e = document.createElement("div"); e.className = "yr"; e.style.left = pct(Date.UTC(y,0,1)); e.textContent = y; scrub.appendChild(e); }
+  const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; w.innerHTML = '<div class="h l"></div><div class="h r"></div>'; scrub.appendChild(w);
+  // the window says its own dates at each edge, like histography; a label that would run off the bar flips inside
+  const room = 74 / scrub.clientWidth;
+  for (const [cls, t, at, f] of [["ed l", W0, W0, frac(W0, A0, A1) < room], ["ed r", W1 - 864e5, W1, frac(W1, A0, A1) > 1 - room]]){ const e = document.createElement("div"); e.className = cls + (f ? " in" : ""); e.style.left = pct(at); e.textContent = ISO(t); scrub.appendChild(e); }
   scrub.dataset.a0 = A0; scrub.dataset.a1 = A1;
 
   if (open !== null && dots[open]) show(open); else line(null);
@@ -311,7 +318,8 @@ function render(){
 function line(i){
   if (i === null || !dots[i]){
     const n = dots.filter(x => Number.isFinite(x.y)).length;   // nothing open: say what the window holds, so an empty scrub stop is not a dead screen
-    ledger.innerHTML = zoom ? `<span class="t2">${n ? `${n} in ${esc(zoom)}` : `nothing in ${esc(zoom)}`}</span>` : "&nbsp;"; return; }
+    const [a, b] = windowOf(), lbl = new Date(a).toISOString().slice(0, 10) + " → " + new Date(b - 864e5).toISOString().slice(0, 10);
+    ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = (dots.filter(o => o.date === x.date).length) - 1;
   ledger.innerHTML = `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${x.kind === "acc" ? "accepted" : "submitted"}</span> · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more this day` : ""}`;
 }
@@ -335,14 +343,27 @@ const pick = document.getElementById("pick"), ntry = document.getElementById("nt
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub");
 pick.onchange = () => { want = null; choose(pick.value); };
-zoomEl.onclick = e => { const b = e.target.closest("button"); if (!b) return; zoom = b.dataset.z || null; render(); };
-band.onclick = e => { const t = e.target.closest(".tick.z"); if (t){ zoom = t.dataset.z; render(); } };
-// scrub: press or drag anywhere on the bar = the window follows the pointer, keeping its width (a month stays a month, else a year)
-const seek = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, f = Math.max(0, Math.min(0.9999, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth));
-  const d = new Date(a0 + f * (a1 - a0)), z = zoom && zoom.length === 7 ? d.toISOString().slice(0, 7) : String(d.getUTCFullYear());
-  if (z !== zoom){ zoom = z; render(); } };
-scrub.onpointerdown = ev => { scrub.setPointerCapture(ev.pointerId); seek(ev); };
-scrub.onpointermove = ev => { if (ev.buttons) seek(ev); };
+zoomEl.onclick = e => { const b = e.target.closest("button"); if (!b) return; win = spanOf(b.dataset.z); render(); };
+band.onclick = e => { const t = e.target.closest(".tick.z"); if (t){ win = spanOf(t.dataset.z); render(); } };
+// scrub, like histography: drag an edge = resize, drag the box = move, press elsewhere = the box jumps there keeping its width; never narrower than a day
+let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a move
+const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
+const snap = t => Math.round(t / 864e5) * 864e5;
+scrub.onpointerdown = ev => {
+  scrub.setPointerCapture(ev.pointerId);
+  const [W0, W1] = windowOf(), t = atX(ev), h = ev.target.closest(".h");
+  grab = h ? { mode: h.classList.contains("l") ? "l" : "r" } : ev.target.closest(".win") ? { mode: "m", off: t - W0 } : { mode: "m", off: (W1 - W0) / 2 };
+  drag(ev);
+};
+scrub.onpointermove = ev => { if (ev.buttons && grab) drag(ev); };
+scrub.onpointerup = () => { grab = null; };
+function drag(ev){
+  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = snap(atX(ev)); let [W0, W1] = windowOf();
+  if (grab.mode === "l") W0 = Math.min(t, W1 - 864e5);
+  else if (grab.mode === "r") W1 = Math.max(t, W0 + 864e5);
+  else { const w = W1 - W0; W0 = Math.max(a0, Math.min(a1 - w, snap(t - grab.off))); W1 = W0 + w; }
+  if (W0 !== win?.[0] || W1 !== win?.[1]){ win = [W0, W1]; render(); }
+}
 document.addEventListener("keydown", e => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea")) return;
   const vis = dots.filter(x => Number.isFinite(x.y)).sort((a, b) => a.x - b.x || b.y - a.y).map(x => x.i);
