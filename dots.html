@@ -29,7 +29,7 @@
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.5 var(--mono);min-height:100vh;
-  display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:minmax(0,1fr);padding-inline:16px}
+  display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);padding-inline:16px}
 a{color:var(--sub)}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
@@ -44,7 +44,7 @@ header .zoom button{padding:0 6px;color:var(--t2)}
 header .zoom button.on{color:var(--t0);border-bottom:1px solid var(--t0)}
 header .st{color:var(--t2);font-size:12px}
 
-main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;margin:0 auto}
+main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #band{position:relative;height:190px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:110px;height:1px;background:var(--t2)}
 #now{position:absolute;top:96px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -77,8 +77,7 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
 
-footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-width:1100px;width:100%;margin:0 auto}
-#scrub{position:relative;height:34px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
+#scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
 #scrub .d{position:absolute;top:5px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
@@ -87,7 +86,6 @@ footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-
 #scrub .now{position:absolute;top:2px;bottom:0;border-left:1px dashed var(--t2);pointer-events:none}
 #scrub .ed{position:absolute;top:15px;font-size:13px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
 #scrub .ed.l{transform:translateX(-100%)} #scrub .ed.in.l{transform:none} #scrub .ed.in.r{transform:translateX(-100%)}
-footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 @media (max-width:640px){ header{gap:10px} header .zoom{margin-left:0} }
 </style>
@@ -103,14 +101,10 @@ footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
 <main>
   <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
+  <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
   <div id="ledger">&nbsp;</div>
   <section id="card" aria-live="polite"></section>
 </main>
-
-<footer>
-  <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
-  <div class="hint">tap a dot · ← → step · wheel or month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize; focused: ← → move, ↑ ↓ zoom, esc = all</div>
-</footer>
 
 <script type="module">
 import { verifyEvent } from "./lib/verify.mjs";
