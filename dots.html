@@ -79,6 +79,7 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 
 footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-width:1100px;width:100%;margin:0 auto}
 #scrub{position:relative;height:34px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
+#scrub:focus-visible{outline:none;border-top-color:var(--t0)}
 #scrub .d{position:absolute;top:5px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
 #scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t1);border-bottom:none;background:color-mix(in srgb,var(--t1) 6%,transparent);cursor:grab}
@@ -107,8 +108,8 @@ footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 </main>
 
 <footer>
-  <div id="scrub" aria-label="whole record"></div>
-  <div class="hint">tap a dot · ← → step · wheel or month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize</div>
+  <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
+  <div class="hint">tap a dot · ← → step · wheel or month names zoom in · scrub bar = the whole record: drag the box to move, its edges to resize; focused: ← → move, ↑ ↓ zoom, esc = all</div>
 </footer>
 
 <script type="module">
@@ -375,8 +376,18 @@ function drag(ev){
   else { const w = W1 - W0; W0 = Math.max(a0, Math.min(a1 - w, snap(t - grab.off))); W1 = W0 + w; }
   if (W0 !== win?.[0] || W1 !== win?.[1]){ win = [W0, W1]; render(); }
 }
+// the bar under focus steers the window: arrows move it a tenth of its width, up/down zoom about its middle, home/end jump, escape = whole record
+scrub.onkeydown = e => {
+  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; let [W0, W1] = windowOf(); const w = W1 - W0, m = (W0 + W1) / 2;
+  const k = { ArrowLeft: -1, ArrowRight: 1 }[e.key], z = { ArrowUp: 0.8, ArrowDown: 1.25 }[e.key];
+  if (k){ W0 = Math.max(a0, Math.min(a1 - w, snap(W0 + k * Math.max(864e5, w / 10)))); W1 = W0 + w; }
+  else if (z){ W0 = Math.max(a0, snap(m - w / 2 * z)); W1 = Math.min(a1, snap(m + w / 2 * z)); if (W1 - W0 < 864e5) return; }
+  else if (e.key === "Home"){ W0 = a0; W1 = a0 + w; } else if (e.key === "End"){ W1 = a1; W0 = a1 - w; }
+  else if (e.key === "Escape"){ W0 = a0; W1 = a1; } else return;
+  e.preventDefault(); win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render();
+};
 document.addEventListener("keydown", e => {
-  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea")) return;
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea") || e.target === scrub) return;
   const vis = dots.filter(x => Number.isFinite(x.y)).sort((a, b) => a.x - b.x || b.y - a.y).map(x => x.i);
   if (!vis.length) return;
   const k = vis.indexOf(open); show(vis[Math.max(0, Math.min(vis.length - 1, (k < 0 ? -1 : k) + (e.key === "ArrowRight" ? 1 : -1)))]);
