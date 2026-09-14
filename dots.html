@@ -308,8 +308,10 @@ function render(){
   if (nowT > A0 && nowT < A1){ const e = document.createElement("div"); e.className = "now"; e.style.left = pct(nowT); scrub.appendChild(e); }
   const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; w.innerHTML = '<div class="h l"></div><div class="h r"></div>'; scrub.appendChild(w);
   // the window says its own dates at each edge, like histography; a label that would run off the bar flips inside
-  const room = 74 / scrub.clientWidth;
-  for (const [cls, t, at, f] of [["ed l", W0, W0, frac(W0, A0, A1) < room], ["ed r", W1 - 864e5, W1, frac(W1, A0, A1) > 1 - room]]){ const e = document.createElement("div"); e.className = cls + (f ? " in" : ""); e.style.left = pct(at); e.textContent = ISO(t); scrub.appendChild(e); }
+  // (LW = one label's width; a flipped-in label on a box narrower than that pushes the other label out past it)
+  const LW = 88, room = LW / scrub.clientWidth, fl = frac(W0, A0, A1) < room, fr = frac(W1, A0, A1) > 1 - room;
+  const L = fr ? `min(${pct(W0)}, calc(${pct(W1)} - ${LW}px))` : pct(W0), R = fl ? `max(${pct(W1)}, calc(${pct(W0)} + ${LW}px))` : pct(W1);
+  for (const [cls, t, at, f] of [["ed l", W0, L, fl], ["ed r", W1 - 864e5, R, fr]]){ const e = document.createElement("div"); e.className = cls + (f ? " in" : ""); e.style.left = at; e.textContent = ISO(t); scrub.appendChild(e); }
   scrub.dataset.a0 = A0; scrub.dataset.a1 = A1;
 
   if (open !== null && dots[open]) show(open); else line(null);
