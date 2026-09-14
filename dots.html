@@ -52,7 +52,7 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 .tick{position:absolute;top:150px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
 .tick::before{content:"";position:absolute;top:-40px;left:50%;height:3px;width:1px;background:var(--t2)}
 .tick.z{cursor:pointer} .tick.z:hover{color:var(--t0)}
-.dot{position:absolute;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);
+.dot{position:absolute;width:var(--dot,11px);height:var(--dot,11px);border-radius:50%;transform:translate(-50%,-50%);
   border:1.5px solid var(--sub);background:transparent}
 .dot.sub{background:var(--sub)}
 .dot.acc{border-color:var(--acc);background:var(--acc)}
@@ -78,13 +78,13 @@ main{display:grid;grid-template-rows:auto auto 1fr;max-width:1100px;width:100%;m
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
 
 footer{position:sticky;bottom:0;background:var(--bg);padding-block:8px 12px;max-width:1100px;width:100%;margin:0 auto}
-#scrub{position:relative;height:28px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
-#scrub .d{position:absolute;top:6px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
+#scrub{position:relative;height:34px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
+#scrub .d{position:absolute;top:5px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
 #scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t1);border-bottom:none;background:color-mix(in srgb,var(--t1) 6%,transparent);cursor:grab}
 #scrub .h{position:absolute;top:-1px;bottom:0;width:9px;cursor:ew-resize} #scrub .h.l{left:-5px} #scrub .h.r{right:-5px}
 #scrub .now{position:absolute;top:2px;bottom:0;border-left:1px dashed var(--t2);pointer-events:none}
-#scrub .ed{position:absolute;top:13px;font-size:10px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
+#scrub .ed{position:absolute;top:15px;font-size:13px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
 #scrub .ed.l{transform:translateX(-100%)} #scrub .ed.in.l{transform:none} #scrub .ed.in.r{transform:translateX(-100%)}
 footer .hint{font-size:11px;color:var(--t2);margin-top:4px}
 
@@ -240,8 +240,8 @@ function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to)
   if (z && /^\d{4}$/.test(z)){ const y = +z; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
   return null;
 }
-function windowOf(){                       // win: null = whole record, else any [from, to) the user dragged
-  if (win) return win;
+function windowOf(whole){                  // win: null = whole record, else any [from, to) the user dragged; whole=true ignores win
+  if (win && !whole) return win;
   const ts = dots.map(x => T(x.date)); if (!ts.length) return [Date.UTC(2026,0,1), Date.UTC(2027,0,1)];
   const a = Math.min(...ts), b = Math.max(...ts), pad = Math.max((b - a) * 0.04, 864e5 * 15);
   return [a - pad, b + pad];
@@ -279,7 +279,10 @@ function render(){
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
   // stack per day: accepted on the line, submitted rise, yours hang below
-  const AX = 110, STEP = 24, byDay = new Map();
+  // zooming in grows the dots: 11px at the whole record, up to 22px at a month
+  const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span))));
+  band.style.setProperty("--dot", DOT + "px");
+  const AX = 110, STEP = DOT + 13, byDay = new Map();
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; (byDay.get(x.date) || byDay.set(x.date, []).get(x.date)).push(x); });
   for (const [, ids] of byDay){
     const t = T(ids[0].date); if (t < W0 || t > W1) continue;
