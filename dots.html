@@ -415,9 +415,15 @@ scrub.onkeydown = e => {
 };
 document.addEventListener("keydown", e => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea") || e.target === scrub) return;
-  const vis = dots.filter(x => Number.isFinite(x.y)).sort((a, b) => a.x - b.x || b.y - a.y).map(x => x.i);
-  if (!vis.length) return;
-  const k = vis.indexOf(open); show(vis[Math.max(0, Math.min(vis.length - 1, (k < 0 ? -1 : k) + (e.key === "ArrowRight" ? 1 : -1)))]);
+  if (!dots.length) return;
+  const i = Math.max(0, Math.min(dots.length - 1, (open ?? -1) + (e.key === "ArrowRight" ? 1 : -1)));   // dots are in date order: next card, on screen or not
+  if (win){   // off the window? slide it, same width, until the card sits just inside the edge
+    const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const w = W1 - W0, pad = Math.max(864e5, w / 20);
+    if (t < W0) W0 = t - pad; else if (t >= W1) W0 = t + pad - w;
+    W0 = Math.max(a0, Math.min(a1 - w, snap(W0))); W1 = W0 + w;
+    if (W0 !== win[0]){ win = [W0, W1]; render(); }
+  }
+  show(i);
 });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
