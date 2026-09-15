@@ -417,11 +417,10 @@ document.addEventListener("keydown", e => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea") || e.target === scrub) return;
   if (!dots.length) return;
   const i = Math.max(0, Math.min(dots.length - 1, (open ?? -1) + (e.key === "ArrowRight" ? 1 : -1)));   // dots are in date order: next card, on screen or not
-  if (win){   // off the window? slide it, same width, until the card sits just inside the edge
-    const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const w = W1 - W0, pad = Math.max(864e5, w / 20);
-    if (t < W0) W0 = t - pad; else if (t >= W1) W0 = t + pad - w;
-    W0 = Math.max(a0, Math.min(a1 - w, snap(W0))); W1 = W0 + w;
-    if (W0 !== win[0]){ win = [W0, W1]; render(); }
+  if (win){   // off the window? the window grows that way to take the card in; the other edge stays put
+    const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const pad = Math.max(864e5, (W1 - W0) / 20);
+    if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
+    if (W0 !== win[0] || W1 !== win[1]){ win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render(); }
   }
   show(i);
 });
