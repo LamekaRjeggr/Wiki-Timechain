@@ -8,6 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
   script-src 'self' 'unsafe-inline';
+  worker-src 'self';
   style-src 'unsafe-inline';
   connect-src wss: ws://127.0.0.1:7777;
   base-uri 'none';
@@ -106,7 +107,6 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 </main>
 
 <script type="module">
-import { verifyEvent } from "./lib/verify.mjs";
 import { fold8828 } from "./lib/fold-8828.mjs";
 import { dotsOf } from "./lib/dots-derive.mjs";
 
@@ -127,19 +127,20 @@ let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
-// ── the gate: every event is id-hashed and signature-checked before it counts ──
-const vQ = []; let vBusy = false;
-function admit(ev, fn){ if (ev && /^[0-9a-f]{64}$/.test(String(ev.id)) && !vBad.has(ev.id)){ vQ.push([ev, fn]); if (!vBusy) drain(); } }
-async function drain(){
-  vBusy = true;
-  while (vQ.length){
-    const [ev, fn] = vQ.shift();
-    if (vBad.has(ev.id)) continue;
-    const ok = vOK.has(ev.id) || await verifyEvent(ev);
-    if (ok){ vOK.add(ev.id); fn(ev); } else { vBad.add(ev.id); console.warn("dots: dropped", ev.id); }
-    await new Promise(r => setTimeout(r, 0));
-  }
-  vBusy = false;
+// ── the gate: every event is id-hashed and signature-checked before it counts — in a pool of workers, so the page never waits on the math ──
+const pend = new Map();   // id → { ev, fns } out for verify; a copy from another relay joins the wait instead of being checked again
+const pool = Array.from({ length: Math.min(8, navigator.hardwareConcurrency || 2) }, () => {
+  const w = new Worker("./lib/verify-worker.mjs", { type:"module" }); w.onmessage = ({ data:[id, ok] }) => settle(id, ok); return w; });
+let rr = 0;
+function admit(ev, fn){
+  if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id)) || vBad.has(ev.id)) return;
+  if (vOK.has(ev.id)) return fn(ev);
+  const p = pend.get(ev.id); if (p) return p.fns.push(fn);
+  pend.set(ev.id, { ev, fns:[fn] }); pool[rr++ % pool.length].postMessage([ev.id, ev]);
+}
+function settle(id, ok){
+  const { ev, fns } = pend.get(id); pend.delete(id);
+  if (ok){ vOK.add(id); fns.forEach(fn => fn(ev)); } else { vBad.add(id); console.warn("dots: dropped", id); }
 }
 
 // ── ingest ──
