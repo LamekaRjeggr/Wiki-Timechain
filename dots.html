@@ -24,9 +24,10 @@
   --t0:#e6e9ef; --t1:#9aa3b2; --t2:#7b8596;
   --sub:#6ea8fe;   /* submitted — the author's signature */
   --acc:#e0b04a;   /* accepted — the notary's signature */
+  --sep:#dcc3a3;   /* summary — warm sepia, apart from the white title and grey content */
   --mono:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
 }
-:root[data-theme="light"]{--bg:#f4f3ef;--panel:#ffffff;--line:#d5d2c8;--t0:#1a1c20;--t1:#4c5260;--t2:#6b707c;--sub:#2a63c9;--acc:#9a6a0c}
+:root[data-theme="light"]{--bg:#f4f3ef;--panel:#ffffff;--line:#d5d2c8;--t0:#1a1c20;--t1:#4c5260;--t2:#6b707c;--sub:#2a63c9;--acc:#9a6a0c;--sep:#7a5a38}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.5 var(--mono);min-height:100vh;
@@ -73,7 +74,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
-#card .sum{color:var(--t0);margin:0 0 12px}   /* summary = the plain fact, full size and bright */
+#card .sum{color:var(--sep);margin:0 0 12px}   /* summary = the plain fact, full size, sepia */
 #card p{margin:0 0 10px;color:var(--t1);font-size:13px}   /* content = the detail, a step smaller and dimmer */
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
 #card .vers button{border:1px dashed var(--line);padding:1px 8px;font-size:12px;color:var(--t1)}
