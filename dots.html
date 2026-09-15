@@ -42,7 +42,7 @@ header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:v
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
-#top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* band, scrub and ledger stay while the column scrolls under them */
+#top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* header, band, scrub and ledger stay while the column scrolls under them */
 #band{position:relative;height:146px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -98,13 +98,12 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 </head>
 <body>
 
-<header>
-  <span class="ntry" id="ntry"></span>
-  <span class="st" id="st">connecting…</span>
-</header>
-
 <main>
   <div id="top">
+    <header>
+      <span class="ntry" id="ntry"></span>
+      <span class="st" id="st">connecting…</span>
+    </header>
     <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
     <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
     <div id="ledger">&nbsp;</div>
