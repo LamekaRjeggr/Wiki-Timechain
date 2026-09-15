@@ -41,7 +41,8 @@ header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wr
 header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
-main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:100%;margin:0 auto}
+main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
+#top{position:sticky;top:0;z-index:2;background:var(--bg)}   /* band, scrub and ledger stay while the column scrolls under them */
 #band{position:relative;height:146px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -64,9 +65,11 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 #ledger b{color:var(--t0);font-weight:400}
 #ledger .a{color:var(--acc)} #ledger .s{color:var(--sub)} #ledger .t2{color:var(--t2)}
 
-#card{max-width:68ch;align-self:start;margin:14px 0 24px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sub)}
-#card.acc{border-left-color:var(--acc)}
+#card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
+#card::after{content:"";height:60vh}   /* room for the last card to reach the top */
 #card:empty{display:none}
+.c{padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sub)}
+.c.acc{border-left-color:var(--acc)} .c.on{box-shadow:0 0 0 1px var(--t1)}
 #card h2{margin:0 0 2px;font-size:15px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
@@ -101,10 +104,12 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 </header>
 
 <main>
-  <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
-  <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
-  <div id="ledger">&nbsp;</div>
-  <section id="card" aria-live="polite"></section>
+  <div id="top">
+    <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
+    <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
+    <div id="ledger">&nbsp;</div>
+  </div>
+  <section id="card" aria-label="the cards, in date order"></section>
 </main>
 
 <script type="module">
@@ -124,7 +129,7 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
-let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null;
+let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -219,7 +224,7 @@ function dotsFor(d, projections, all){
 }
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d;
 function choose(c){   // c = a subject d → that timeline; null → the timeline of timelines
-  coord = c; open = null; want = null; win = c ? spanOf(Q.get("y")) : null; card.innerHTML = "";
+  coord = c; open = null; want = null; win = c ? spanOf(Q.get("y")) : null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
   const q = new URLSearchParams(); if (c) q.set("c", c);
   for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q); schedule();
@@ -318,7 +323,7 @@ function render(){
       // the deep dot is a door: its click spreads the cluster (window = its days); on one day there is nothing to spread, so it opens
       const lo = ids.reduce((m, o) => o.date < m ? o.date : m, ids[0].date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, ids[0].date), deep = x !== ids[0] && hi > lo;
       e.setAttribute("aria-label", x === ids[0] ? x.date + " " + x.title : `${ids.length - 1} more here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
-      e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => show(x.i);
+      e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
       e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${ids.length} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
       e.onmouseleave = () => line(open);
       band.appendChild(e);
@@ -341,7 +346,7 @@ function render(){
   for (const [cls, t, at, f] of [["ed l", W0, L, fl], ["ed r", W1 - 864e5, R, fr]]){ const e = document.createElement("div"); e.className = cls + (f ? " in" : ""); e.style.left = at; e.textContent = ISO(t); scrub.appendChild(e); }
   scrub.dataset.a0 = A0; scrub.dataset.a1 = A1;
 
-  if (open !== null && dots[open]) show(open); else line(null);
+  column(); if (open !== null && dots[open]) show(open, false); else line(null);
 }
 
 function line(i){
@@ -353,28 +358,40 @@ function line(i){
   ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${x.n} cards${same > 0 ? ` · ${same} more here` : ""}`
     : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}`;
 }
-function show(i){
-  const x = dots[i], c = x.card || x, accs = accsOf(c.id);
-  const vers = dots.filter(o => o.d === x.d || (x.g !== null && o.g === x.g));   // versions of this card, and whatever else shares its spot
-  open = i; x.tl ? line(null) : line(i);   // a timeline's block says it all; the ledger only previews on hover
-  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
-  const day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  card.className = x.kind === "acc" ? "acc" : "";
-  card.innerHTML = `${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
+function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
+  const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
+  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
   <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
-  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.date) + " · " + esc(o.title || o.d) + " · "}${o.tl ? o.n + " cards" : esc(who(o.author)) + " · " + new Date(o.created_at * 1000).toISOString().slice(0, 10) + (accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : "")}</button>`).join("")}</div>` : ""}
-  <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
-  card.querySelectorAll(".vers button").forEach(b => b.onclick = () => show(+b.dataset.i));
-  if (x.tl) card.querySelector(".go").onclick = () => choose(x.tl);
+  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
+  <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
+function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
+  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|"); if (key === colKey) return; colKey = key;
+  card.innerHTML = dots.map(article).join("");
+  card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
+  card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
+}
+function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
+  const x = dots[i]; open = i; x.tl ? line(null) : line(i);   // a timeline's block says it all; the ledger only previews on hover
+  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
+  const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
+  if (scroll && art) scrollBy(0, art.getBoundingClientRect().top - mapEl.getBoundingClientRect().bottom - 14);
+}
+function reveal(i){   // card i off a zoomed window? the window grows that way to take it in; the other edge stays put
+  if (!win || !dots[i]) return;
+  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const pad = Math.max(864e5, (W1 - W0) / 20);
+  if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
+  if (W0 !== win[0] || W1 !== win[1]){ win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render(); }
+}
+const go = i => { reveal(i); show(i); };
 
 // ── controls ──
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
-  ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub");
+  ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub"), mapEl = document.getElementById("top");
 // wheel over the band: zoom about the day under the pointer, never past the record's years or under a day
 band.addEventListener("wheel", e => {
   e.preventDefault();
@@ -415,15 +432,14 @@ scrub.onkeydown = e => {
 };
 document.addEventListener("keydown", e => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea") || e.target === scrub) return;
-  if (!dots.length) return;
-  const i = Math.max(0, Math.min(dots.length - 1, (open ?? -1) + (e.key === "ArrowRight" ? 1 : -1)));   // dots are in date order: next card, on screen or not
-  if (win){   // off the window? the window grows that way to take the card in; the other edge stays put
-    const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const pad = Math.max(864e5, (W1 - W0) / 20);
-    if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
-    if (W0 !== win[0] || W1 !== win[1]){ win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render(); }
-  }
-  show(i);
+  if (dots.length) go(Math.max(0, Math.min(dots.length - 1, (open ?? -1) + (e.key === "ArrowRight" ? 1 : -1))));   // dots are in date order: next card, on screen or not
 });
+// scrolling the column: the block under the map is the open one — its dot lights and the window grows to hold it
+addEventListener("scroll", () => {
+  const at = mapEl.getBoundingClientRect().bottom + 15; let hit = null;
+  for (const a of card.children) if (a.getBoundingClientRect().top <= at) hit = a; else break;
+  const i = hit ? +hit.dataset.i : 0; if (card.children.length && i !== open){ reveal(i); show(i, false); }
+}, { passive:true });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
 render();
