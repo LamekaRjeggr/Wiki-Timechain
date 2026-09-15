@@ -160,7 +160,7 @@ function ingestCard(ev){
 }
 function ingestAct(ev){
   if (acts.has(ev.id)) return;
-  const keep = () => { acts.set(ev.id, ev); if (!actE.has(ev.id)){ actE.add(ev.id); ask(); } schedule(); };
+  const keep = () => { acts.set(ev.id, ev); if (!actE.has(ev.id)){ actE.add(ev.id); clearTimeout(askT); askT = setTimeout(ask, 300); } schedule(); };
   let snap = null; try { snap = JSON.parse(tag(ev, "snapshot") || "null"); } catch {}
   // the act's signature cannot vouch for the card it carries — that snapshot walks the gate too
   snap && snap.id ? admit(snap, s => { askProfile(s.pubkey); keep(); }) : keep();
@@ -181,16 +181,17 @@ function askProfile(pk){
 
 // ── relays ──
 const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)));
-function ask(){   // one sub over every timeline known so far; same sub id = the relay swaps the filter
+let asked = "";
+function ask(){   // one sub over every timeline known so far; same sub id = the relay swaps the filter AND replays it, so re-send only what grew
   const cs = [...notaries.keys()]; if (!cs.length) return;
-  send(["REQ", "wtc", { kinds:[KIND], "#a":cs }]);
+  if (asked !== cs.join()){ asked = cs.join(); send(["REQ", "wtc", { kinds:[KIND], "#a":cs }]); }
   send(["REQ", "act", { kinds:[ACT_KIND], "#a":cs }, ...(actE.size ? [{ kinds:[ACT_KIND], "#e":[...actE] }] : [])]);
 }
 let up = 0;
 function connect(url){
   let ws; try { ws = new WebSocket(url); } catch { return; }
   sockets.push(ws);
-  ws.onopen = () => { up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); ask(); };
+  ws.onopen = () => { up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = ""; ask(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
     if (d[0] !== "EVENT") return;
