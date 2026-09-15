@@ -69,7 +69,7 @@ main{display:grid;grid-template-rows:auto auto auto 1fr;max-width:1100px;width:1
 #card:empty{display:none}
 #card h2{margin:0 0 2px;font-size:15px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
-#card .a{color:var(--acc)}
+#card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
 #card .sum{color:var(--t1);border-left:2px solid var(--line);padding-left:10px;margin:0 0 10px}
 #card p{margin:0 0 10px;color:var(--t1)}
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
@@ -237,7 +237,7 @@ const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.filter(o => o.id === id && o.kind === "acc");   // one gold dot per notary that accepted this exact card
-const ticks = n => "✓".repeat(n);   // ✓ = one accept, by one notary
+const mark = n => n ? `<span class="a">✓ ${n}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
   if (z && /^\d{4}-\d{2}$/.test(z)){ const [y, m] = z.split("-").map(Number); return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)]; }
@@ -256,7 +256,7 @@ function render(){
   if (coord){
     dots = dotsFor(coord, fold.projections, all);
     const ns = notariesOf(coord), nAcc = new Set(dots.filter(x => x.kind === "acc").map(x => x.id)).size;   // cards accepted, not accepts
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} cards · <span class="a">✓</span> ${nAcc} accepted · ${ns.length > 1 ? ns.length + " notaries" : "notary"} <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} cards · ${mark(nAcc) || "none accepted"} · ${ns.length > 1 ? ns.length + " notaries" : "notary"} <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
     document.getElementById("back").onclick = () => choose(null);
   } else {
     // the timeline of timelines: each subject is one dot at its earliest card, coloured as that card, reaching to its last
@@ -345,7 +345,7 @@ function line(i){
   const x = dots[i], uniq = l => new Set(l.map(o => o.id)).size;   // cards, not dots — one card accepted twice is still one card
   const vers = uniq(dots.filter(o => o.d === x.d)), same = x.g === null ? 0 : uniq(dots.filter(o => o.g === x.g)) - 1;
   ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${x.n} cards${same > 0 ? ` · ${same} more here` : ""}`
-    : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${accsOf(x.id).length ? ticks(accsOf(x.id).length) + " accepted" : "submitted"}</span> · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}`;
+    : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}`;
 }
 function show(i){
   const x = dots[i], c = x.card || x, accs = accsOf(c.id);
@@ -355,12 +355,12 @@ function show(i){
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   card.className = x.kind === "acc" ? "acc" : "";
-  card.innerHTML = `${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · <span class="a">✓</span> ${x.nAcc} accepted · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
+  card.innerHTML = `${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? `<span class="a">${ticks(accs.length)}</span> accepted by <b>${esc(accs.map(o => who(o.by.split(":")[1])).join(", "))}</b>` : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
-  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.id === c.id ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.date) + " · " + esc(o.title || o.d) + " · "}${o.tl ? o.n + " cards" : esc(who(o.author)) + " · " + new Date(o.created_at * 1000).toISOString().slice(0, 10) + (accsOf(o.id).length ? ` <span class="a">${ticks(accsOf(o.id).length)}</span>` : "")}</button>`).join("")}</div>` : ""}
+  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.id === c.id ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.date) + " · " + esc(o.title || o.d) + " · "}${o.tl ? o.n + " cards" : esc(who(o.author)) + " · " + new Date(o.created_at * 1000).toISOString().slice(0, 10) + (accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : "")}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => show(+b.dataset.i));
   if (x.tl) card.querySelector(".go").onclick = () => choose(x.tl);
