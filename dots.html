@@ -278,26 +278,32 @@ function render(){
   // zooming in grows the dots: 11px at the whole record, up to 22px at a month
   const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span))));
   band.style.setProperty("--dot", DOT + "px");
-  // one dot per day, accepted first; a second dot one deep only when the day holds more — open it to see what rivals
-  const AX = 78, STEP = DOT + 13, byDay = new Map();
-  dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; (byDay.get(x.date) || byDay.set(x.date, []).get(x.date)).push(x); });
+  // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
+  // a second dot one deep says +N for the rest — open it to see what shares the spot (a day's rivals, or a dense year)
+  const AX = 78, STEP = DOT + 13, PX = band.clientWidth / 100, groups = [];
+  dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; x.g = null; });
+  for (const x of [...dots].sort((a, b) => a.x - b.x)){
+    if (x.x < 0 || x.x > 100) continue;
+    const g = groups[groups.length - 1];
+    if (g && (x.x - g[0].x) * PX <= DOT + 2) g.push(x); else groups.push([x]);
+  }
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AX + "px";
     e.style.left = Math.max(0, x.x) + "%"; e.style.width = Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x) + "%"; band.insertBefore(e, band.firstChild); }
-  for (const [, ids] of byDay){
-    const t = T(ids[0].date); if (t < W0 || t > W1) continue;
+  groups.forEach((ids, gi) => {
+    const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
     for (const x of ids.slice(0, 2)){
-      x.y = x === ids[0] ? AX : AX - STEP;
+      x.y = x === ids[0] ? AX : AX - STEP; x.g = gi;
       const e = document.createElement("button");
       e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (x.date > NOW ? " future" : "") + (x.i === open ? " on" : "");
-      e.dataset.i = x.i; e.style.left = x.x + "%"; e.style.top = x.y + "px"; if (x !== ids[0]) e.dataset.n = ids.length - 1;
-      e.setAttribute("aria-label", x.date + " " + (x === ids[0] ? x.title : `${ids.length - 1} more this day`));
+      e.dataset.i = x.i; e.style.left = cx + "%"; e.style.top = x.y + "px"; if (x !== ids[0]) e.dataset.n = ids.length - 1;
+      e.setAttribute("aria-label", x.date + " " + (x === ids[0] ? x.title : `${ids.length - 1} more here`));
       e.onclick = () => show(x.i); e.onmouseenter = () => line(x.i); e.onmouseleave = () => line(open);
       band.appendChild(e);
     }
-    const ys = ids.map(x => x.y).filter(Number.isFinite);
-    if (ys.length > 1){ const e = document.createElement("div"); e.className = "tie"; e.style.left = ids[0].x + "%"; e.style.top = Math.min(...ys) + "px"; e.style.height = Math.max(...ys) - Math.min(...ys) + "px"; band.insertBefore(e, band.firstChild); }
-  }
+    ids.forEach(x => x.g = gi);
+    if (ids.length > 1){ const e = document.createElement("div"); e.className = "tie"; e.style.left = cx + "%"; e.style.top = AX - STEP + "px"; e.style.height = STEP + "px"; band.insertBefore(e, band.firstChild); }
+  });
 
   // scrub: whole years, first to last the record touches — fixed, so the bar never rescales under the pointer
   scrub.innerHTML = "";
@@ -321,13 +327,13 @@ function line(i){
     const n = dots.filter(x => Number.isFinite(x.y)).length;   // nothing open: say what the window holds, so an empty scrub stop is not a dead screen
     const [a, b] = windowOf(), lbl = new Date(a).toISOString().slice(0, 10) + " → " + new Date(b - 864e5).toISOString().slice(0, 10);
     ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
-  const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = (dots.filter(o => o.date === x.date).length) - 1;
-  ledger.innerHTML = `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${x.kind === "acc" ? "accepted" : "submitted"}</span> · ${esc(who(x.author))}${x.tl ? ` · ${x.n} cards` : vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more this day` : ""}`;
+  const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = x.g === null ? 0 : dots.filter(o => o.g === x.g).length - 1;
+  ledger.innerHTML = `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · <span class="${x.kind === "acc" ? "a" : "s"}">${x.kind === "acc" ? "accepted" : "submitted"}</span> · ${esc(who(x.author))}${x.tl ? ` · ${x.n} cards` : vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}`;
 }
 function show(i){
   open = i; line(i);
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
-  const x = dots[i], c = x.card || x, ctx = x.tl || coord, vers = dots.filter(o => o.d === x.d || o.date === x.date);   // versions of this card, and whatever else claims the day
+  const x = dots[i], c = x.card || x, ctx = x.tl || coord, vers = dots.filter(o => o.d === x.d || (x.g !== null && o.g === x.g));   // versions of this card, and whatever else shares its spot
   const day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   card.className = x.kind === "acc" ? "acc" : "";
   card.innerHTML = `${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">notary <b>${esc(who(x.author))}</b> · ${x.n} cards · ${x.nAcc} accepted · <b>${esc(x.date)}</b> → <b>${esc(x.last)}</b></div><button class="go">open timeline ▸</button></div>` : ""}
@@ -335,7 +341,7 @@ function show(i){
   <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${c.kind === "acc" ? `accepted by <b>${esc(who(ctx.split(":")[1]))}</b>` : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
-  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.title || o.d) + " · "}${esc(who(o.author))} · ${o.tl ? o.n + " cards" : o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
+  ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${o.d === x.d ? "" : esc(o.date) + " · " + esc(o.title || o.d) + " · "}${esc(who(o.author))} · ${o.tl ? o.n + " cards" : o.kind === "acc" ? "accepted" : new Date(o.created_at * 1000).toISOString().slice(0, 10)}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div>`;
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => show(+b.dataset.i));
   if (x.tl) card.querySelector(".go").onclick = () => choose(x.tl);
