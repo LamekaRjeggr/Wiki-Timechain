@@ -42,7 +42,7 @@ header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:v
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
-#top{position:sticky;top:0;z-index:2;background:var(--bg)}   /* band, scrub and ledger stay while the column scrolls under them */
+#top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* band, scrub and ledger stay while the column scrolls under them */
 #band{position:relative;height:146px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -346,7 +346,7 @@ function render(){
   for (const [cls, t, at, f] of [["ed l", W0, L, fl], ["ed r", W1 - 864e5, R, fr]]){ const e = document.createElement("div"); e.className = cls + (f ? " in" : ""); e.style.left = at; e.textContent = ISO(t); scrub.appendChild(e); }
   scrub.dataset.a0 = A0; scrub.dataset.a1 = A1;
 
-  column(); if (open !== null && dots[open]) show(open, false); else line(null);
+  column(); if (dots.length) show(open !== null && dots[open] ? open : 0, false); else line(null);   // something is always open: the first card until the reader moves
 }
 
 function line(i){
@@ -378,7 +378,7 @@ function show(i, scroll = true){   // open = card i: its dot and block light up;
   const x = dots[i]; open = i; x.tl ? line(null) : line(i);   // a timeline's block says it all; the ledger only previews on hover
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
-  if (scroll && art) scrollBy(0, art.getBoundingClientRect().top - mapEl.getBoundingClientRect().bottom - 14);
+  if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
 }
 function reveal(i){   // card i off a zoomed window? the window grows that way to take it in; the other edge stays put
   if (!win || !dots[i]) return;
