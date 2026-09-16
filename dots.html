@@ -420,14 +420,14 @@ const go = i => { reveal(i); show(i); };
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub"), mapEl = document.getElementById("top");
-// wheel over the band: zoom about the day under the pointer, never past the record's years or under a day
+// wheel over the band: zoom about the day under the pointer, never past the record's years or under a day; at the ends it stays put
 band.addEventListener("wheel", e => {
   e.preventDefault();
   const [W0, W1] = windowOf(), a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, k = e.deltaY > 0 ? 1.25 : 0.8;
   const t = W0 + (e.clientX - band.getBoundingClientRect().left) / band.clientWidth * (W1 - W0);
   let n0 = Math.max(a0, t - (t - W0) * k), n1 = Math.min(a1, t + (W1 - t) * k);
-  if (n1 - n0 < 864e5) return;
-  win = n0 <= a0 && n1 >= a1 ? null : [n0, n1]; render();
+  if (n1 - n0 < 864e5 || (n0 === W0 && n1 === W1)) return;
+  win = [n0, n1]; render();   // out to the ends = the whole record, held as a window; null (the mass) is the first-load rest only
 }, { passive:false });
 // scrub, like histography: drag an edge = resize, drag the box = move, press elsewhere = the box jumps there keeping its width; never narrower than a day
 let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a move
