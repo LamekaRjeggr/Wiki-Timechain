@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Reader only: no key, no write, nothing leaves but relay subscriptions. ws: is here for
-     the lab relay (?relay=ws://127.0.0.1:7777); every http(s) channel stays barred. -->
+<!-- No key lives here. The one write is the accept (kind 8828, plus the 30829 that names your
+     timeline), signed by a NIP-07 extension. ws: is here for the lab relay
+     (?relay=ws://127.0.0.1:7777); every http(s) channel stays barred. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
   script-src 'self' 'unsafe-inline';
@@ -72,6 +73,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
+#card .abtn{border:1px dashed var(--acc);color:var(--acc);padding:0 6px} #card .abtn:disabled{opacity:.5;cursor:default}   /* the same pill, dashed = not yet: press it and it fills */
 #card .sum{color:var(--sep);margin:0 0 12px}   /* summary = the plain fact, full size, sepia */
 #card p{margin:0 0 10px;color:var(--t1);font-size:13px}   /* content = the detail, a step smaller and dimmer */
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
@@ -248,6 +250,22 @@ const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
+const canSign = () => typeof window.nostr?.signEvent === "function";   // NIP-07 only: the extension holds the key, this page never does
+const myCoord = () => myPk && coord ? NOTARY_KIND + ":" + myPk + ":" + coord : "";   // my timeline for the open subject, minted on the first accept
+async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
+  const x = dots[i], ev = [...cards.values()].find(e => e.id === x.id); if (!ev) return;
+  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {}
+  const now = Math.floor(Date.now() / 1000), sign = t => window.nostr.signEvent(t);
+  if (!notaries.get(myCoord())){
+    const mine = await sign({ kind:NOTARY_KIND, created_at:now, content:"", tags:[["d", coord], ["title", titleOf(coord)], ["t", MARKER], ["a", notariesOf(coord)[0][0]]] });
+    admit(mine, ingestNotary); send(["EVENT", mine]);
+  }
+  const prior = Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === ev.id)).map(a => a.created_at));
+  const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, prior + 1), content:"",
+    tags:[["a", myCoord(), "", "context"], ["e", ev.id, "", "source"], ["snapshot", JSON.stringify(ev)], ["select", "card"], ["p", ev.pubkey, "", "credit"]] });
+  admit(act, ingestAct); send(["EVENT", act]);
+}
+const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? '<span class="a">✓ by you</span>' : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
@@ -384,14 +402,14 @@ function article(x){   // one card's block in the column; a timeline's block lea
   if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2></article>`;   // the menu: a title and its count, nothing more
   return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|"); if (key === colKey) return; colKey = key;
+  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|") + canSign(); if (key === colKey) return; colKey = key;
   card.classList.toggle("menu", !coord);
   card.innerHTML = dots.map((x, i) => {
     if (x.tl) return article(x);   // the menu: titles only, no day lines
@@ -404,6 +422,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   }).join("");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
+  card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; accept(+b.dataset.i).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
