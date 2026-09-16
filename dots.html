@@ -44,7 +44,7 @@ header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* header, band, scrub and ledger stay while the column scrolls under them */
-#band{position:relative;height:146px;user-select:none;overflow:hidden}   /* an edge dot is half cut by the band: more, that way */
+#band{position:relative;height:146px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
@@ -55,6 +55,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub)} .dot.many.acc{background:var(--acc)}
 .dot.future{background:transparent}
+.dot.edge{width:24px;height:24px;opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg)}   /* cards beyond this end: an empty ring with their count */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
@@ -335,12 +336,12 @@ function render(){
     e.onmouseleave = () => line(open);
     band.appendChild(e);
   });
-  // cards beyond an edge: a half dot on the line at that end, sized like any other; click grows the window to take them in
+  // cards beyond an edge: an empty ring at that end with their count; click grows the window to take them in
   for (const [side, off] of [["l", dots.filter(x => x.x < 0)], ["r", dots.filter(x => x.x > 100)]]){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
-    const e = document.createElement("button"); e.className = "dot " + (off.some(o => o.kind === "acc") ? "acc" : "sub") + (n > 1 ? " many" : "");
-    e.style.left = side === "l" ? "0" : "100%"; e.style.top = AX + "px"; e.style.width = e.style.height = SZ(n) + "px";
+    const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
+    e.style.left = side === "l" ? "12px" : "calc(100% - 12px)"; e.style.top = AX + "px";
     e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
     e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
     band.appendChild(e);
