@@ -44,7 +44,7 @@ header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* header, band, scrub and ledger stay while the column scrolls under them */
-#band{position:relative;height:146px;user-select:none}
+#band{position:relative;height:146px;user-select:none;overflow:hidden}   /* an edge dot is half cut by the band: more, that way */
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
@@ -335,6 +335,16 @@ function render(){
     e.onmouseleave = () => line(open);
     band.appendChild(e);
   });
+  // cards beyond an edge: a half dot on the line at that end, sized like any other; click grows the window to take them in
+  for (const [side, off] of [["l", dots.filter(x => x.x < 0)], ["r", dots.filter(x => x.x > 100)]]){
+    if (!off.length) continue;
+    const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
+    const e = document.createElement("button"); e.className = "dot " + (off.some(o => o.kind === "acc") ? "acc" : "sub") + (n > 1 ? " many" : "");
+    e.style.left = side === "l" ? "0" : "100%"; e.style.top = AX + "px"; e.style.width = e.style.height = SZ(n) + "px";
+    e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
+    e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
+    band.appendChild(e);
+  }
 
   // scrub: whole years, first to last the record touches — fixed, so the bar never rescales under the pointer
   scrub.innerHTML = "";
