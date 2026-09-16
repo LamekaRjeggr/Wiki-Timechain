@@ -55,7 +55,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub)} .dot.many.acc{background:var(--acc)}
 .dot.future{background:transparent}
-.dot.edge{width:24px;height:24px;opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg)}   /* cards beyond this end: an empty ring with their count */
+.dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg)}   /* cards beyond this end: an empty ring with their count, grown by it like any dot */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
@@ -341,7 +341,7 @@ function render(){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
-    e.style.left = side === "l" ? "12px" : "calc(100% - 12px)"; e.style.top = AX + "px";
+    e.style.left = side === "l" ? "12px" : "calc(100% - 12px)"; e.style.top = AX + "px"; e.style.width = e.style.height = Math.max(24, SZ(n)) + "px";
     e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
     e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
     band.appendChild(e);
