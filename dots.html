@@ -43,7 +43,7 @@ header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:v
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
-#top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px}   /* header, band, scrub and ledger stay while the column scrolls under them */
+#top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
 #band{position:relative;height:146px;user-select:none}
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -434,7 +434,7 @@ let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a
 const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
 const snap = t => Math.round(t / 864e5) * 864e5;
 scrub.onpointerdown = ev => {
-  scrub.setPointerCapture(ev.pointerId);
+  ev.preventDefault(); scrub.setPointerCapture(ev.pointerId);   // no focus from the pointer: arrows keep stepping cards after a drag; Tab still reaches the bar
   const [W0, W1] = windowOf(), t = atX(ev), h = ev.target.closest(".h");
   grab = h ? { mode: h.classList.contains("l") ? "l" : "r" } : ev.target.closest(".win") ? { mode: "m", off: t - W0 } : { mode: "m", off: (W1 - W0) / 2 };
   drag(ev);
@@ -464,7 +464,7 @@ document.addEventListener("keydown", e => {
 });
 // scrolling the column: the block under the map is the open one — its dot lights and the window grows to hold it
 addEventListener("scroll", () => {
-  const at = mapEl.getBoundingClientRect().bottom + 15; let hit = null;
+  const at = mapEl.getBoundingClientRect().bottom + 30; let hit = null;   // show() parks a block 14px under the map; Safari lands a fraction off, so the threshold sits well past that or the spy snaps `open` straight back
   for (const a of card.querySelectorAll("article")) if (a.getBoundingClientRect().top <= at) hit = a; else break;
   const i = hit ? +hit.dataset.i : 0; if (card.children.length && i !== open){ reveal(i); show(i, false); }
 }, { passive:true });
