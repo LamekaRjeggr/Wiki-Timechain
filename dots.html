@@ -80,7 +80,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
-#card.menu{gap:4px} #card.menu .c{padding:8px 12px} #card.menu h2{margin:0} #card.menu .go{color:var(--t0);text-align:left}   /* the timeline menu: one title per row, the title is the door */
+#card.menu{gap:4px} #card.menu .c{padding:8px 12px} #card.menu h2{margin:0} #card.menu h2{display:flex;gap:12px;align-items:baseline} #card.menu .go{color:var(--t0);text-align:left} #card.menu .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap}   /* the timeline menu: one title per row, the title is the door */
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
@@ -381,7 +381,7 @@ function line(i){
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button></h2></article>`;   // the menu: a timeline is its title, nothing more; the ledger says the rest on hover
+  if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2></article>`;   // the menu: a title and its count, nothing more
   return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
   <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
