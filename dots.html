@@ -250,12 +250,27 @@ const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
-const canSign = () => typeof window.nostr?.signEvent === "function";   // NIP-07 only: the extension holds the key, this page never does
+let bunker = null;   // resumed add.html session (wtc:signin, via bunker); wins over the extension when both exist
+const canSign = () => !!bunker || typeof window.nostr?.signEvent === "function";   // this page never holds a key
+const signer = async () => bunker || { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
+(async function bunkerResume(){   // RESUME ONLY, no login here — mirrors index.html; CSP already lets wss: through for the bunker's own relays
+  let s = null; try { s = JSON.parse(localStorage.getItem("wtc:signin") || "null"); } catch {}
+  if (s?.via !== "bunker" || !s.uri || !s.ck) return;
+  try {
+    const { BunkerSigner, parseBunkerInput } = await import("./nip46.js");   // dynamic: a broken vendor file must not take the reader down
+    const pointer = await parseBunkerInput(s.uri); if (!pointer) return;
+    const b = BunkerSigner.fromBunker(Uint8Array.from(s.ck.match(/../g), x => parseInt(x, 16)), pointer);
+    await b.connect();
+    bunker = { pubkey: await b.getPublicKey(), sign: t => b.signEvent(t) };
+    myPk = bunker.pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
+    colKey = null; schedule();   // the column keys on canSign(); a late signer must redraw the buttons
+  } catch {}   // phone off / revoked = signed out, not an error
+})();
 const myCoord = () => myPk && coord ? NOTARY_KIND + ":" + myPk + ":" + coord : "";   // my timeline for the open subject, minted on the first accept
 async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
   const x = dots[i], ev = [...cards.values()].find(e => e.id === x.id); if (!ev) return;
-  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {}
-  const now = Math.floor(Date.now() / 1000), sign = t => window.nostr.signEvent(t);
+  const { pubkey, sign } = await signer(); myPk = pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
+  const now = Math.floor(Date.now() / 1000);
   if (!notaries.get(myCoord())){
     const mine = await sign({ kind:NOTARY_KIND, created_at:now, content:"", tags:[["d", coord], ["title", titleOf(coord)], ["t", MARKER], ["a", notariesOf(coord)[0][0]]] });
     admit(mine, ingestNotary); send(["EVENT", mine]);
