@@ -50,15 +50,12 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
 .tick{position:absolute;top:118px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
 .tick::before{content:"";position:absolute;top:-40px;left:50%;height:3px;width:1px;background:var(--t2)}
-.dot{position:absolute;width:var(--dot,11px);height:var(--dot,11px);border-radius:50%;transform:translate(-50%,-50%);
-  border:1.5px solid var(--sub);background:transparent}
+.dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%);border:1.5px solid var(--sub);background:transparent;opacity:.6}   /* one card: a hollow, quiet mark; the size says how many cards sit under it */
 .dot::before{content:"";position:absolute;inset:-10px}   /* the finger gets 31px, the eye keeps the dot */
-.dot[data-n]::after{content:"+" attr(data-n);position:absolute;left:50%;bottom:100%;transform:translate(-50%,-4px);font-size:11px;color:var(--t1)}   /* above, so dense neighbours never cover it */
-.dot.sub{background:var(--sub)}
-.dot.acc{border-color:var(--acc);background:var(--acc)}
+.dot.acc{border-color:var(--acc)}
+.dot.many{opacity:1;background:var(--sub)} .dot.many.acc{background:var(--acc)}
 .dot.future{background:transparent}
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
-.tie{position:absolute;width:1px;background:var(--line);transform:translateX(-50%)}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 
@@ -296,7 +293,7 @@ function render(){
 
   // the band
   const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
-  band.querySelectorAll(".dot,.tick,.tie,.tail,#now").forEach(e => e.remove());
+  band.querySelectorAll(".dot,.tick,.tail,#now").forEach(e => e.remove());
   const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
     const per = band.clientWidth / (span / (864e5 * 365.25)), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
@@ -308,13 +305,12 @@ function render(){
     const e = document.createElement("div"); e.className = "tick"; e.style.left = f * 100 + "%"; e.textContent = label; band.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = frac(nowT, W0, W1) * 100 + "%"; e.innerHTML = "<i>now</i>"; band.appendChild(e); }
 
-  // zooming in grows the dots: 11px at the whole record, up to 22px at a month
-  const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span))));
-  band.style.setProperty("--dot", DOT + "px");
+  // zooming in grows the dots: 11px at the whole record, up to 22px at a month; a dot's size then says how many cards it holds (log, so 40 is not 40x)
+  const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
   // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
-  // a second dot one deep says +N for the rest — open it to see what shares the spot (a day's rivals, or a dense year)
-  const AX = 78, STEP = DOT + 13, PX = band.clientWidth / 100, groups = [];
-  dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.y = null; x.g = null; });
+  // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
+  const AX = 78, PX = band.clientWidth / 100, groups = [];
+  dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.g = null; });
   for (const x of [...dots].sort((a, b) => a.x - b.x)){
     if (x.x < 0 || x.x > 100) continue;
     const g = groups[groups.length - 1];
@@ -323,23 +319,18 @@ function render(){
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AX + "px";
     e.style.left = Math.max(0, x.x) + "%"; e.style.width = Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x) + "%"; band.insertBefore(e, band.firstChild); }
   groups.forEach((ids, gi) => {
-    const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length;
+    const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length, n = ids.length;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
-    for (const x of ids.slice(0, 2)){
-      x.y = x === ids[0] ? AX : AX - STEP; x.g = gi;
-      const e = document.createElement("button");
-      e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (x.date > NOW ? " future" : "") + (x.i === open ? " on" : "");
-      e.dataset.i = x.i; e.style.left = cx + "%"; e.style.top = x.y + "px"; if (x !== ids[0]) e.dataset.n = ids.length - 1;
-      // the deep dot is a door: its click spreads the cluster (window = its days); on one day there is nothing to spread, so it opens
-      const lo = ids.reduce((m, o) => o.date < m ? o.date : m, ids[0].date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, ids[0].date), deep = x !== ids[0] && hi > lo;
-      e.setAttribute("aria-label", x === ids[0] ? x.date + " " + x.title : `${ids.length - 1} more here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
-      e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
-      e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${ids.length} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
-      e.onmouseleave = () => line(open);
-      band.appendChild(e);
-    }
     ids.forEach(x => x.g = gi);
-    if (ids.length > 1){ const e = document.createElement("div"); e.className = "tie"; e.style.left = cx + "%"; e.style.top = AX - STEP + "px"; e.style.height = STEP + "px"; band.insertBefore(e, band.firstChild); }
+    const x = ids[0], e = document.createElement("button");
+    e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (n > 1 ? " many" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
+    e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "%"; e.style.top = AX + "px"; e.style.width = e.style.height = SZ(n) + "px";
+    const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
+    e.setAttribute("aria-label", n === 1 ? x.date + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
+    e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
+    e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${n} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
+    e.onmouseleave = () => line(open);
+    band.appendChild(e);
   });
 
   // scrub: whole years, first to last the record touches — fixed, so the bar never rescales under the pointer
@@ -391,7 +382,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; x.tl ? line(null) : line(i);   // a timeline's block says it all; the ledger only previews on hover
-  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
+  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
 }
