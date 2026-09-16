@@ -272,15 +272,24 @@ function render(){
     document.getElementById("back").onclick = () => choose(null);
   } else {
     // the timeline of timelines: each subject is one dot at its earliest card, coloured as that card, reaching to its last
-    dots = [];
+    dots = []; let emptyN = 0;
     const subjects = new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")));
+    const held = new Map();   // card set → the dot already showing it: timelines holding exactly the same cards fold into one dot
     for (const d of subjects){
-      const dl = dotsFor(d, fold.projections, all); if (!dl.length) continue;
-      dots.push({ ...dl[0], tl:d, card:dl[0], d, title:titleOf(d), created_at:dl[0].created_at, last:dl[dl.length - 1].date,
-        n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length, ns:notariesOf(d).map(([, n]) => who(n.pubkey)) });
+      const dl = dotsFor(d, fold.projections, all); if (!dl.length){ emptyN++; continue; }
+      const key = dl.map(x => x.id).sort().join(" "), ns = notariesOf(d).map(([, n]) => who(n.pubkey)), prev = held.get(key);
+      if (prev){   // same cards, another keeper: add the keeper, pool the accepts
+        prev.ns.push(...ns.filter(n => !prev.ns.includes(n))); prev.tls.push(d);
+        for (const x of dl) prev.all.get(x.id).accs.push(...x.accs.filter(c => !prev.all.get(x.id).accs.includes(c)));
+        prev.nAcc = [...prev.all.values()].filter(x => x.accs.length).length; if (prev.accs.length) prev.kind = "acc";
+        continue;
+      }
+      const dot = { ...dl[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), created_at:dl[0].created_at, last:dl[dl.length - 1].date,
+        n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length, ns, all:new Map(dl.map(x => [x.id, x])) };
+      held.set(key, dot); dots.push(dot);
     }
     dots.sort((a, b) => a.date.localeCompare(b.date) || a.created_at - b.created_at);
-    ntry.innerHTML = `<b>${dots.length}</b> timelines${subjects.size > dots.length ? ` · ${subjects.size - dots.length} empty` : ""}`;
+    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}`;
   }
   empty.hidden = dots.length > 0;
 
@@ -360,7 +369,7 @@ function line(i){
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
+  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.tls?.length > 1 ? "held by" : x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
   <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
