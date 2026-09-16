@@ -79,6 +79,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
 #card .vers button{border:1px dashed var(--line);padding:1px 8px;font-size:12px;color:var(--t1)}
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
+#card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
 #card .tl{margin:-14px -16px 14px;padding:12px 16px;border-bottom:1px solid var(--line)} #card .tl .meta{margin:0}
 #card .go{margin-top:8px;border:1px solid var(--t1);padding:2px 10px;color:var(--t0)}
@@ -114,7 +115,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { dotsOf } from "./lib/dots-derive.mjs";
+import { dotsOf, byDate } from "./lib/dots-derive.mjs";
 
 const Q = new URLSearchParams(location.search);
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
@@ -220,7 +221,7 @@ function dotsFor(d, projections, all){
     const cur = byId.get(x.id) || byId.set(x.id, { ...x, kind:"sub", accs:[] }).get(x.id);
     if (x.kind === "acc"){ cur.accs.push(c); Object.assign(cur, x, { kind:"acc", accs:cur.accs }); }   // an accepted projection carries the notary's selected fields
   }
-  return [...byId.values()].sort((a, b) => a.date.localeCompare(b.date) || a.created_at - b.created_at);
+  return [...byId.values()].sort(byDate);
 }
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d;
 function choose(c){   // c = a subject d → that timeline; null → the timeline of timelines
@@ -288,7 +289,7 @@ function render(){
         n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length, ns, all:new Map(dl.map(x => [x.id, x])) };
       held.set(key, dot); dots.push(dot);
     }
-    dots.sort((a, b) => a.date.localeCompare(b.date) || a.created_at - b.created_at);
+    dots.sort(byDate);
     ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}`;
   }
   empty.hidden = dots.length > 0;
@@ -379,7 +380,12 @@ function article(x){   // one card's block in the column; a timeline's block lea
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
   const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|"); if (key === colKey) return; colKey = key;
-  card.innerHTML = dots.map(article).join("");
+  card.innerHTML = dots.map((x, i) => {   // a day holding several cards gets a day line above its group: the neighbours are visible, nothing is claimed about them
+    if (x.date === dots[i - 1]?.date) return article(x);
+    const g = dots.filter(o => o.date === x.date); if (g.length < 2) return article(x);
+    const ts = g.map(o => (o.card || o).time).filter(Boolean);
+    return `<div class="day">${esc(x.date)} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x);
+  }).join("");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
 }
@@ -446,7 +452,7 @@ document.addEventListener("keydown", e => {
 // scrolling the column: the block under the map is the open one — its dot lights and the window grows to hold it
 addEventListener("scroll", () => {
   const at = mapEl.getBoundingClientRect().bottom + 15; let hit = null;
-  for (const a of card.children) if (a.getBoundingClientRect().top <= at) hit = a; else break;
+  for (const a of card.querySelectorAll("article")) if (a.getBoundingClientRect().top <= at) hit = a; else break;
   const i = hit ? +hit.dataset.i : 0; if (card.children.length && i !== open){ reveal(i); show(i, false); }
 }, { passive:true });
 

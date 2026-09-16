@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dotsOf } from "../lib/dots-derive.mjs";
+import { dotsOf, byDate, timeMin } from "../lib/dots-derive.mjs";
 
 const PK = "a".repeat(64), CTX = "30829:" + PK + ":tl";
 const card = (id, d, date, title, extra = {}) => ({ id, pubkey: extra.pk || PK, created_at: extra.at || 1, kind: 30828,
@@ -34,4 +34,11 @@ test("cards under another context or without a date are not dots", () => {
 test("sorted by event_date, then by created_at", () => {
   const a = card("5".repeat(64), "da", "2026-02-01", "B", { at: 9 }), b = card("6".repeat(64), "db", "2026-01-01", "A"), c = card("7".repeat(64), "dc", "2026-02-01", "C", { at: 3 });
   assert.deepEqual(dotsOf(CTX, [], [a, b, c]).map(x => x.title), ["A", "C", "B"]);
+});
+
+test("same-day cards sort by time through the offset; a timeless card leads", () => {
+  assert.equal(timeMin("06:40+05:00"), 100); assert.equal(timeMin("01:40"), 100); assert.equal(timeMin(""), -1);
+  const at = (time, created_at) => ({ date: "1959-02-17", time, created_at });
+  const got = [at("06:55+05:00", 1), at("06:40+05:00", 2), at("", 3), at("06:50+05:00", 4)].sort(byDate).map(x => x.time);
+  assert.deepEqual(got, ["", "06:40+05:00", "06:50+05:00", "06:55+05:00"]);
 });
