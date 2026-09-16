@@ -115,7 +115,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { dotsOf, byDate } from "./lib/dots-derive.mjs";
+import { dotsOf, byDate } from "./lib/dots-derive.mjs?v=2";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
