@@ -80,8 +80,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
-#card .tl{margin:-14px -16px 14px;padding:12px 16px;border-bottom:1px solid var(--line)} #card .tl .meta{margin:0}
-#card .go{margin-top:8px;border:1px solid var(--t1);padding:2px 10px;color:var(--t0)}
+#card.menu{gap:4px} #card.menu .c{padding:8px 12px} #card.menu h2{margin:0} #card.menu .go{color:var(--t0);text-align:left}   /* the timeline menu: one title per row, the title is the door */
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
@@ -382,7 +381,8 @@ function line(i){
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${x.tl ? `<div class="tl"><h2>${esc(x.title)}</h2><div class="meta">${x.n} cards · ${mark(x.nAcc) || "none accepted"} · <b>${esc(x.date)}</b>${x.last > x.date ? ` → <b>${esc(x.last)}</b>` : ""} · ${x.tls?.length > 1 ? "held by" : x.ns.length > 1 ? x.ns.length + " notaries" : "notary"} <b>${esc(x.ns.join(", "))}</b></div><button class="go">open timeline ▸</button></div>` : ""}
+  if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button></h2></article>`;   // the menu: a timeline is its title, nothing more; the ledger says the rest on hover
+  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
   <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
@@ -392,7 +392,10 @@ function article(x){   // one card's block in the column; a timeline's block lea
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
   const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|"); if (key === colKey) return; colKey = key;
-  card.innerHTML = dots.map((x, i) => {   // a day holding several cards gets a day line above its group: the neighbours are visible, nothing is claimed about them
+  card.classList.toggle("menu", !coord);
+  card.innerHTML = dots.map((x, i) => {
+    if (x.tl) return article(x);   // the menu: titles only, no day lines
+    // a day holding several cards gets a day line above its group: the neighbours are visible, nothing is claimed about them
     const g = dots.filter(o => o.date === x.date), end = g.length > 1 && x.date !== dots[i + 1]?.date ? '<div class="dayend"></div>' : "";
     if (x.date === dots[i - 1]?.date) return article(x) + end;
     if (g.length < 2) return article(x);
@@ -403,7 +406,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i; x.tl ? line(null) : line(i);   // a timeline's block says it all; the ledger only previews on hover
+  const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
