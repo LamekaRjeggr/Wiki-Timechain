@@ -46,7 +46,7 @@ header .st{margin-left:auto;color:var(--t2);font-size:12px}
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
 #band{position:relative;height:146px;user-select:none}
-#axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2)}
+#axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2);z-index:1;pointer-events:none}   /* drawn over the dots: a grown dot straddles it and the line still says which side it is on */
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
 .tick{position:absolute;top:118px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
@@ -321,6 +321,7 @@ function render(){
       }
       const dot = { ...dl[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), created_at:dl[0].created_at, last:dl[dl.length - 1].date,
         n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length, ns, all:new Map(dl.map(x => [x.id, x])) };
+      dot.kind = dot.nAcc ? "acc" : "sub";   // a timeline sits above the line once any card of it is held
       held.set(key, dot); dots.push(dot);
     }
     dots.sort(byDate);
@@ -348,15 +349,21 @@ function render(){
   // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
   const AX = 78, PX = band.clientWidth / 100, groups = [];
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.g = null; });
-  for (const x of [...dots].sort((a, b) => a.x - b.x)){
-    if (x.x < 0 || x.x > 100) continue;
-    const g = groups[groups.length - 1];
-    if (g && (x.x - g[0].x) * PX <= DOT + 2) g.push(x); else groups.push([x]);
-  }
+  // two sides of the line: accepted rests on it, the rest hangs under it — a side is a channel of its own, so clusters never cross it
+  const side = x => x.kind === "acc" ? -1 : 1, OFF = 5.5;   // the centre sits half the smallest dot off the axis and stays there while the dot grows
   const mx = ids => ids.reduce((s, x) => s + x.x, 0) / ids.length * PX;
-  for (let i = 0; i < groups.length - 1;){   // grown dots that would touch merge too, so no two dots overlap and every solid one has room for its count
-    const a = groups[i], b = groups[i + 1];
-    if (mx(b) - mx(a) < (SZ(a.length) + SZ(b.length)) / 2 + 2){ groups.splice(i, 2, a.concat(b)); i = Math.max(0, i - 1); } else i++;
+  for (const sd of [-1, 1]){
+    const gs = [];
+    for (const x of [...dots].filter(x => side(x) === sd).sort((a, b) => a.x - b.x)){
+      if (x.x < 0 || x.x > 100) continue;
+      const g = gs[gs.length - 1];
+      if (g && (x.x - g[0].x) * PX <= DOT + 2) g.push(x); else gs.push([x]);
+    }
+    for (let i = 0; i < gs.length - 1;){   // grown dots that would touch merge too, so no two dots overlap and every solid one has room for its count
+      const a = gs[i], b = gs[i + 1];
+      if (mx(b) - mx(a) < (SZ(a.length) + SZ(b.length)) / 2 + 2){ gs.splice(i, 2, a.concat(b)); i = Math.max(0, i - 1); } else i++;
+    }
+    groups.push(...gs);
   }
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AX + "px";
     e.style.left = Math.max(0, x.x) + "%"; e.style.width = Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x) + "%"; band.insertBefore(e, band.firstChild); }
@@ -366,7 +373,7 @@ function render(){
     ids.forEach(x => x.g = gi);
     const x = ids[0], e = document.createElement("button");
     e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (n > 1 ? " many" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
-    e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "%"; e.style.top = AX + "px"; e.style.width = e.style.height = SZ(n) + "px";
+    e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "%"; e.style.top = AX + side(x) * OFF + "px"; e.style.width = e.style.height = SZ(n) + "px";
     if (n > 1 && SZ(n) >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
     e.setAttribute("aria-label", n === 1 ? x.date + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
