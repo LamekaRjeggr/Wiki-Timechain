@@ -254,10 +254,13 @@ function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to)
   if (z && /^\d{4}$/.test(z)){ const y = +z; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
   return null;
 }
-function windowOf(whole){                  // win: null = whole record, else any [from, to) the user dragged; whole=true ignores win
+function windowOf(whole){                  // win: null = the record's mass, else any [from, to) the user dragged; whole=true = first card to last
   if (win && !whole) return win;
-  const ts = dots.map(x => T(x.date)); if (!ts.length) return [Date.UTC(2026,0,1), Date.UTC(2027,0,1)];
-  const a = Math.min(...ts), b = Math.max(...ts), pad = Math.max((b - a) * 0.04, 864e5 * 15);
+  const ts = dots.map(x => T(x.date)).sort((a, b) => a - b); if (!ts.length) return [Date.UTC(2026,0,1), Date.UTC(2027,0,1)];
+  // the mass: the shortest span holding 9 in 10 cards — a lone outlier stays on the bar, not in the band, until the reader scrubs to it
+  const k = whole ? ts.length : Math.ceil(ts.length * 0.9); let a = ts[0], b = ts[ts.length - 1];
+  for (let i = 0; i + k <= ts.length; i++) if (ts[i + k - 1] - ts[i] < b - a){ a = ts[i]; b = ts[i + k - 1]; }
+  const pad = Math.max((b - a) * 0.04, 864e5 * 15);
   return [a - pad, b + pad];
 }
 
@@ -387,10 +390,10 @@ function show(i, scroll = true){   // open = card i: its dot and block light up;
   if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
 }
 function reveal(i){   // card i off a zoomed window? the window grows that way to take it in; the other edge stays put
-  if (!win || !dots[i]) return;
-  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date); let [W0, W1] = win; const pad = Math.max(864e5, (W1 - W0) / 20);
+  if (!dots[i]) return;
+  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date), was = windowOf(); let [W0, W1] = was; const pad = Math.max(864e5, (W1 - W0) / 20);
   if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
-  if (W0 !== win[0] || W1 !== win[1]){ win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render(); }
+  if (W0 !== was[0] || W1 !== was[1]){ win = [W0, W1]; render(); }
 }
 const go = i => { reveal(i); show(i); };
 
