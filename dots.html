@@ -269,9 +269,16 @@ const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries 
 const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
 function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here, by date; only what the network has not echoed, never an act
   if (!coord || !myPk) return [];
-  const cs = dots.filter(x => isLocal(x.id) && x.accs.includes(myCoord())).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
+  const cs = whole.filter(x => isLocal(x.id) && x.accs.includes(myCoord())).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
   const ns = [...new Set(cs.map(subTo))].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
   return [...ns, ...cs];
+}
+let pushT = null, whole = [];   // the push clock: one event to the network per minute while the queue has any; nothing stored — a reload resumes from what the relays echo
+const pushChip = () => coord && myPk && (pushT || (local && queue().length)) ?   // offered on the local side; once running it stays in view whichever side you look at
+   ` · <button class="chip${pushT ? " on" : ""}" id="pushbtn" title="${pushT ? "one a minute to the network · click to stop" : "send what you accepted here to the network, one a minute"}">${pushT ? `pushing · ${queue().length} left · stop` : `push ${queue().length} ▸`}</button>` : "";
+function tick(){   // the head of the queue goes to every MAIN relay; its echo takes it off the queue, no echo = same event again next minute
+  const ev = queue()[0]; if (!ev){ clearInterval(pushT); pushT = null; return render(); }
+  sockets.forEach(ws => ws.readyState === WebSocket.OPEN && MAIN.includes(ws.relay) && ws.send(JSON.stringify(["EVENT", ev])));
 }
 let bunker = null;   // resumed add.html session (wtc:signin, via bunker); wins over the extension when both exist
 const canSign = () => !!bunker || typeof window.nostr?.signEvent === "function";   // this page never holds a key
@@ -349,9 +356,9 @@ function render(){
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   if (coord){
-    dots = dotsFor(coord, fold.projections, all).filter(x => keep(x, coord));
+    whole = dotsFor(coord, fold.projections, all); dots = whole.filter(x => keep(x, coord));   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${youChip()}${localChip()}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${youChip()}${localChip()}${pushChip()}`;
     document.getElementById("back").onclick = () => choose(null);
     document.getElementById("nchip").onclick = () => { names = !names; render(); };
   } else {
@@ -378,6 +385,7 @@ function render(){
   }
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
+  const pushbtn = document.getElementById("pushbtn"); if (pushbtn) pushbtn.onclick = () => { if (pushT){ clearInterval(pushT); pushT = null; } else { pushT = setInterval(tick, 60000); tick(); } render(); };
   empty.hidden = dots.length > 0;
 
   // the band
