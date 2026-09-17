@@ -72,7 +72,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card:empty{display:none}
 .c{padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sub)}
 .c.acc{border-left-color:var(--acc)} .c.on{box-shadow:0 0 0 1px var(--t1)}
-.c.ref{border-left-style:dashed;opacity:.6} .c.ref h2 button.peek{color:var(--t2);text-align:left}   /* refused: a stub that opens, never a hole */
+.c.ref{border-left-style:dashed;opacity:.6} #card .refs{margin-top:16px;font-size:12px;color:var(--t2);border-top:1px solid var(--line);padding-top:6px}   /* refused: one closing line, the cards behind it on request */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
@@ -135,7 +135,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, refused = new Map(), shown = new Set();   // refused: card id → my whole-card refusal in the open timeline; shown: refused ids the reader opened anyway   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, refused = new Map(), showRef = false;   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -467,33 +467,32 @@ function article(x){   // one card's block in the column; a timeline's block lea
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2></article>`;   // the menu: a title and its count, nothing more
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
-  if (ref && !shown.has(c.id)) return `<article class="c ref" data-i="${i}"><h2><button class="peek" data-id="${c.id}">refused ▸</button></h2>
-  <div class="meta"><b>${esc(c.date)}</b> · by <b>${esc(who(c.author))}</b> · ${day}${held} · ${rbtn(x)}</div></article>`;
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
-  <h2>${ref ? `<button class="peek" data-id="${c.id}">refused ▾</button> ` : ""}${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""}${rbtn(x) ? " · " + rbtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
+  <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""}${rbtn(x) ? " · " + rbtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "") + (shown.has(x.id) ? "s" : "")).join("|") + canSign() + myPk; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
-  card.innerHTML = dots.map((x, i) => {
+  const vis = dots.filter(x => !refused.has(x.id)), refs = dots.filter(x => refused.has(x.id));   // refused cards leave the column; one line at its end holds them
+  card.innerHTML = vis.map((x, i) => {
     if (x.tl) return article(x);   // the menu: titles only, no day lines
     // a day holding several cards gets a day line above its group: the neighbours are visible, nothing is claimed about them
-    const g = dots.filter(o => o.date === x.date), end = g.length > 1 && x.date !== dots[i + 1]?.date ? '<div class="dayend"></div>' : "";
-    if (x.date === dots[i - 1]?.date) return article(x) + end;
+    const g = vis.filter(o => o.date === x.date), end = g.length > 1 && x.date !== vis[i + 1]?.date ? '<div class="dayend"></div>' : "";
+    if (x.date === vis[i - 1]?.date) return article(x) + end;
     if (g.length < 2) return article(x);
     const ts = g.map(o => (o.card || o).time).filter(Boolean);
     return `<div class="day">${esc(x.date)} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x) + end;
-  }).join("");
+  }).join("") + (refs.length ? `<div class="refs"><button class="peek">${refs.length} refused ${showRef ? "▾" : "▸"}</button></div>${showRef ? refs.map(article).join("") : ""}` : "");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
   card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   card.querySelectorAll(".rbtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.r ? withdraw(+b.dataset.r, "refuse") : refuse(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
-  card.querySelectorAll(".peek").forEach(b => b.onclick = () => { shown.has(b.dataset.id) ? shown.delete(b.dataset.id) : shown.add(b.dataset.id); colKey = null; column(); });   // open or fold a refused stub, page-local
+  const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; column(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
@@ -507,7 +506,7 @@ function reveal(i){   // card i off a zoomed window? the window grows that way t
   if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
   if (W0 !== was[0] || W1 !== was[1]){ win = [W0, W1]; render(); }
 }
-const go = i => { reveal(i); show(i); };
+const go = i => { reveal(i); if (refused.has(dots[i]?.id) && !showRef){ showRef = true; column(); } show(i); };   // aiming at a refused card unfolds the closing line
 
 // ── controls ──
 const ntry = document.getElementById("ntry"),
