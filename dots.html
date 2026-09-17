@@ -145,7 +145,7 @@ const seenOn = new Map();   // id → Set(relay url): a card no MAIN relay has e
 const isLocal = id => ![...(seenOn.get(id) || [])].some(u => MAIN.includes(u));
 function admit(ev, fn, url){
   if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id)) || vBad.has(ev.id)) return;
-  const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (local && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo flips a local card off the chip
+  const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (Q.get("add") && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
   if (vOK.has(ev.id)) return fn(ev);
   const p = pend.get(ev.id); if (p) return p.fns.push(fn);
   pend.set(ev.id, { ev, fns:[fn] }); pool[rr++ % pool.length].postMessage([ev.id, ev]);
@@ -238,8 +238,8 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
   for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
 }
-const keep = (x, d) => (!local || isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
-const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="only cards no main relay has">local</button>` : "";   // only when an add= relay is in the room; nothing to compare against otherwise
+const keep = (x, d) => (!Q.get("add") || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
+const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
 const youChip = () => myPk ? ` · <button class="chip${me ? " on" : ""}" id="mebtn" aria-pressed="${me}" title="only cards you wrote or accepted">you: ${esc(who(myPk))}</button>` : "";
 
 // ── derive + render ──
@@ -332,7 +332,7 @@ function render(){
     const subjects = new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")));
     const held = new Map();   // card set → the dot already showing it: timelines holding exactly the same cards fold into one dot
     for (const d of subjects){
-      const dl = dotsFor(d, fold.projections, all).filter(x => keep(x, d)); if (!dl.length){ if (!me && !local) emptyN++; continue; }
+      const dl = dotsFor(d, fold.projections, all).filter(x => keep(x, d)); if (!dl.length){ if (!me && !Q.get("add")) emptyN++; continue; }
       const key = dl.map(x => x.id).sort().join(" "), ns = notariesOf(d).map(([, n]) => who(n.pubkey)), prev = held.get(key);
       if (prev){   // same cards, another keeper: add the keeper, pool the accepts
         prev.ns.push(...ns.filter(n => !prev.ns.includes(n))); prev.tls.push(d);
