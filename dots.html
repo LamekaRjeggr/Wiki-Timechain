@@ -280,7 +280,16 @@ async function accept(i){   // the accept as the viewer writes it: my notary nam
     tags:[["a", myCoord(), "", "context"], ["e", ev.id, "", "source"], ["snapshot", JSON.stringify(ev)], ["select", "card"], ["p", ev.pubkey, "", "credit"]] });
   admit(act, ingestAct); send(["EVENT", act]);
 }
-const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? '<span class="a">✓ by you</span>' : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
+async function withdraw(i){   // the revoke: one per live acceptance of mine on this card in my context; the fold clears the slot, a prior value never returns
+  const x = dots[i], { pubkey, sign } = await signer(); myPk = pubkey;
+  const revoked = new Set([...acts.values()].map(a => a.tags.find(t => t[0] === "e" && t[3] === "revoke")?.[1]));
+  const mine = [...acts.values()].filter(a => a.pubkey === myPk && !revoked.has(a.id) && a.tags.some(t => t[0] === "a" && t[1] === myCoord()) && a.tags.some(t => t[0] === "e" && t[1] === x.id && t[3] === "source"));
+  for (const a of mine){
+    const rv = await sign({ kind:ACT_KIND, created_at:Math.max(Math.floor(Date.now() / 1000), a.created_at + 1), content:"", tags:[["a", myCoord(), "", "context"], ["e", a.id, "", "revoke"]] });
+    admit(rv, ingestAct); send(["EVENT", rv]);
+  }
+}
+const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<span class="a">✓ by you</span> · <button class="abtn" data-w="${x.i}">withdraw</button>` : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
@@ -431,7 +440,7 @@ function article(x){   // one card's block in the column; a timeline's block lea
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|") + canSign(); if (key === colKey) return; colKey = key;
+  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|") + canSign() + myPk; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   card.innerHTML = dots.map((x, i) => {
     if (x.tl) return article(x);   // the menu: titles only, no day lines
@@ -444,7 +453,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   }).join("");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
-  card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; accept(+b.dataset.i).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
+  card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
