@@ -41,7 +41,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
 header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
-header .st{margin-left:auto;color:var(--t2);font-size:12px}
+header .st{margin-left:auto;color:var(--t2);font-size:12px} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
 header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
@@ -108,7 +108,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
   <div id="top">
     <header>
       <span class="ntry" id="ntry"></span>
-      <span class="st" id="st">connecting…</span>
+      <span class="st" id="bst"></span><span class="st" id="st">connecting…</span>
     </header>
     <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
     <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
@@ -267,18 +267,22 @@ const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries 
 let bunker = null;   // resumed add.html session (wtc:signin, via bunker); wins over the extension when both exist
 const canSign = () => !!bunker || typeof window.nostr?.signEvent === "function";   // this page never holds a key
 const signer = async () => bunker || { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
+const bst = (t, title = "") => { const e = document.getElementById("bst"); e.textContent = t; e.title = title; };   // the bunker's state, next to the relay count: silence was unreadable
 (async function bunkerResume(){   // RESUME ONLY, no login here — mirrors index.html; CSP already lets wss: through for the bunker's own relays
   let s = null; try { s = JSON.parse(localStorage.getItem("wtc:signin") || "null"); } catch {}
-  if (s?.via !== "bunker" || !s.uri || !s.ck) return;
+  if (s?.via !== "bunker" || !s.uri || !s.ck) return bst("", "");   // no session on this origin: sign in on add.html here, the reader rides it
+  bst("bunker…", "asking your signer");
   try {
     const { BunkerSigner, parseBunkerInput } = await import("./nip46.js");   // dynamic: a broken vendor file must not take the reader down
-    const pointer = await parseBunkerInput(s.uri); if (!pointer) return;
+    const pointer = await parseBunkerInput(s.uri); if (!pointer) return bst("bunker: bad uri");
     const b = BunkerSigner.fromBunker(Uint8Array.from(s.ck.match(/../g), x => parseInt(x, 16)), pointer);
-    await b.connect();
-    bunker = { pubkey: await b.getPublicKey(), sign: t => b.signEvent(t) };
+    const cap = ms => new Promise((_, no) => setTimeout(() => no(new Error("no answer in " + ms / 1000 + "s")), ms));
+    await Promise.race([b.connect(), cap(20000)]);
+    bunker = { pubkey: await Promise.race([b.getPublicKey(), cap(20000)]), sign: t => b.signEvent(t) };
     myPk = bunker.pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
+    bst("bunker ✓", "signing through " + (pointer.relays || []).join(", "));
     colKey = null; schedule();   // the column keys on canSign(); a late signer must redraw the buttons
-  } catch {}   // phone off / revoked = signed out, not an error
+  } catch (e) { bst("bunker: " + (e?.message || "no answer"), "phone off, session revoked, or its relay unreachable"); console.warn("dots: bunker resume", e); }   // signed out, not an error — but say so
 })();
 const myCoord = () => myPk && coord ? NOTARY_KIND + ":" + myPk + ":" + coord : "";   // my timeline for the open subject, minted on the first accept
 async function ready(){   // sign-in + my notary for the open subject, minted on my first act here
