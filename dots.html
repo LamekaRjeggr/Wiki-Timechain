@@ -296,7 +296,7 @@ async function withdraw(i){   // the revoke: one per live acceptance of mine on 
     admit(rv, ingestAct); send(["EVENT", rv]);
   }
 }
-const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<span class="a">✓ by you</span> · <button class="abtn" data-w="${x.i}">withdraw</button>` : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
+const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<button class="abtn" data-w="${x.i}">withdraw</button>` : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
