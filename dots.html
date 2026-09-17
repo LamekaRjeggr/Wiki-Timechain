@@ -42,6 +42,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
 header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
 header .st{margin-left:auto;color:var(--t2);font-size:12px}
+header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
@@ -131,6 +132,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
+let me = Q.get("me") === "1", names = false;   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -226,10 +228,15 @@ function dotsFor(d, projections, all){
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d;
 function choose(c){   // c = a subject d → that timeline; null → the timeline of timelines
   coord = c; open = null; want = null; win = c ? spanOf(Q.get("y")) : null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
-  const q = new URLSearchParams(); if (c) q.set("c", c);
-  for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
-  history.replaceState(null, "", "?" + q); schedule();
+  setUrl(); schedule();
 }
+function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
+  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (me) q.set("me", "1");
+  for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
+  history.replaceState(null, "", "?" + q);
+}
+const keep = (x, d) => !me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d);   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
+const youChip = () => myPk ? ` · <button class="chip${me ? " on" : ""}" id="mebtn" aria-pressed="${me}" title="only cards you wrote or accepted">you: ${esc(who(myPk))}</button>` : "";
 
 // ── derive + render ──
 function schedule(){ if (!renderT) renderT = setTimeout(() => { renderT = null; render(); }, 120); }
@@ -310,17 +317,18 @@ function windowOf(whole){                  // win: null = the record's mass, els
 function render(){
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   if (coord){
-    dots = dotsFor(coord, fold.projections, all);
+    dots = dotsFor(coord, fold.projections, all).filter(x => keep(x, coord));
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} cards · ${mark(nAcc, " accepted") || "none accepted"} · ${ns.length > 1 ? ns.length + " notaries" : "notary"} <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${myPk ? ` · you: ${esc(who(myPk))}` : ""}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${youChip()}`;
     document.getElementById("back").onclick = () => choose(null);
+    document.getElementById("nchip").onclick = () => { names = !names; render(); };
   } else {
     // the timeline of timelines: each subject is one dot at its earliest card, coloured as that card, reaching to its last
     dots = []; let emptyN = 0;
     const subjects = new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")));
     const held = new Map();   // card set → the dot already showing it: timelines holding exactly the same cards fold into one dot
     for (const d of subjects){
-      const dl = dotsFor(d, fold.projections, all); if (!dl.length){ emptyN++; continue; }
+      const dl = dotsFor(d, fold.projections, all).filter(x => keep(x, d)); if (!dl.length){ if (!me) emptyN++; continue; }
       const key = dl.map(x => x.id).sort().join(" "), ns = notariesOf(d).map(([, n]) => who(n.pubkey)), prev = held.get(key);
       if (prev){   // same cards, another keeper: add the keeper, pool the accepts
         prev.ns.push(...ns.filter(n => !prev.ns.includes(n))); prev.tls.push(d);
@@ -334,8 +342,9 @@ function render(){
       held.set(key, dot); dots.push(dot);
     }
     dots.sort(byDate);
-    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}`;
+    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}`;
   }
+  const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   empty.hidden = dots.length > 0;
 
   // the band
