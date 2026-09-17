@@ -31,6 +31,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
 - **Projection** — the current field map derived by folding a notary's acts.
 - **Provenance** — the exact signed source envelope from which selected bytes are read.
 - **Credit** — optional public attribution, separate from provenance.
+- **Refusal** — one notary's signed choice to hide one exact card version, or some of
+  its field blocks, from its own lens. A refusal decides no register.
 
 ## Invariants
 
@@ -47,6 +49,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
    or validity.
 7. **Reversion is explicit.** Revocation never resurrects an older value. Returning to
    old bytes requires another acceptance.
+8. **A refusal hides, it never decides.** It touches no register, and it neither revokes
+   nor blocks an acceptance of the same version.
 
 ## Acceptance grammar
 
@@ -155,14 +159,45 @@ A revoke has empty `content`, the same context as its target, and one target:
 }
 ```
 
-The target MUST be a valid acceptance signed by the same key and have the same context.
-The revoke's slot is the target's slot. The target-id edge is causal: a valid revoke
+The target MUST be a valid acceptance or refusal signed by the same key and have the same
+context. The revoke's slot is the target's slot; a revoke of a refusal lifts that refusal. The target-id edge is causal: a valid revoke
 applies immediately after its target even when the revoke has an earlier `created_at`.
 It clears all and only registers whose current source is still the targeted act.
 Registers changed by a later acceptance in deterministic order are unaffected. A prior
 value does not return.
 
 A revoke contains no source, snapshot, selector, or credit tag.
+
+## Refusal
+
+A refusal has empty `content`, the notary's own context, one exact card version as its
+target, and the same selectors as an acceptance:
+
+```json
+{
+  "kind": 8828,
+  "content": "",
+  "tags": [
+    ["a", "30829:<notary-pubkey>:<notary-d>", "", "context"],
+    ["e", "<card-event-id>", "", "refuse"],
+    ["select", "card"]
+  ]
+}
+```
+
+A refusal MUST contain exactly one marked `a` context, exactly one marked `refuse` `e`,
+and either exactly one `select:card` or one or more distinct field `select` tags under
+the Partial-card selection rules. It carries no snapshot and no credit: nothing is
+selected, so there is nothing to preserve.
+
+The target is an exact event id, never a `d` and never a content hash. A republished card
+is a new version and is not refused by an earlier refusal. A refusal of a version the
+same notary accepted leaves that acceptance standing; hiding and deciding are separate
+acts. Lifting a refusal is a revoke whose target is the refusal.
+
+A client rendering the notary's lens SHOULD show a refused version as a reversible stub
+rather than remove it; the refusal is itself a visible act. Field refusals hide only the
+named blocks of that version.
 
 ## Snapshot validation
 
@@ -187,11 +222,11 @@ For an act to affect a notary projection:
 1. the act's event id and signature MUST validate;
 2. it MUST identify exactly one parseable marked notary context;
 3. its signer MUST equal the pubkey in that context coordinate;
-4. it MUST be exactly one valid acceptance shape or one valid revoke shape;
+4. it MUST be exactly one valid acceptance, refusal, or revoke shape;
 5. an acceptance snapshot and its source `e` MUST pass Snapshot validation;
 6. acceptance selectors MUST be allowed, distinct, and structurally valid;
-7. a revoke target MUST be a valid acceptance and pass the same-key and context checks
-   above.
+7. a revoke target MUST be a valid acceptance or refusal and pass the same-key and context
+   checks above.
 
 Current source-card replacement, present notary-graph reachability, optional credit, and
 observed plurality are not validity requirements.
@@ -227,6 +262,11 @@ Relay incompleteness may produce a temporary partial view under any append-only 
 Clients SHOULD disclose incomplete queries or later recomputation; they MUST NOT replace
 the specified order with arrival order.
 
+Refusals fold as a set, not in order. A version is refused in a context, for a field
+block, when at least one valid refusal in that context names the version and the block
+and is not revoked. Fold order and timestamps are irrelevant to refusals. A refusal writes
+no register; a projection is the same with or without it.
+
 The projection is derived state. It is not stored in `30829` and is not itself evidence;
 the signed acts and snapshots are. A projection whose `tag:event_date` register is absent
 has no position on the timeline.
@@ -256,7 +296,7 @@ built-in Sybil resistance.
 
 ## Discovery
 
-Readers can query decisions by marked context `#a`, exact source or revoke target `#e`,
+Readers can query decisions by marked context `#a`, exact source, refused or revoke target `#e`,
 notary author, or known event id. Results MUST pass local validation before derivation.
 The source-card coordinate is derived from the verified snapshot. Relay filters are
 discovery hints only. Multi-character tag names such as `snapshot` and `select` are not
