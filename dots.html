@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- No key lives here. The writes are the accept and the refuse (kind 8828, plus the 30829 that
-     names your timeline), signed by a NIP-07 extension or a resumed bunker. ws: is here for the lab relay
+     names your timeline), signed by a NIP-07 extension or a resumed bunker; with the local chip on
+     they reach only your add= relay. ws: is here for the lab relay
      (?relay=ws://127.0.0.1:7777); every http(s) channel stays barred. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
@@ -197,6 +198,7 @@ function askProfile(pk){
 
 // ── relays ──
 const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)));
+const write = ev => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && !(local && MAIN.includes(ws.relay)) && ws.send(JSON.stringify(["EVENT", ev])));   // the chip on `local` = your acts stay on your relay; the network never hears them
 let asked = "";
 function ask(){   // one sub over every timeline known so far; same sub id = the relay swaps the filter AND replays it, so re-send only what grew
   const cs = [...notaries.keys()]; if (!cs.length) return;
@@ -206,7 +208,7 @@ function ask(){   // one sub over every timeline known so far; same sub id = the
 let up = 0;
 function connect(url){
   let ws; try { ws = new WebSocket(url); } catch { return; }
-  sockets.push(ws);
+  ws.relay = url; sockets.push(ws);
   ws.onopen = () => { up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = ""; ask(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
@@ -290,7 +292,7 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
   const now = Math.floor(Date.now() / 1000);
   if (!notaries.get(myCoord())){
     const mine = await sign({ kind:NOTARY_KIND, created_at:now, content:"", tags:[["d", coord], ["title", titleOf(coord)], ["t", MARKER], ["a", notariesOf(coord)[0][0]]] });
-    admit(mine, ingestNotary); send(["EVENT", mine]);
+    admit(mine, ingestNotary); write(mine);
   }
   return { sign, now };
 }
@@ -300,13 +302,13 @@ async function accept(i){   // the accept as the viewer writes it: my notary nam
   const { sign, now } = await ready();
   const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, after(ev.id) + 1), content:"",
     tags:[["a", myCoord(), "", "context"], ["e", ev.id, "", "source"], ["snapshot", JSON.stringify(ev)], ["select", "card"], ["p", ev.pubkey, "", "credit"]] });
-  admit(act, ingestAct); send(["EVENT", act]);
+  admit(act, ingestAct); write(act);
 }
 async function refuse(i){   // the refusal: this exact version leaves my view as a stub; it decides nothing, an accept of mine stands beside it
   const x = dots[i], { sign, now } = await ready();
   const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, after(x.id) + 1), content:"",
     tags:[["a", myCoord(), "", "context"], ["e", x.id, "", "refuse"], ["select", "card"]] });
-  admit(act, ingestAct); send(["EVENT", act]);
+  admit(act, ingestAct); write(act);
 }
 async function withdraw(i, marker = "source"){   // the revoke: one per live act of mine (accept, or refusal when marker = "refuse") on this card in my context; a prior value never returns
   const x = dots[i], { pubkey, sign } = await signer(); myPk = pubkey;
@@ -314,7 +316,7 @@ async function withdraw(i, marker = "source"){   // the revoke: one per live act
   const mine = [...acts.values()].filter(a => a.pubkey === myPk && !revoked.has(a.id) && a.tags.some(t => t[0] === "a" && t[1] === myCoord()) && a.tags.some(t => t[0] === "e" && t[1] === x.id && t[3] === marker));
   for (const a of mine){
     const rv = await sign({ kind:ACT_KIND, created_at:Math.max(Math.floor(Date.now() / 1000), a.created_at + 1), content:"", tags:[["a", myCoord(), "", "context"], ["e", a.id, "", "revoke"]] });
-    admit(rv, ingestAct); send(["EVENT", rv]);
+    admit(rv, ingestAct); write(rv);
   }
 }
 const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<button class="abtn" data-w="${x.i}">withdraw</button>` : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
