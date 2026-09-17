@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- No key lives here. The one write is the accept (kind 8828, plus the 30829 that names your
-     timeline), signed by a NIP-07 extension. ws: is here for the lab relay
+<!-- No key lives here. The writes are the accept and the refuse (kind 8828, plus the 30829 that
+     names your timeline), signed by a NIP-07 extension or a resumed bunker. ws: is here for the lab relay
      (?relay=ws://127.0.0.1:7777); every http(s) channel stays barred. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
@@ -57,6 +57,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub);color:#000;font:bold 10px var(--mono)} .dot.many.acc{background:var(--acc)}   /* the count sits inside once the dot is big enough */
 .dot.future{background:transparent}
+.dot.ref{opacity:.2}   /* a version you refused: still on the band, barely */
 .dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot; the axis stops at its flat side */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
@@ -71,10 +72,12 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card:empty{display:none}
 .c{padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sub)}
 .c.acc{border-left-color:var(--acc)} .c.on{box-shadow:0 0 0 1px var(--t1)}
+.c.ref{border-left-style:dashed;opacity:.6} .c.ref h2 button.peek{color:var(--t2);text-align:left}   /* refused: a stub that opens, never a hole */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
-#card .abtn{border:1px dashed var(--acc);color:var(--acc);padding:0 6px} #card .abtn:disabled{opacity:.5;cursor:default}   /* the same pill, dashed = not yet: press it and it fills */
+#card .abtn{border:1px dashed var(--acc);color:var(--acc);padding:0 6px} #card .abtn:disabled{opacity:.5;cursor:default}
+#card .rbtn{border:1px dashed var(--t2);color:var(--t2);padding:0 6px} #card .rbtn:disabled{opacity:.5;cursor:default}   /* refuse / restore: the grey twin of the accept pill */   /* the same pill, dashed = not yet: press it and it fills */
 #card .sum{color:var(--sep);margin:0 0 12px}   /* summary = the plain fact, full size, sepia */
 #card p{margin:0 0 10px;color:var(--t1);font-size:13px}   /* content = the detail, a step smaller and dimmer */
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
@@ -132,7 +135,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false;   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, refused = new Map(), shown = new Set();   // refused: card id → my whole-card refusal in the open timeline; shown: refused ids the reader opened anyway   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -278,29 +281,40 @@ const signer = async () => bunker || { pubkey: await window.nostr.getPublicKey()
   } catch {}   // phone off / revoked = signed out, not an error
 })();
 const myCoord = () => myPk && coord ? NOTARY_KIND + ":" + myPk + ":" + coord : "";   // my timeline for the open subject, minted on the first accept
-async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
-  const x = dots[i], ev = [...cards.values()].find(e => e.id === x.id); if (!ev) return;
+async function ready(){   // sign-in + my notary for the open subject, minted on my first act here
   const { pubkey, sign } = await signer(); myPk = pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
   const now = Math.floor(Date.now() / 1000);
   if (!notaries.get(myCoord())){
     const mine = await sign({ kind:NOTARY_KIND, created_at:now, content:"", tags:[["d", coord], ["title", titleOf(coord)], ["t", MARKER], ["a", notariesOf(coord)[0][0]]] });
     admit(mine, ingestNotary); send(["EVENT", mine]);
   }
-  const prior = Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === ev.id)).map(a => a.created_at));
-  const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, prior + 1), content:"",
+  return { sign, now };
+}
+const after = id => Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === id)).map(a => a.created_at));   // a new act on the same card sorts after my last one
+async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
+  const x = dots[i], ev = [...cards.values()].find(e => e.id === x.id); if (!ev) return;
+  const { sign, now } = await ready();
+  const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, after(ev.id) + 1), content:"",
     tags:[["a", myCoord(), "", "context"], ["e", ev.id, "", "source"], ["snapshot", JSON.stringify(ev)], ["select", "card"], ["p", ev.pubkey, "", "credit"]] });
   admit(act, ingestAct); send(["EVENT", act]);
 }
-async function withdraw(i){   // the revoke: one per live acceptance of mine on this card in my context; the fold clears the slot, a prior value never returns
+async function refuse(i){   // the refusal: this exact version leaves my view as a stub; it decides nothing, an accept of mine stands beside it
+  const x = dots[i], { sign, now } = await ready();
+  const act = await sign({ kind:ACT_KIND, created_at:Math.max(now, after(x.id) + 1), content:"",
+    tags:[["a", myCoord(), "", "context"], ["e", x.id, "", "refuse"], ["select", "card"]] });
+  admit(act, ingestAct); send(["EVENT", act]);
+}
+async function withdraw(i, marker = "source"){   // the revoke: one per live act of mine (accept, or refusal when marker = "refuse") on this card in my context; a prior value never returns
   const x = dots[i], { pubkey, sign } = await signer(); myPk = pubkey;
   const revoked = new Set([...acts.values()].map(a => a.tags.find(t => t[0] === "e" && t[3] === "revoke")?.[1]));
-  const mine = [...acts.values()].filter(a => a.pubkey === myPk && !revoked.has(a.id) && a.tags.some(t => t[0] === "a" && t[1] === myCoord()) && a.tags.some(t => t[0] === "e" && t[1] === x.id && t[3] === "source"));
+  const mine = [...acts.values()].filter(a => a.pubkey === myPk && !revoked.has(a.id) && a.tags.some(t => t[0] === "a" && t[1] === myCoord()) && a.tags.some(t => t[0] === "e" && t[1] === x.id && t[3] === marker));
   for (const a of mine){
     const rv = await sign({ kind:ACT_KIND, created_at:Math.max(Math.floor(Date.now() / 1000), a.created_at + 1), content:"", tags:[["a", myCoord(), "", "context"], ["e", a.id, "", "revoke"]] });
     admit(rv, ingestAct); send(["EVENT", rv]);
   }
 }
 const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<button class="abtn" data-w="${x.i}">withdraw</button>` : `<button class="abtn" data-i="${x.i}">accept</button>`;   // only with a signer, only inside a timeline
+const rbtn = x => !coord || !canSign() ? "" : refused.has(x.id) ? `<button class="rbtn" data-r="${x.i}">restore</button>` : `<button class="rbtn" data-i="${x.i}">refuse</button>`;   // the grey pill: refuse this version, or lift the refusal
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
@@ -320,6 +334,7 @@ function windowOf(whole){                  // win: null = the record's mass, els
 
 function render(){
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
+  refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   if (coord){
     dots = dotsFor(coord, fold.projections, all).filter(x => keep(x, coord));
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
@@ -395,7 +410,7 @@ function render(){
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
     ids.forEach(x => x.g = gi);
     const x = ids[0], e = document.createElement("button");
-    e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (n > 1 ? " many" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
+    e.className = "dot " + (x.kind === "acc" ? "acc" : "sub") + (n > 1 ? " many" : "") + (ids.every(o => refused.has(o.id)) ? " ref" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "%"; e.style.top = AX + side(x) * OFF + "px"; e.style.width = e.style.height = SZ(n) + "px";
     if (n > 1 && SZ(n) >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
@@ -442,21 +457,24 @@ function line(i){
     ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = x.g === null ? 0 : dots.filter(o => o.g === x.g).length - 1;
   ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${x.n} cards${same > 0 ? ` · ${same} more here` : ""}`
-    : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}`;
+    : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2></article>`;   // the menu: a title and its count, nothing more
-  return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}">
-  <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
+  const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
+  if (ref && !shown.has(c.id)) return `<article class="c ref" data-i="${i}"><h2><button class="peek" data-id="${c.id}">refused ▸</button></h2>
+  <div class="meta"><b>${esc(c.date)}</b> · by <b>${esc(who(c.author))}</b> · ${day}${held} · ${rbtn(x)}</div></article>`;
+  return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
+  <h2>${ref ? `<button class="peek" data-id="${c.id}">refused ▾</button> ` : ""}${esc(c.title) || "<i>untitled</i>"}</h2>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""}${rbtn(x) ? " · " + rbtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}</div>
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length).join("|") + canSign() + myPk; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "") + (shown.has(x.id) ? "s" : "")).join("|") + canSign() + myPk; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   card.innerHTML = dots.map((x, i) => {
     if (x.tl) return article(x);   // the menu: titles only, no day lines
@@ -470,6 +488,8 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
   card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
+  card.querySelectorAll(".rbtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.r ? withdraw(+b.dataset.r, "refuse") : refuse(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
+  card.querySelectorAll(".peek").forEach(b => b.onclick = () => { shown.has(b.dataset.id) ? shown.delete(b.dataset.id) : shown.add(b.dataset.id); colKey = null; column(); });   // open or fold a refused stub, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
