@@ -7,8 +7,6 @@ build step.
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
 **Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html)
 
-![The viewer showing a timeline pulled live from relays](screenshot.png)
-
 ## The convention
 
 One timeline entry is one **kind-30828** addressable event
@@ -34,37 +32,6 @@ python3 -m http.server 8000
 ```
 
 **Not `file://`** — some relays reject the `null` origin and cards go missing silently.
-
-### Modular acceptance lab
-
-The `lab/modular-acceptance-mock` branch includes a standalone protocol mock at
-`shelf-model.html`. With the local server running, open:
-
-```
-http://localhost:8000/shelf-model.html
-```
-
-The default view uses simulated events only: nothing is signed or sent to a relay. The
-companion `shelf-live.html` view reads the local Colima lab through the verified timeline
-client and renders the same signed 30828/30829/8828 events in the shelf layout; it holds
-no private keys and does not sign. The exact prior
-shelf mock is retained as `shelf-model-original.html` for comparison.
-
-### Signed protocol back-test
-
-The local-only harness in `.htest/protocol-lab/` replays a five-card closed dossier
-through sequential authors, whole-card acceptance, an editorial derivation, revocation,
-source replacement/loss, and two independent notary layers. It generates ephemeral keys
-and genuine signed Nostr events in a temporary directory; it uses no relay and commits no
-keys or generated pubkeys.
-
-```sh
-node .htest/protocol-lab/replay.mjs
-```
-
-The preserved agent artifacts and first findings live beside the harness. Each run also
-writes full, source-missing, and reverse-arrival event logs to the temporary output path
-printed at completion.
 
 To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 

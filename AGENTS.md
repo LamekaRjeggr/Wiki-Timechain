@@ -15,8 +15,7 @@ Read this before touching anything. Codex reads it natively; `CLAUDE.md` opens w
 | Grunt | local Ollama model | `review.md`, untracked, deleted after the lead reads it | one file or one diff |
 | Hands | Haiku subagents inside a session | nothing durable | what the lead hands them |
 
-Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.md`,
-`DESIGN-MODULAR-ACCEPTANCE.md`.
+Specs = `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md`, `NIP-DRAFT-NOTARY.md`, `CONVENTION.md`.
 
 ## Hard rules
 
