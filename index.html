@@ -3461,20 +3461,6 @@ function handoffAct(pk, d, w){
 // test hook — headless harness only, no runtime consumer
 window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
                  admit, dropped: () => vDropped,
-                 // Read-only bridge for the companion shelf client. Everything exposed
-                 // here has already passed this client's hash + Schnorr admission gate.
-                 labProjection: () => ({
-                   projections: structuredClone(foldProjection()),
-                   acceptedActs: structuredClone([...validActs.values()]),
-                   rejectedActs: [...rejectedActs].map(([id,x]) => ({id,code:x.code,event:structuredClone(x.event)}))
-                 }),
-                 labSnapshot: () => ({
-                   events: [...events.values()].map(e => structuredClone(e)),
-                   notaries: [...notaries.values()].map(e => structuredClone(e)),
-                   acts: [...acts.values()].map(e => structuredClone(e)),
-                   projections: structuredClone(foldProjection())
-                 }),
-                 labAdmitAct: e => admit(e, ingestAct),
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
                  startDraft, discardDraft, pickCommit, pickBack, pickDone, spanOf,
                  pickFracSet, pickPageY,
