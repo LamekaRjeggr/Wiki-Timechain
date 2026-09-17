@@ -57,7 +57,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub);color:#000;font:bold 10px var(--mono)} .dot.many.acc{background:var(--acc)}   /* the count sits inside once the dot is big enough */
 .dot.future{background:transparent}
-.dot.ref{opacity:.2}   /* a version you refused: still on the band, barely */
+.dot.ref{opacity:.2}   /* a version you refused, unfolded: on the band, barely */
 .dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot; the axis stops at its flat side */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
@@ -397,7 +397,7 @@ function render(){
   for (const sd of [-1, 1]){
     const gs = [];
     for (const x of [...dots].filter(x => side(x) === sd).sort((a, b) => a.x - b.x)){
-      if (x.x < 0 || x.x > 100) continue;
+      if (x.x < 0 || x.x > 100 || (refused.has(x.id) && !showRef)) continue;   // refused: off the band until the closing line unfolds
       const g = gs[gs.length - 1];
       if (g && (x.x - g[0].x) * PX <= DOT + 2) g.push(x); else gs.push([x]);
     }
@@ -426,7 +426,7 @@ function render(){
   });
   // cards beyond an edge: a half ring on that end with their count; click grows the window to take them in
   const axis = document.getElementById("axis"); axis.style.left = axis.style.right = 0;
-  for (const [side, off] of [["l", dots.filter(x => x.x < 0)], ["r", dots.filter(x => x.x > 100)]]){
+  const seen = dots.filter(x => showRef || !refused.has(x.id)); for (const [side, off] of [["l", seen.filter(x => x.x < 0)], ["r", seen.filter(x => x.x > 100)]]){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
@@ -492,7 +492,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
   card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   card.querySelectorAll(".rbtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.r ? withdraw(+b.dataset.r, "refuse") : refuse(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
-  const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; column(); };   // unfold or fold the refused cards, page-local
+  const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
@@ -506,7 +506,7 @@ function reveal(i){   // card i off a zoomed window? the window grows that way t
   if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
   if (W0 !== was[0] || W1 !== was[1]){ win = [W0, W1]; render(); }
 }
-const go = i => { reveal(i); if (refused.has(dots[i]?.id) && !showRef){ showRef = true; column(); } show(i); };   // aiming at a refused card unfolds the closing line
+const go = i => { reveal(i); if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
 
 // ── controls ──
 const ntry = document.getElementById("ntry"),
