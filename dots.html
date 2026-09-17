@@ -266,6 +266,13 @@ const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
+const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
+function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here, by date; only what the network has not echoed, never an act
+  if (!coord || !myPk) return [];
+  const cs = dots.filter(x => isLocal(x.id) && x.accs.includes(myCoord())).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
+  const ns = [...new Set(cs.map(subTo))].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
+  return [...ns, ...cs];
+}
 let bunker = null;   // resumed add.html session (wtc:signin, via bunker); wins over the extension when both exist
 const canSign = () => !!bunker || typeof window.nostr?.signEvent === "function";   // this page never holds a key
 const signer = async () => bunker || { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
