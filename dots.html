@@ -46,7 +46,7 @@ header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
-#band{position:relative;height:146px;user-select:none}
+#band{position:relative;height:146px;user-select:none;overflow:hidden}   /* an edge ring sits on the band edge and is cut to a half: more, that way */
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2);z-index:1;pointer-events:none}   /* drawn over the dots: a grown dot straddles it and the line still says which side it is on */
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
@@ -57,7 +57,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub);color:#000;font:bold 10px var(--mono)} .dot.many.acc{background:var(--acc)}   /* the count sits inside once the dot is big enough */
 .dot.future{background:transparent}
-.dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg)}   /* cards beyond this end: an empty ring with their count, grown by it like any dot */
+.dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot; the axis stops at its flat side */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
@@ -400,12 +400,14 @@ function render(){
     e.onmouseleave = () => line(open);
     band.appendChild(e);
   });
-  // cards beyond an edge: an empty ring at that end with their count; click grows the window to take them in
+  // cards beyond an edge: a half ring on that end with their count; click grows the window to take them in
+  const axis = document.getElementById("axis"); axis.style.left = axis.style.right = 0;
   for (const [side, off] of [["l", dots.filter(x => x.x < 0)], ["r", dots.filter(x => x.x > 100)]]){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
-    e.style.left = side === "l" ? "12px" : "calc(100% - 12px)"; e.style.top = AX + "px"; e.style.width = e.style.height = Math.max(24, SZ(n)) + "px";
+    const d = Math.max(24, SZ(n)); e.style.left = side === "l" ? "0" : "100%"; e.style.top = AX + "px"; e.style.width = e.style.height = d + "px";
+    axis.style[side === "l" ? "left" : "right"] = d / 2 + "px"; e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px";   // the count sits in the half that shows
     e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
     e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
     band.appendChild(e);
