@@ -28,6 +28,7 @@
   --acc:#e0b04a;   /* accepted — the notary's signature */
   --sep:#dcc3a3;   /* summary — warm sepia, apart from the white title and grey content */
   --mono:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 :root[data-theme="light"]{--bg:#f4f3ef;--panel:#ffffff;--line:#d5d2c8;--t0:#1a1c20;--t1:#4c5260;--t2:#6b707c;--sub:#2a63c9;--acc:#9a6a0c;--sep:#7a5a38}
 
@@ -75,12 +76,15 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .c.acc{border-left-color:var(--acc)} .c.on{box-shadow:0 0 0 1px var(--t1)}
 .c.ref{border-left-style:dashed;opacity:.6} #card .refs{margin-top:16px;font-size:12px;color:var(--t2);border-top:1px solid var(--line);padding-top:6px}   /* refused: one closing line, the cards behind it on request */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
-#card .meta{color:var(--t2);font-size:12px;margin-bottom:10px} #card .meta b{font-weight:400;color:var(--t1)}
+#card:not(.menu) h2{font-family:var(--sans);font-size:18px;line-height:1.3;letter-spacing:-.01em}
+#card .meta{color:var(--t2);font-size:12px;margin-bottom:8px} #card .meta b{font-weight:400;color:var(--t1)}
 #card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
 #card .abtn{border:1px dashed var(--acc);color:var(--acc);padding:0 6px} #card .abtn:disabled{opacity:.5;cursor:default}
 #card .rbtn{border:1px dashed var(--t2);color:var(--t2);padding:0 6px} #card .rbtn:disabled{opacity:.5;cursor:default}   /* refuse / restore: the grey twin of the accept pill */   /* the same pill, dashed = not yet: press it and it fills */
-#card .sum{color:var(--sep);margin:0 0 12px}   /* summary = the plain fact, full size, sepia */
-#card p{margin:0 0 10px;color:var(--t1);font-size:13px}   /* content = the detail, a step smaller and dimmer */
+#card .actions{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+#card .actions button{padding:2px 8px;border-radius:4px}
+#card .sum{color:var(--sep);margin:0 0 12px;font:500 14px/1.5 var(--sans)}   /* summary = the plain fact, full size, sepia */
+#card p{margin:0 0 10px;color:var(--t1);font:14px/1.6 var(--sans)}   /* prose is for reading; the surrounding record and provenance stay mono */
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
 #card .vers button{border:1px dashed var(--line);padding:1px 8px;font-size:12px;color:var(--t1)}
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
@@ -484,9 +488,11 @@ function article(x){   // one card's block in the column; a timeline's block lea
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   if (x.tl) return `<article class="c${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2></article>`;   // the menu: a title and its count, nothing more
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
+  const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"}${abtn(x) ? " · " + abtn(x) : ""}${rbtn(x) ? " · " + rbtn(x) : ""} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
+  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
+  ${actions ? `<div class="actions" aria-label="Card actions">${actions}</div>` : ""}
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
