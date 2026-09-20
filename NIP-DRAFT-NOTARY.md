@@ -35,7 +35,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
 | `d` | `["d","hcr2001"]` | REQUIRED. Opaque addressable identifier |
 | `title` | `["title","HCR 2001 election results"]` | REQUIRED. Display name |
 | `t` | `["t","wikitimechain"]` | REQUIRED corpus marker; additional topics allowed |
-| `description` | `["description","…"]` | OPTIONAL plain text |
+| `summary` | `["summary","…"]` | OPTIONAL plain text, same field name as a card |
 | `g` | `["g","9tbq"]` | OPTIONAL default geohash rung |
 | `a` | `["a","30829:<pubkey>:<d>"]` | OPTIONAL and repeatable notary source |
 
@@ -43,7 +43,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", and "MAY" are as in RFC 
 
 A `30829` carries no card decisions. A client MUST NOT derive acceptance from a card
 address placed on the notary event. Replacing a `30829` changes current identity,
-description, and discovery configuration; it does not rewrite historical decisions.
+summary, and discovery configuration; it does not rewrite historical decisions.
 
 Absence of a decision is absence of acceptance. A live client MAY inspect signals and
 sign decisions automatically, but the resulting
@@ -90,7 +90,8 @@ no delegation mode on the wire.
 
 Source graphs may branch, converge, and loop. A client MUST keep a visited-coordinate
 set for each traversal branch and MUST stop a branch when it revisits a coordinate. It
-MAY impose depth, width, event, relay, and time budgets. Incomplete traversal SHOULD be
+MAY impose depth, width, event, relay, and time budgets. The reference client walks one hop: a
+source's own sources are not followed. Incomplete traversal SHOULD be
 shown. Convergent paths confer no extra weight and a duplicate coordinate is inspected
 once.
 
