@@ -240,10 +240,14 @@ function dotsFor(d, projections, all){
   return [...byId.values()].sort(byDate);
 }
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d, summaryOf = d => notariesOf(d).map(([, n]) => tag(n, "summary")).find(Boolean) || "";
-function subjectDot(d, projections, all){   // a whole timeline as ONE dot at its earliest card, coloured by whether any card is held, reaching to its last; null when empty
-  const dl = dotsFor(d, projections, all).filter(x => keep(x, d)); if (!dl.length) return null;
-  const dot = { ...dl[0], date:dl[0].date.split("/")[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), summary:summaryOf(d), created_at:dl[0].created_at, last:dl[dl.length - 1].date,
-    n:dl.length, nAcc:dl.filter(x => x.kind === "acc").length, ns:notariesOf(d).map(([, n]) => who(n.pubkey)), all:new Map(dl.map(x => [x.id, x])) };
+function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card, coloured by whether any card is held, reaching to its last; null when empty
+  const dl = dotsFor(d, projections, all).filter(x => keep(x, d)), ns = notariesOf(d);
+  const srcs = hop ? sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a list reaches as far as its sources; one hop
+  const mineEmpty = ns.some(([c]) => c === myCoordOf(d)) && !dl.length && !srcs.length;   // my own list, still empty: it stays on the menu so it can be filled, dot at today
+  if (!dl.length && !srcs.length && !mineEmpty) return null;
+  const first = [...dl, ...srcs].sort(byDate)[0] || { id:"tl:" + d, author:ns[0][1].pubkey, created_at:ns[0][1].created_at, accs:[], date:new Date().toISOString().slice(0, 10) };
+  const dot = { ...first, date:first.date.split("/")[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), summary:summaryOf(d), last:[...dl.map(x => x.date), ...srcs.map(x => x.last)].sort().pop() || first.date,
+    n:dl.length, nTl:srcs.length, nAcc:dl.filter(x => x.kind === "acc").length, ns:ns.map(([, n]) => who(n.pubkey)), all:new Map(dl.map(x => [x.id, x])) };
   dot.kind = dot.nAcc ? "acc" : "sub";
   return dot;
 }
@@ -320,7 +324,7 @@ const bst = (t, title = "") => { const e = document.getElementById("bst"); e.tex
     colKey = null; schedule();   // the column keys on canSign(); a late signer must redraw the buttons
   } catch (e) { bst("bunker: " + (e?.message || "no answer"), "phone off, session revoked, or its relay unreachable"); console.warn("dots: bunker resume", e); }   // signed out, not an error — but say so
 })();
-const myCoord = () => myPk && coord ? NOTARY_KIND + ":" + myPk + ":" + coord : "";   // my timeline for the open subject, minted on the first accept
+const myCoordOf = d => myPk && d ? NOTARY_KIND + ":" + myPk + ":" + d : "", myCoord = () => myCoordOf(coord);   // my timeline for the open subject, minted on the first accept
 async function ready(){   // sign-in + my notary for the open subject, minted on my first act here
   const { pubkey, sign } = await signer(); myPk = pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
   const now = Math.floor(Date.now() / 1000);
@@ -334,6 +338,19 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
 async function setSources(list){   // the tether, replaced whole: my head keeps d/title/t and takes the new `a` list
   const { sign, now, head: cur } = await ready();
   const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, cur.created_at + 1), content:cur.content, tags:[...cur.tags.filter(t => t[0] !== "a"), ...list.map(c => ["a", c])] });
+  admit(mine, ingestNotary); write(mine);
+}
+const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");   // d from the title, once: the title can change later, the d never does
+async function newList(){   // a list = a head with no cards of its own: title + summary now, sources from the picker inside
+  const title = (prompt("title") || "").trim(); if (!title) return; const summary = (prompt("summary — one line, what this gathers") || "").trim();
+  const { pubkey, sign } = await signer(); myPk = pubkey;
+  const head = await sign({ kind:NOTARY_KIND, created_at:Math.floor(Date.now() / 1000), content:"", tags:[["d", slug(title)], ["title", title], ...(summary ? [["summary", summary]] : []), ["t", MARKER]] });
+  admit(head, ingestNotary); write(head); choose(slug(title));
+}
+async function editHead(){   // retitle: the head is replaced whole, d/t/a kept
+  const { sign, now, head: cur } = await ready();
+  const title = prompt("title", tag(cur, "title")); if (title === null || !title.trim()) return; const summary = prompt("summary", tag(cur, "summary")); if (summary === null) return;
+  const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, cur.created_at + 1), content:cur.content, tags:[...cur.tags.filter(t => t[0] !== "title" && t[0] !== "summary"), ["title", title.trim()], ...(summary.trim() ? [["summary", summary.trim()]] : [])] });
   admit(mine, ingestNotary); write(mine);
 }
 const after = id => Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === id)).map(a => a.created_at));   // a new act on the same card sorts after my last one
@@ -384,12 +401,13 @@ function render(){
   if (coord){
     whole = dotsFor(coord, fold.projections, all); dots = whole.filter(x => keep(x, coord));   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcChips()}` : ""}${youChip()}${localChip()}${pushChip()}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcChips()}` : ""}${canSign() && notaries.has(myCoord()) ? ` · <button class="chip" id="editbtn" title="retitle your head; d never changes">edit</button>` : ""}${youChip()}${localChip()}${pushChip()}`;
     document.getElementById("back").onclick = () => choose(null);
     document.getElementById("nchip").onclick = () => { names = !names; render(); };
     const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
     ntry.querySelectorAll(".src").forEach(b => b.onclick = () => setSources(srcs.filter(c => c !== b.dataset.c)));
     const pick = document.getElementById("srcpick"); if (pick) pick.onchange = () => pick.value && setSources([...srcs, pick.value]);
+    const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
     for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a tethered subject = one dot and its reach, the root menu's shape; its cards stay home
     dots.sort(byDate);
   } else {
@@ -399,7 +417,7 @@ function render(){
     const held = new Map();   // card set → the dot already showing it: timelines holding exactly the same cards fold into one dot
     for (const d of subjects){
       const dot = subjectDot(d, fold.projections, all); if (!dot){ if (!me && !Q.get("add")) emptyN++; continue; }
-      const key = [...dot.all.keys()].sort().join(" "), prev = held.get(key);
+      const key = dot.all.size ? [...dot.all.keys()].sort().join(" ") : "tl " + d, prev = held.get(key);
       if (prev){   // same cards, another keeper: add the keeper, pool the accepts
         prev.ns.push(...dot.ns.filter(n => !prev.ns.includes(n))); prev.tls.push(d);
         for (const x of dot.all.values()) prev.all.get(x.id).accs.push(...x.accs.filter(c => !prev.all.get(x.id).accs.includes(c)));
@@ -409,7 +427,8 @@ function render(){
       held.set(key, dot); dots.push(dot);
     }
     dots.sort(byDate);
-    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}`;
+    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
+    const nl = document.getElementById("newlist"); if (nl) nl.onclick = newList;
   }
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
@@ -519,12 +538,12 @@ function line(i){
     const [a, b] = windowOf(), lbl = new Date(a).toISOString().slice(0, 10) + " → " + new Date(b - 864e5).toISOString().slice(0, 10);
     ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = x.g === null ? 0 : dots.filter(o => o.g === x.g).length - 1;
-  ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${x.n} cards${same > 0 ? ` · ${same} more here` : ""}`
+  ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${countOf(x)}${same > 0 ? ` · ${same} more here` : ""}`
     : `<b>${esc(showDate(x.date))}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : `<span class="s">submitted</span>`} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${x.n} card${x.n === 1 ? "" : "s"}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
+  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
   const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
@@ -536,8 +555,9 @@ function article(x){   // one card's block in the column; a timeline's block lea
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
+const countOf = x => x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : "empty";   // a subject counts cards; a list counts the timelines it gathers
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl || "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.nTl : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   const vis = dots.filter(x => !refused.has(x.id)), refs = dots.filter(x => refused.has(x.id));   // refused cards leave the column; one line at its end holds them
   card.innerHTML = vis.map((x, i) => {
