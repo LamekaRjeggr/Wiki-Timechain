@@ -42,9 +42,9 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 .lhost::before{content:" ⟨"} .lhost::after{content:"⟩"}
 
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
-header .ntry{color:var(--t2)} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
-header .st{margin-left:auto;color:var(--t2);font-size:12px} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
-header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)}   /* a chip: folded until pressed; the you chip fills when the filter is on */
+header .ntry{color:var(--t2);flex:1 1 0;min-width:0} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
+header .st{margin-left:auto;color:var(--t2);font-size:12px;white-space:nowrap} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
+header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)} header .title{color:var(--t2);border-bottom:1px dotted var(--line)} header select{font:inherit;color:var(--t1);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-width:22ch}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
@@ -93,7 +93,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
-#card.menu{gap:4px} #card.menu .c{padding:8px 12px} .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
+#card.menu{gap:4px} #card.menu .c{padding:8px 12px} .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
@@ -262,11 +262,11 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
 }
 const keep = (x, d) => (!Q.get("add") || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
 const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
-const srcChips = () => {   // my tether for the open subject: each source a chip (✕ drops it), a picker adds a notary of another subject
+const srcPick = () => {   // add a source to my head: a notary of another subject; dropping one is the ✕ on its row
   if (!canSign()) return "";
   const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], sub = c => c.split(":").slice(2).join(":");
   const others = [...notaries.entries()].filter(([c, n]) => sub(c) !== coord && !srcs.includes(c)).sort((a, b) => tag(a[1], "title").localeCompare(tag(b[1], "title")));
-  return ` · sources: ${srcs.map(c => `<button class="chip src" data-c="${esc(c)}" title="drop this source">${esc(tag(notaries.get(c) || { tags:[] }, "title") || sub(c))} · ${esc(who(c.split(":")[1]))} ✕</button>`).join(" ") || "none"}${others.length ? ` <select id="srcpick"><option value="">+ source</option>${others.map(([c, n]) => `<option value="${esc(c)}">${esc(tag(n, "title") || sub(c))} · ${esc(who(n.pubkey))}</option>`).join("")}</select>` : ""}`;
+  return others.length ? ` <select id="srcpick"><option value="">+ source</option>${others.map(([c, n]) => `<option value="${esc(c)}">${esc(tag(n, "title") || sub(c))} · ${esc(who(n.pubkey))}</option>`).join("")}</select>` : "";
 };
 const youChip = () => myPk ? ` · <button class="chip${me ? " on" : ""}" id="mebtn" aria-pressed="${me}" title="only cards you wrote or accepted">you: ${esc(who(myPk))}</button>` : "";
 
@@ -407,16 +407,16 @@ function render(){
   if (coord){
     whole = dotsFor(coord, fold.projections, all); dots = whole.filter(x => keep(x, coord));   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcChips()}` : ""}${canSign() && notaries.has(myCoord()) ? ` · <button class="chip" id="editbtn" title="retitle your head; d never changes">edit</button>${dots.some(x => x.accs.includes(myCoord())) ? "" : ` · <button class="chip" id="delbtn" title="delete your head — a list with no cards of your own">delete</button>`}` : ""}${youChip()}${localChip()}${pushChip()}`;
+    for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a tethered subject = one dot and its reach, the root menu's shape; its cards stay home
+    dots.sort(byDate);
+    const mine = canSign() && notaries.has(myCoord()), nC = dots.filter(x => !x.tl).length, nT = dots.length - nC;   // where · what · count · notaries · filters · actions
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord))} · ${[nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : "", mark(nAcc, " accepted")].filter(Boolean).join(" · ") || "empty"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — a list with no cards of your own">delete</button>` : ""}`;
     document.getElementById("back").onclick = () => choose(null);
     document.getElementById("nchip").onclick = () => { names = !names; render(); };
     const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
-    ntry.querySelectorAll(".src").forEach(b => b.onclick = () => setSources(srcs.filter(c => c !== b.dataset.c)));
     const pick = document.getElementById("srcpick"); if (pick) pick.onchange = () => pick.value && setSources([...srcs, pick.value]);
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
     const del = document.getElementById("delbtn"); if (del) del.onclick = deleteHead;
-    for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a tethered subject = one dot and its reach, the root menu's shape; its cards stay home
-    dots.sort(byDate);
   } else {
     // the timeline of timelines: each subject is one dot at its earliest card, coloured as that card, reaching to its last
     dots = []; let emptyN = 0;
@@ -435,7 +435,7 @@ function render(){
     }
     const isList = x => !x.n, L = lists ?? dots.some(isList);   // a list = a head with no cards of its own, only the timelines it gathers; the root opens on lists when any exist
     dots = dots.filter(x => isList(x) === L).sort(byDate);
-    ntry.innerHTML = `<button class="chip" id="listbtn" title="${L ? "lists of timelines · click for every timeline" : "every timeline · click for lists"}">${L ? "lists" : "timelines"}</button> <b>${dots.length}</b>${L ? "" : emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() && L ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
+    ntry.innerHTML = `<button class="chip" id="listbtn" title="${L ? "lists of timelines · click for every timeline" : "every timeline · click for lists"}">${L ? "lists" : "timelines"}</button> ${dots.length}${L ? "" : emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() && L ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
     const nl = document.getElementById("newlist"); if (nl) nl.onclick = newList;
     document.getElementById("listbtn").onclick = () => { lists = !L; open = null; colKey = null; render(); };
   }
@@ -552,7 +552,8 @@ function line(i){
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
+  const drop = x.tl && coord && canSign() && sourcesOf(notaries.get(myCoord()) || { tags:[] }).some(c => c.endsWith(":" + x.tl));   // a source of my head: the row carries its ✕
+  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}${drop ? ` <button class="drop" data-d="${esc(x.tl)}" title="drop this source from your list">✕</button>` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
   const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
@@ -566,7 +567,7 @@ function article(x){   // one card's block in the column; a timeline's block lea
 }
 const countOf = x => x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : "empty";   // a subject counts cards; a list counts the timelines it gathers
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.nTl : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   const vis = dots.filter(x => !refused.has(x.id)), refs = dots.filter(x => refused.has(x.id));   // refused cards leave the column; one line at its end holds them
   card.innerHTML = vis.map((x, i) => {
@@ -580,6 +581,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   }).join("") + (refs.length ? `<div class="refs"><button class="peek">${refs.length} refused ${showRef ? "▾" : "▸"}</button></div>${showRef ? refs.map(article).join("") : ""}` : "");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
+  card.querySelectorAll(".drop").forEach(b => b.onclick = () => setSources(sourcesOf(notaries.get(myCoord())).filter(c => !c.endsWith(":" + b.dataset.d))));
   card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   card.querySelectorAll(".rbtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.r ? withdraw(+b.dataset.r, "refuse") : refuse(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
