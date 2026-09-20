@@ -142,7 +142,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, lists = null, refused = new Map(), showRef = false;   // lists: the root shows lists (heads gathering timelines) or raw timelines; null = lists if any exist   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, refused = new Map(), showRef = false;   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -242,8 +242,8 @@ function dotsFor(d, projections, all){
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d, summaryOf = d => notariesOf(d).map(([, n]) => tag(n, "summary")).find(Boolean) || "";
 function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card, coloured by whether any card is held, reaching to its last; null when empty
   const dl = dotsFor(d, projections, all).filter(x => keep(x, d)), ns = notariesOf(d);
-  const srcs = hop ? sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a list reaches as far as its sources; one hop
-  const mineEmpty = ns.some(([c]) => c === myCoordOf(d)) && !dl.length && !srcs.length;   // my own list, still empty: it stays on the menu so it can be filled, dot at today
+  const srcs = hop ? sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a head reaches as far as the timelines it points at; one hop
+  const mineEmpty = ns.some(([c]) => c === myCoordOf(d)) && !dl.length && !srcs.length;   // my own head, still empty: it stays on the menu so it can be filled, dot at today
   if (!dl.length && !srcs.length && !mineEmpty) return null;
   const first = [...dl, ...srcs].sort(byDate)[0] || { id:"tl:" + d, author:ns[0][1].pubkey, created_at:ns[0][1].created_at, accs:[], date:new Date().toISOString().slice(0, 10) };
   const dot = { ...first, date:first.date.split("/")[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), summary:summaryOf(d), last:[...dl.map(x => x.date), ...srcs.map(x => x.last)].sort().pop() || first.date,
@@ -262,11 +262,11 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
 }
 const keep = (x, d) => (!Q.get("add") || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
 const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
-const srcPick = () => {   // add a source to my head: a notary of another subject; dropping one is the ✕ on its row
+const tlPick = () => {   // point my head at another timeline; taking one off is the ✕ on its row
   if (!canSign()) return "";
   const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], sub = c => c.split(":").slice(2).join(":");
   const others = [...notaries.entries()].filter(([c, n]) => sub(c) !== coord && !srcs.includes(c)).sort((a, b) => tag(a[1], "title").localeCompare(tag(b[1], "title")));
-  return others.length ? ` <select id="srcpick"><option value="">+ source</option>${others.map(([c, n]) => `<option value="${esc(c)}">${esc(tag(n, "title") || sub(c))} · ${esc(who(n.pubkey))}</option>`).join("")}</select>` : "";
+  return others.length ? ` <select id="srcpick"><option value="">+ timeline</option>${others.map(([c, n]) => `<option value="${esc(c)}">${esc(tag(n, "title") || sub(c))} · ${esc(who(n.pubkey))}</option>`).join("")}</select>` : "";
 };
 const youChip = () => myPk ? ` · <button class="chip${me ? " on" : ""}" id="mebtn" aria-pressed="${me}" title="only cards you wrote or accepted">you: ${esc(who(myPk))}</button>` : "";
 
@@ -335,13 +335,13 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
   }
   return { sign, now, head };
 }
-async function setSources(list){   // the tether, replaced whole: my head keeps d/title/t and takes the new `a` list
+async function setSources(list){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
   const { sign, now, head: cur } = await ready();
   const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, cur.created_at + 1), content:cur.content, tags:[...cur.tags.filter(t => t[0] !== "a"), ...list.map(c => ["a", c])] });
   admit(mine, ingestNotary); write(mine);
 }
 const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");   // d from the title, once: the title can change later, the d never does
-async function newList(){   // a list = a head with no cards of its own: title + summary now, sources from the picker inside
+async function newTimeline(){   // an empty head: title + summary now; cards by accept, timelines by the picker inside
   const title = (prompt("title") || "").trim(); if (!title) return; const summary = (prompt("summary — one line, what this gathers") || "").trim();
   const { pubkey, sign } = await signer(); myPk = pubkey;
   const head = await sign({ kind:NOTARY_KIND, created_at:Math.floor(Date.now() / 1000), content:"", tags:[["d", slug(title)], ["title", title], ...(summary ? [["summary", summary]] : []), ["t", MARKER]] });
@@ -407,10 +407,10 @@ function render(){
   if (coord){
     whole = dotsFor(coord, fold.projections, all); dots = whole.filter(x => keep(x, coord));   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a tethered subject = one dot and its reach, the root menu's shape; its cards stay home
+    for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a timeline mine points at = one dot and its reach, the root menu's shape; its cards stay home
     dots.sort(byDate);
     const mine = canSign() && notaries.has(myCoord()), nC = dots.filter(x => !x.tl).length, nT = dots.length - nC;   // where · what · count · notaries · filters · actions
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord))} · ${[nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : "", mark(nAcc, " accepted")].filter(Boolean).join(" · ") || "empty"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — a list with no cards of your own">delete</button>` : ""}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord))} · ${[nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : "", mark(nAcc, " accepted")].filter(Boolean).join(" · ") || "empty"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${tlPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
     document.getElementById("back").onclick = () => choose(null);
     document.getElementById("nchip").onclick = () => { names = !names; render(); };
     const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
@@ -433,11 +433,10 @@ function render(){
       }
       held.set(key, dot); dots.push(dot);
     }
-    const isList = x => !x.n, L = lists ?? dots.some(isList);   // a list = a head with no cards of its own, only the timelines it gathers; the root opens on lists when any exist
-    dots = dots.filter(x => isList(x) === L).sort(byDate);
-    ntry.innerHTML = `<button class="chip" id="listbtn" title="${L ? "lists of timelines · click for every timeline" : "every timeline · click for lists"}">${L ? "lists" : "timelines"}</button> ${dots.length}${L ? "" : emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() && L ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
-    const nl = document.getElementById("newlist"); if (nl) nl.onclick = newList;
-    document.getElementById("listbtn").onclick = () => { lists = !L; open = null; colKey = null; render(); };
+    const inside = new Set(sourceSubjects([...notaries.values()]));   // the top level: a timeline another timeline points at sits inside it, one level down, not on the root
+    dots = dots.filter(x => !x.tls.some(d => inside.has(d))).sort(byDate);
+    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() ? ` · <button class="chip" id="newtl" title="an empty head of yours: add cards, add timelines">new timeline ▸</button>` : ""}`;
+    const nt = document.getElementById("newtl"); if (nt) nt.onclick = newTimeline;
   }
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
@@ -552,8 +551,8 @@ function line(i){
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
-  const drop = x.tl && coord && canSign() && sourcesOf(notaries.get(myCoord()) || { tags:[] }).some(c => c.endsWith(":" + x.tl));   // a source of my head: the row carries its ✕
-  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}${drop ? ` <button class="drop" data-d="${esc(x.tl)}" title="drop this source from your list">✕</button>` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
+  const drop = x.tl && coord && canSign() && sourcesOf(notaries.get(myCoord()) || { tags:[] }).some(c => c.endsWith(":" + x.tl));   // my head points at it: the row carries its ✕
+  if (x.tl) return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}"><h2><button class="go">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}${drop ? ` <button class="drop" data-d="${esc(x.tl)}" title="take this timeline off yours">✕</button>` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}</article>`;   // a timeline row: title, count, the notary's own summary
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
   const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
@@ -565,7 +564,7 @@ function article(x){   // one card's block in the column; a timeline's block lea
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
-const countOf = x => x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : "empty";   // a subject counts cards; a list counts the timelines it gathers
+const countOf = x => [x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : "", x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";   // cards it holds, timelines it points at — both when both
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
   const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
