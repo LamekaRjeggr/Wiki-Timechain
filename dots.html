@@ -63,6 +63,8 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot; the axis stops at its flat side */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
+#arcs{position:absolute;inset:0;width:100%;height:100%;overflow:visible}   /* a card's span: an arc from its start foot to its end, bowing to its side — height is width, so nested spans nest */
+#arcs path{fill:none;stroke:var(--sub);stroke-width:1.5;opacity:.6;pointer-events:stroke;cursor:pointer} #arcs path.acc{stroke:var(--acc)} #arcs path.ref{opacity:.2} #arcs path.on,#arcs path:hover{opacity:1;stroke-width:2.5}
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 
 #ledger{height:22px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -265,7 +267,8 @@ const prose = t => esc(t).split(/\n\s*\n/).map(b => "<p>" + b.trim()
   .replace(/\{-([^]*?)-\}/g, "<del>$1</del>").replace(/\{\+([^]*?)\+\}/g, "<ins>$1</ins>")
   .replace(/\n/g, "<br>") + "</p>").join("");
 
-const T = d => Date.parse(d.slice(0, 10) + "T12:00:00Z");
+const T = d => Date.parse(d.slice(0, 10) + "T12:00:00Z");   // a range YYYY-MM-DD/YYYY-MM-DD sits at its start
+const endOf = d => d.split("/")[1] || "", showDate = d => d.replace("/", " – ");
 const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
@@ -394,7 +397,7 @@ function render(){
 
   // the band
   const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
-  band.querySelectorAll(".dot,.tick,.tail,#now").forEach(e => e.remove());
+  band.querySelectorAll(".dot,.tick,.tail,#arcs,#now").forEach(e => e.remove());
   const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
     const per = band.clientWidth / (span / (864e5 * 365.25)), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
@@ -430,6 +433,20 @@ function render(){
   }
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AX + "px";
     e.style.left = Math.max(0, x.x) + "%"; e.style.width = Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x) + "%"; band.insertBefore(e, band.firstChild); }
+  // a span card bows an arc from its start foot to its end: up if accepted, down if not; radius = half its width, capped at the band's room on that side,
+  // past the cap it flattens along the top — below 2px it is only its dot
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "arcs"; svg.setAttribute("viewBox", `0 0 ${band.clientWidth} 146`); svg.setAttribute("preserveAspectRatio", "none");
+  for (const x of [...dots].sort((a, b) => T(endOf(b.date)) - T(endOf(a.date)) - (T(b.date) - T(a.date)))){   // widest first: a small arc sits over its container and stays hoverable
+    if (!endOf(x.date) || (refused.has(x.id) && !showRef)) continue;
+    const x0 = frac(T(x.date), W0, W1) * band.clientWidth, x1 = frac(T(endOf(x.date)), W0, W1) * band.clientWidth; if (x1 < 0 || x0 > band.clientWidth || x1 - x0 < 2) continue;
+    const sd = side(x), CAP = sd < 0 ? 70 : 30, r = Math.min((x1 - x0) / 2, CAP), dy = sd * r;
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", r < CAP ? `M${x0} ${AX} A${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${x1} ${AX}` : `M${x0} ${AX} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${dy} H${x1 - r} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${-dy}`);
+    p.setAttribute("class", (sd < 0 ? "acc" : "sub") + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "")); p.dataset.i = x.i;
+    p.onclick = () => go(x.i); p.onmouseenter = () => line(x.i); p.onmouseleave = () => line(open);
+    svg.appendChild(p);
+  }
+  band.insertBefore(svg, band.firstChild);
   groups.forEach((ids, gi) => {
     const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length, n = ids.length;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
@@ -439,7 +456,7 @@ function render(){
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "%"; e.style.top = AX + side(x) * OFF + "px"; e.style.width = e.style.height = SZ(n) + "px";
     if (n > 1 && SZ(n) >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
-    e.setAttribute("aria-label", n === 1 ? x.date + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
+    e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
     e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
     e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${n} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
     e.onmouseleave = () => line(open);
@@ -482,7 +499,7 @@ function line(i){
     ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = x.g === null ? 0 : dots.filter(o => o.g === x.g).length - 1;
   ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${x.n} cards${same > 0 ? ` · ${same} more here` : ""}`
-    : `<b>${esc(x.date)}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
+    : `<b>${esc(showDate(x.date))}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : '<span class="s">submitted</span>'} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
@@ -491,7 +508,7 @@ function article(x){   // one card's block in the column; a timeline's block lea
   const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(c.date)}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
+  <div class="meta"><b>${esc(showDate(c.date))}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
   ${actions ? `<div class="actions" aria-label="Card actions">${actions}</div>` : ""}
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
@@ -509,7 +526,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
     if (x.date === vis[i - 1]?.date) return article(x) + end;
     if (g.length < 2) return article(x);
     const ts = g.map(o => (o.card || o).time).filter(Boolean);
-    return `<div class="day">${esc(x.date)} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x) + end;
+    return `<div class="day">${esc(showDate(x.date))} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x) + end;
   }).join("") + (refs.length ? `<div class="refs"><button class="peek">${refs.length} refused ${showRef ? "▾" : "▸"}</button></div>${showRef ? refs.map(article).join("") : ""}` : "");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(dots[+b.closest("article").dataset.i].tl));
@@ -520,6 +537,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i; line(i);   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
+  band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
 }
