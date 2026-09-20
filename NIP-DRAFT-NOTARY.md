@@ -91,7 +91,8 @@ no delegation mode on the wire.
 Source graphs may branch, converge, and loop. A client MUST keep a visited-coordinate
 set for each traversal branch and MUST stop a branch when it revisits a coordinate. It
 MAY impose depth, width, event, relay, and time budgets. The reference client walks one hop: a
-source's own sources are not followed. Incomplete traversal SHOULD be
+source's own sources are not followed. It resolves a source to its subject: every notary
+carrying that `d` contributes, submissions included. Incomplete traversal SHOULD be
 shown. Convergent paths confer no extra weight and a duplicate coordinate is inspected
 once.
 

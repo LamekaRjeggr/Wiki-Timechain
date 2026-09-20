@@ -127,7 +127,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { dotsOf, byDate, sourcesOf, viaOf } from "./lib/dots-derive.mjs?v=3";   /* bump when the lib changes shape: a cached old copy kills the page at import */
+import { dotsOf, byDate, sourcesOf, viaOf } from "./lib/dots-derive.mjs?v=4";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
@@ -239,7 +239,7 @@ function dotsFor(d, projections, all){
     if (x.kind === "acc"){ cur.accs.push(c); Object.assign(cur, x, { kind:"acc", accs:cur.accs }); }   // an accepted projection carries the notary's selected fields
   }
   for (const [c] of notariesOf(d)) for (const x of viaOf(c, notaries, projections, all, new Set(byId.keys())))
-    (byId.get(x.id) || byId.set(x.id, { ...x, accs:[] }).get(x.id)).via = [...new Set([...(byId.get(x.id).via || []), ...x.via])];   // grey: held by a source, not by this subject
+    for (const k of ["via", "viaAcc"]) (byId.get(x.id) || byId.set(x.id, { ...x, accs:[] }).get(x.id))[k] = [...new Set([...(byId.get(x.id)[k] || []), ...x[k]])];   // grey: sits under a source subject, not this one
   return [...byId.values()].sort(byDate);
 }
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d;
@@ -281,7 +281,7 @@ const endOf = d => d.split("/")[1] || "", showDate = d => d.replace("/", " – "
 const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const isMine = x => myPk && x.author === myPk;
-const viaOfDot = x => x.via?.length ? "via " + esc(x.via.map(c => who(c.split(":")[1])).join(", ")) : "";   // whose list it came off; the count is the pull
+const viaOfDot = x => x.via?.length ? "via " + esc([...new Set(x.via.map(c => who(c.split(":")[1])))].join(", ")) + (x.viaAcc?.length ? " · " + mark(x.viaAcc.length) : "") : "";   // whose subject it sits under; the ✓ says who there accepted it
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
 const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
 function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here, by date; only what the network has not echoed, never an act

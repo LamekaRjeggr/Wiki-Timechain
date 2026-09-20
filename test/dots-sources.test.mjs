@@ -11,29 +11,39 @@ const unset = { state: "unset" };
 const proj = (context, c) => ({ context, slot: c.tags[0][1], registers: { title: sel(c, "title"), summary: unset, content: unset, event_date: sel(c, "event_date"), event_time: unset, g: unset } });
 
 test("sourcesOf: 30829 coords on `a`, deduped, self and card coords dropped", () => {
-  const n = notary(PK, "tl", [S1, S1, S2, ME, "30828:" + PT + ":x"]);
-  assert.deepEqual(sourcesOf(n), [S1, S2]);
+  const n = notary(PK, "tl", [S2, S2, ME, "30828:" + PT + ":x"]);
+  assert.deepEqual(sourcesOf(n), [S2]);
   assert.deepEqual(sourcesOf(notary(PK, "tl")), []);
 });
 
-test("viaOf: a source's accepted card is a via dot naming the source; its submissions are not", () => {
-  const c1 = card("1".repeat(64), "d1", "2026-01-02", "Held", S1), c2 = card("2".repeat(64), "d2", "2026-01-03", "Only submitted", S1);
-  const notaries = new Map([[ME, notary(PK, "tl", [S1])], [S1, notary(PS, "tl")]]);
-  const dots = viaOf(ME, notaries, [proj(S1, c1)], [c1, c2]);
-  assert.deepEqual(dots.map(x => [x.kind, x.title, x.via]), [["via", "Held", [S1]]]);
+test("sourcesOf: a coord with my own d is not a source, whoever signed it", () => {
+  assert.deepEqual(sourcesOf(notary(PK, "tl", [S1, S2])), [S2]);
+});
+
+test("viaOf: a source's accepts AND submissions are via dots; viaAcc names who accepted", () => {
+  const c1 = card("1".repeat(64), "d1", "2026-01-02", "Held", S2), c2 = card("2".repeat(64), "d2", "2026-01-03", "Only submitted", S2);
+  const notaries = new Map([[ME, notary(PK, "tl", [S2])], [S2, notary(PT, "other")]]);
+  const dots = viaOf(ME, notaries, [proj(S2, c1)], [c1, c2]);
+  assert.deepEqual(dots.map(x => [x.kind, x.title, x.via, x.viaAcc]), [["via", "Held", [S2], [S2]], ["via", "Only submitted", [S2], []]]);
+});
+
+test("viaOf: a source names a subject — a duplicate notary with the same d pours in too", () => {
+  const D2 = "30829:" + PS + ":other", c1 = card("1".repeat(64), "d1", "2026-01-02", "Dup", D2);
+  const notaries = new Map([[ME, notary(PK, "tl", [S2])], [S2, notary(PT, "other")], [D2, notary(PS, "other")]]);
+  assert.deepEqual(viaOf(ME, notaries, [], [c1]).map(x => x.via), [[D2]]);
 });
 
 test("viaOf: two sources holding one card = one dot, both named; an id the context shows itself is skipped", () => {
   const c1 = card("1".repeat(64), "d1", "2026-01-02", "Held", S1);
-  const notaries = new Map([[ME, notary(PK, "tl", [S1, S2])], [S1, notary(PS, "tl")], [S2, notary(PT, "other")]]);
-  const ps = [proj(S1, c1), proj(S2, c1)];
-  assert.deepEqual(viaOf(ME, notaries, ps, [c1]).map(x => x.via), [[S1, S2]]);
+  const D2 = "30829:" + PS + ":other", notaries = new Map([[ME, notary(PK, "tl", [S2])], [S2, notary(PT, "other")], [D2, notary(PS, "other")]]);
+  const ps = [proj(S2, c1), proj(D2, c1)];
+  assert.deepEqual(viaOf(ME, notaries, ps, [c1]).map(x => x.viaAcc), [[S2, D2]]);
   assert.deepEqual(viaOf(ME, notaries, ps, [c1], new Set([c1.id])), []);
 });
 
 test("viaOf: one hop only — a source's source is not walked; unknown context = nothing", () => {
   const c1 = card("1".repeat(64), "d1", "2026-01-02", "Far", S2);
-  const notaries = new Map([[ME, notary(PK, "tl", [S1])], [S1, notary(PS, "tl", [S2])], [S2, notary(PT, "other")]]);
+  const MID = "30829:" + PS + ":mid", notaries = new Map([[ME, notary(PK, "tl", [MID])], [MID, notary(PS, "mid", [S2])], [S2, notary(PT, "other")]]);
   assert.deepEqual(viaOf(ME, notaries, [proj(S2, c1)], [c1]), []);
   assert.deepEqual(viaOf("30829:" + PS + ":nope", notaries, [], []), []);
 });
