@@ -142,7 +142,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, refused = new Map(), showRef = false;   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, lists = null, refused = new Map(), showRef = false;   // lists: the root shows lists (heads gathering timelines) or raw timelines; null = lists if any exist   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -426,9 +426,11 @@ function render(){
       }
       held.set(key, dot); dots.push(dot);
     }
-    dots.sort(byDate);
-    ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
+    const isList = x => !x.n, L = lists ?? dots.some(isList);   // a list = a head with no cards of its own, only the timelines it gathers; the root opens on lists when any exist
+    dots = dots.filter(x => isList(x) === L).sort(byDate);
+    ntry.innerHTML = `<button class="chip" id="listbtn" title="${L ? "lists of timelines · click for every timeline" : "every timeline · click for lists"}">${L ? "lists" : "timelines"}</button> <b>${dots.length}</b>${L ? "" : emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${canSign() && L ? ` · <button class="chip" id="newlist" title="a timeline of timelines: your head, your sources">new list ▸</button>` : ""}`;
     const nl = document.getElementById("newlist"); if (nl) nl.onclick = newList;
+    document.getElementById("listbtn").onclick = () => { lists = !L; open = null; colKey = null; render(); };
   }
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
