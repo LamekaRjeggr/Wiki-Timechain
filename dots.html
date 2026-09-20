@@ -353,6 +353,12 @@ async function editHead(){   // retitle: the head is replaced whole, d/t/a kept
   const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, cur.created_at + 1), content:cur.content, tags:[...cur.tags.filter(t => t[0] !== "title" && t[0] !== "summary"), ["title", title.trim()], ...(summary.trim() ? [["summary", summary.trim()]] : [])] });
   admit(mine, ingestNotary); write(mine);
 }
+async function deleteHead(){   // a kind 5 on my head: id and coord both named; the page forgets it at once, the relay drops it
+  const cur = notaries.get(myCoord()); if (!cur || !confirm(`delete "${tag(cur, "title")}"?`)) return;
+  const { sign } = await signer();
+  const del = await sign({ kind:5, created_at:Math.floor(Date.now() / 1000), content:"", tags:[["e", cur.id], ["a", myCoord()], ["k", String(NOTARY_KIND)]] });
+  write(del); notaries.delete(myCoord()); choose(null);
+}
 const after = id => Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === id)).map(a => a.created_at));   // a new act on the same card sorts after my last one
 async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
   const x = dots[i], ev = [...cards.values()].find(e => e.id === x.id); if (!ev) return;
@@ -401,13 +407,14 @@ function render(){
   if (coord){
     whole = dotsFor(coord, fold.projections, all); dots = whole.filter(x => keep(x, coord));   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc").length;
-    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcChips()}` : ""}${canSign() && notaries.has(myCoord()) ? ` · <button class="chip" id="editbtn" title="retitle your head; d never changes">edit</button>` : ""}${youChip()}${localChip()}${pushChip()}`;
+    ntry.innerHTML = `<button id="back">◂ timelines</button> · ${esc(titleOf(coord))} · ${dots.length} card${dots.length === 1 ? "" : "s"} · ${mark(nAcc, " accepted") || "none accepted"} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${srcChips()}` : ""}${canSign() && notaries.has(myCoord()) ? ` · <button class="chip" id="editbtn" title="retitle your head; d never changes">edit</button>${dots.some(x => x.accs.includes(myCoord())) ? "" : ` · <button class="chip" id="delbtn" title="delete your head — a list with no cards of your own">delete</button>`}` : ""}${youChip()}${localChip()}${pushChip()}`;
     document.getElementById("back").onclick = () => choose(null);
     document.getElementById("nchip").onclick = () => { names = !names; render(); };
     const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
     ntry.querySelectorAll(".src").forEach(b => b.onclick = () => setSources(srcs.filter(c => c !== b.dataset.c)));
     const pick = document.getElementById("srcpick"); if (pick) pick.onchange = () => pick.value && setSources([...srcs, pick.value]);
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
+    const del = document.getElementById("delbtn"); if (del) del.onclick = deleteHead;
     for (const d of sourceSubjects(ns.map(([, n]) => n))){ const t = subjectDot(d, fold.projections, all); if (t) dots.push(t); }   // a tethered subject = one dot and its reach, the root menu's shape; its cards stay home
     dots.sort(byDate);
   } else {
