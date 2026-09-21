@@ -284,6 +284,7 @@ const prose = t => esc(t).split(/\n\s*\n/).map(b => "<p>" + b.trim()
   .replace(/\{-([^]*?)-\}/g, "<del>$1</del>").replace(/\{\+([^]*?)\+\}/g, "<ins>$1</ins>")
   .replace(/\n/g, "<br>") + "</p>").join("");
 
+const utc = (y, m = 0, d = 1) => new Date(0).setUTCFullYear(y, m, d);   // Date.UTC reads 0–99 as 1900–1999; year 1 is year 1 here
 const T = d => Date.parse(d.slice(0, 10) + "T12:00:00Z");   // a range YYYY-MM-DD/YYYY-MM-DD sits at its start
 const endOf = d => d.split("/")[1] || "", showDate = d => d.replace("/", " – ");
 const frac = (t, a, b) => (t - a) / (b - a);
@@ -387,13 +388,13 @@ const rbtn = x => !coord || !canSign() ? "" : refused.has(x.id) ? `<button class
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
 function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
-  if (z && /^\d{4}-\d{2}$/.test(z)){ const [y, m] = z.split("-").map(Number); return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)]; }
-  if (z && /^\d{4}$/.test(z)){ const y = +z; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
+  if (z && /^\d{4}-\d{2}$/.test(z)){ const [y, m] = z.split("-").map(Number); return [utc(y, m - 1), utc(y, m)]; }
+  if (z && /^\d{4}$/.test(z)){ const y = +z; return [utc(y), utc(y + 1)]; }
   return null;
 }
 function windowOf(whole){                  // win: null = the record's mass, else any [from, to) the user dragged; whole=true = first card to last
   if (win && !whole) return win;
-  const ts = dots.map(x => T(x.date)).sort((a, b) => a - b); if (!ts.length) return [Date.UTC(2026,0,1), Date.UTC(2027,0,1)];
+  const ts = dots.map(x => T(x.date)).sort((a, b) => a - b); if (!ts.length) return [utc(2026), utc(2027)];
   // the mass: the shortest span holding 9 in 10 cards — a lone outlier stays on the bar, not in the band, until the reader scrubs to it
   const k = whole ? ts.length : Math.ceil(ts.length * 0.9); let a = ts[0], b = ts[ts.length - 1];
   for (let i = 0; i + k <= ts.length; i++) if (ts[i + k - 1] - ts[i] < b - a){ a = ts[i]; b = ts[i + k - 1]; }
@@ -469,9 +470,9 @@ function render(){
   const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
     const per = band.clientWidth / (span / (864e5 * 365.25)), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
-    for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; Date.UTC(y,0,1) < W1; y += step) ticks.push([Date.UTC(y,0,1), String(y)]);
+    for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; utc(y) < W1; y += step) ticks.push([utc(y), String(y)]);
   }
-  else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = Date.UTC(y, m, 1); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12]]); }
+  else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = utc(y, m); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12]]); }
   else for (let t = W0; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if (n % 5 === 1) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); }   // days say their month at its start and at the window's first tick
   for (const [t, label] of ticks){ const f = frac(t, W0, W1); if (f < 0.015 || f > 0.985) continue;   // a label on the edge would clip
     const e = document.createElement("div"); e.className = "tick"; e.style.left = f * 100 + "%"; e.textContent = label; band.appendChild(e); }
@@ -546,7 +547,7 @@ function render(){
   // scrub: whole years, first to last the record touches — fixed, so the bar never rescales under the pointer
   scrub.innerHTML = "";
   const ys = dots.length ? dots.map(x => +x.date.slice(0, 4)) : [new Date(NOW).getUTCFullYear()];
-  const A0 = Date.UTC(Math.min(...ys), 0, 1), A1 = Date.UTC(Math.max(...ys) + 1, 0, 1), pct = t => Math.max(0, Math.min(1, frac(t, A0, A1))) * 100 + "%";
+  const A0 = utc(Math.min(...ys)), A1 = utc(Math.max(...ys) + 1), pct = t => Math.max(0, Math.min(1, frac(t, A0, A1))) * 100 + "%";
   for (const x of [...dots].sort((a, b) => (a.kind === "acc" ? 1 : 0) - (b.kind === "acc" ? 1 : 0))){ const e = document.createElement("div"); e.className = "d" + (x.kind === "acc" ? " acc" : "") + (x.date > NOW ? " future" : ""); e.style.left = pct(T(x.date)); scrub.appendChild(e); }
   if (nowT > A0 && nowT < A1){ const e = document.createElement("div"); e.className = "now"; e.style.left = pct(nowT); scrub.appendChild(e); }
   const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; w.innerHTML = '<div class="h l"></div><div class="h r"></div>'; scrub.appendChild(w);
