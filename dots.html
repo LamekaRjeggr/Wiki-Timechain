@@ -93,7 +93,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
 #card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
-#card.menu{gap:4px} #card.menu .c{padding:8px 12px} .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px} .c.tl .row .row{margin:6px 0 0 calc(14px + 4px);padding-left:10px;border-left:2px solid var(--line)} .c.tl .fold{color:var(--t2);width:14px;text-align:left} .c.tl .row.on > h2 .go{color:var(--acc)}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
+#card.menu{gap:4px} #card.menu .c{padding:8px 12px} .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px} .c.tl .row .row{margin:6px 0 0 calc(14px + 4px);padding-left:10px;border-left:2px solid var(--line)} .c.tl .fold{color:var(--t2);width:14px;text-align:left} .c.tl .pick{color:var(--t2)} .c.tl .pick[aria-pressed="true"]{color:var(--acc)} .c.tl .drop[data-arm]{color:var(--acc)} .c.tl .row.on > h2 .go{color:var(--acc)}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
@@ -142,7 +142,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1", unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false;   // nested: the room of timelines that point at timelines; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1" || !!Q.get("pick"), picked = new Set((Q.get("pick") || "").split(",").filter(Boolean)), multi = !!Q.get("pick"), unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false;   // nested: the room of timelines that point at timelines; picked: rows checked there; multi: those timelines' cards on one band; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -256,7 +256,7 @@ function choose(c){   // c = a subject d → that timeline; null → the timelin
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
-  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (nested && !coord) q.set("nested", "1"); if (me) q.set("me", "1"); if (local) q.set("local", "1");
+  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (nested && !coord) q.set("nested", "1"); if (multi && !coord && picked.size) q.set("pick", [...picked].join(",")); if (me) q.set("me", "1"); if (local) q.set("local", "1");
   for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
 }
@@ -439,9 +439,19 @@ function render(){
       byD = new Map(); const ptrs = dots.filter(x => x.nTl); dots = [];
       for (const t of ptrs){ const end = t.last.split("/").pop(); if (end > t.date) t.date = t.date + "/" + end; t.last = t.date; byD.set(t.tl, t); dots.push(t); }
       for (const t of ptrs) for (const m of t.mem) if (!byD.has(m.d)){ byD.set(m.d, m); dots.push(m); }
+      if (multi && picked.size){   // several timelines at once: the picked ones' cards on one band; the pointer arcs over them stay, for now
+        dots = ptrs.filter(t => picked.has(t.tl) || t.mem.some(m => picked.has(m.d)));
+        for (const d of picked) dots.push(...dotsFor(d, fold.projections, all).filter(x => keep(x, d)).map(x => ({ ...x, of:d })));   // of: which timeline the card came in with
+        dots.sort(byDate);
+        const nC = dots.filter(x => !x.tl).length;
+        ntry.innerHTML = `<button id="back">◂ nested</button> · ${picked.size} timelines · ${nC} card${nC === 1 ? "" : "s"}${youChip()}${localChip()}`;
+        document.getElementById("back").onclick = () => { multi = false; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
+      } else {
       dots.sort(byDate);
-      ntry.innerHTML = `<button id="back">◂ timelines</button> · nested · ${ptrs.length}${youChip()}${localChip()}`;
+      ntry.innerHTML = `<button id="back">◂ timelines</button> · nested · ${ptrs.length}${picked.size ? ` · <button class="chip" id="viewbtn" title="the checked timelines' cards on one band">view ${picked.size} ▸</button>` : ""}${youChip()}${localChip()}`;
       document.getElementById("back").onclick = () => { nested = false; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
+      const vb = document.getElementById("viewbtn"); if (vb) vb.onclick = () => { multi = true; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
+      }
     } else {
       ntry.innerHTML = `<b>${dots.length}</b> timelines${emptyN ? ` · ${emptyN} empty` : ""}${youChip()}${localChip()}${nN ? ` · <button class="chip" id="nestbtn" title="timelines that point at timelines">nested ${nN} ▸</button>` : ""}${canSign() ? ` · <button class="chip" id="newtl" title="an empty head of yours: add cards, add timelines">new timeline ▸</button>` : ""}`;
       const nt = document.getElementById("newtl"); if (nt) nt.onclick = newTimeline;
@@ -563,14 +573,14 @@ function article(x){   // one card's block in the column; a timeline's block lea
   const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
   const drop = x.tl && coord && canSign() && sourcesOf(notaries.get(myCoord()) || { tags:[] }).some(c => c.endsWith(":" + x.tl));   // my head points at it: the row carries its ✕
   if (x.tl){
-    if (nested && !coord && !x.nTl) return "";   // in the nested room a member shows inside its pointer's row, not as its own
+    if (nested && !coord && !x.nTl && !multi) return "";   // in the nested room a member shows inside its pointer's row, not as its own
     return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${tlRow(x, drop)}</article>`;
   }   // a timeline row: title, count, the notary's own summary
   const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
   const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(showDate(c.date))}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}</div>
+  <div class="meta"><b>${esc(showDate(c.date))}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}${x.of ? ` · in <b>${esc(titleOf(x.of))}</b>` : ""}</div>
   ${actions ? `<div class="actions" aria-label="Card actions">${actions}</div>` : ""}
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
@@ -578,12 +588,12 @@ function article(x){   // one card's block in the column; a timeline's block lea
   <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
 }
 function tlRow(x, drop = false, depth = 0){   // a timeline's row: title = the door, count, summary; in the nested room a ▸ unfolds the timelines it points at, so you see inside before entering
-  const kids = nested && !coord && x.nTl ? x.mem.map(m => byD.get(m.d) || m) : [], on = unfolded.has(x.tl);
-  return `<div class="row" data-d="${esc(x.tl)}"><h2>${kids.length ? `<button class="fold" data-d="${esc(x.tl)}" aria-expanded="${on}">${on ? "▾" : "▸"}</button>` : ""}<button class="go" data-d="${esc(x.tl)}">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}${drop ? ` <button class="drop" data-d="${esc(x.tl)}" title="take this timeline off yours">✕</button>` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}${on ? kids.map(k => tlRow(k, false, depth + 1)).join("") : ""}</div>`;
+  const kids = nested && !coord && x.nTl ? x.mem.map(m => byD.get(m.d) || m) : [], on = unfolded.has(x.tl), pk = nested && !coord && !multi && x.n;   // pk: in the room a timeline holding cards can be checked for the many-at-once view
+  return `<div class="row" data-d="${esc(x.tl)}"><h2>${kids.length ? `<button class="fold" data-d="${esc(x.tl)}" aria-expanded="${on}">${on ? "▾" : "▸"}</button>` : ""}${pk ? `<button class="pick" data-d="${esc(x.tl)}" aria-pressed="${picked.has(x.tl)}" title="${picked.has(x.tl) ? "uncheck" : "check, to view with others"}">${picked.has(x.tl) ? "▣" : "▢"}</button>` : ""}<button class="go" data-d="${esc(x.tl)}">${esc(x.title)}</button><span class="n">${countOf(x)}${x.nAcc ? ` · ${mark(x.nAcc)}` : ""}${drop ? ` <button class="drop" data-d="${esc(x.tl)}" title="take this timeline off yours">✕</button>` : ""}</span></h2>${x.summary ? `<div class="sum">${esc(x.summary)}</div>` : ""}${on ? kids.map(k => tlRow(k, false, depth + 1)).join("") : ""}</div>`;
 }
 const countOf = x => [x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : "", x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";   // cards it holds, timelines it points at — both when both
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl + unfolded.has(x.tl) : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl + unfolded.has(x.tl) + picked.has(x.tl) : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   const vis = dots.filter(x => !refused.has(x.id)), refs = dots.filter(x => refused.has(x.id));   // refused cards leave the column; one line at its end holds them
   card.innerHTML = vis.map((x, i) => {
@@ -598,7 +608,10 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(b.dataset.d));
   card.querySelectorAll(".fold").forEach(b => b.onclick = () => { unfolded.has(b.dataset.d) ? unfolded.delete(b.dataset.d) : unfolded.add(b.dataset.d); colKey = null; column(); });
-  card.querySelectorAll(".drop").forEach(b => b.onclick = () => setSources(sourcesOf(notaries.get(myCoord())).filter(c => !c.endsWith(":" + b.dataset.d))));
+  card.querySelectorAll(".pick").forEach(b => b.onclick = () => { picked.has(b.dataset.d) ? picked.delete(b.dataset.d) : picked.add(b.dataset.d); colKey = null; render(); });
+  card.querySelectorAll(".drop").forEach(b => b.onclick = () => {   // two taps: the first arms it and says so, the second takes the timeline off; it disarms by itself
+    if (!b.dataset.arm){ b.dataset.arm = "1"; b.textContent = "remove?"; b.title = "click again to take it off"; setTimeout(() => { delete b.dataset.arm; b.textContent = "✕"; b.title = "take this timeline off yours"; }, 4000); return; }
+    setSources(sourcesOf(notaries.get(myCoord())).filter(c => !c.endsWith(":" + b.dataset.d))); });
   card.querySelectorAll(".abtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.w ? withdraw(+b.dataset.w) : accept(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   card.querySelectorAll(".rbtn").forEach(b => b.onclick = () => { b.disabled = true; (b.dataset.r ? withdraw(+b.dataset.r, "refuse") : refuse(+b.dataset.i)).catch(() => { b.disabled = false; b.textContent = "declined · try again"; }); });
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
