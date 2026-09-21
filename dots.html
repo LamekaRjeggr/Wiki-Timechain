@@ -507,9 +507,9 @@ function render(){
   for (const x of [...dots].sort((a, b) => T(endOf(b.date)) - T(endOf(a.date)) - (T(b.date) - T(a.date)))){   // widest first: a small arc sits over its container and stays hoverable
     if (!endOf(x.date) || (refused.has(x.id) && !showRef)) continue;
     const x0 = frac(T(x.date), W0, W1) * band.clientWidth, x1 = frac(T(endOf(x.date)), W0, W1) * band.clientWidth; if (x1 < 0 || x0 > band.clientWidth || x1 - x0 < 2) continue;
-    const sd = side(x), CAP = sd < 0 ? 70 : 30, r = Math.min((x1 - x0) / 2, CAP), dy = sd * r;
+    const sd = side(x), foot = OFF + DOT / 2, CAP = (sd < 0 ? 70 : 38) - foot, r = Math.min((x1 - x0) / 2, CAP), dy = sd * r, y = AX + sd * foot;   // feet at the dot's far edge (dots sit OFF px off the axis on their side), so the arc hangs from the rim; the cap gives up that room
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    p.setAttribute("d", r < CAP ? `M${x0} ${AX} A${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${x1} ${AX}` : `M${x0} ${AX} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${dy} H${x1 - r} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${-dy}`);
+    p.setAttribute("d", r < CAP ? `M${x0} ${y} A${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${x1} ${y}` : `M${x0} ${y} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${dy} H${x1 - r} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${-dy}`);
     p.setAttribute("class", (sd < 0 ? "acc" : "sub") + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "")); p.dataset.i = x.i;
     p.onclick = () => go(x.i); p.onmouseenter = () => line(x.i); p.onmouseleave = () => line(open);
     svg.appendChild(p);
@@ -536,8 +536,8 @@ function render(){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
-    const d = Math.max(24, SZ(n)); e.style.left = side === "l" ? "0" : "100%"; e.style.top = AX + "px"; e.style.width = e.style.height = d + "px";
-    axis.style[side === "l" ? "left" : "right"] = d / 2 + "px"; e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px";   // the count sits in the half that shows
+    const d = Math.max(32, SZ(n)); e.style.left = side === "l" ? "0" : "100%"; e.style.top = AX + "px"; e.style.width = e.style.height = d + "px";
+    axis.style[side === "l" ? "left" : "right"] = d / 2 + "px"; e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px"; e.style[side === "l" ? "paddingRight" : "paddingLeft"] = "0";   // the count sits mid-way across the half that shows
     e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
     e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
     band.appendChild(e);
