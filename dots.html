@@ -44,7 +44,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
 header .ntry{color:var(--t2);flex:1 1 0;min-width:0} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
 header .st{margin-left:auto;color:var(--t2);font-size:12px;white-space:nowrap} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
-header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)} header .title{color:var(--t2);border-bottom:1px dotted var(--line)} header select{font:inherit;color:var(--t1);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-width:22ch}   /* a chip: folded until pressed; the you chip fills when the filter is on */
+header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)} header .chip.gold{background:var(--acc);color:var(--bg);border-color:var(--acc)}   /* gold: the chip that acts on what you checked */ header .title{color:var(--t2);border-bottom:1px dotted var(--line)} header select{font:inherit;color:var(--t1);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-width:22ch}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
@@ -448,7 +448,7 @@ function render(){
         document.getElementById("back").onclick = () => { multi = false; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
       } else {
       dots.sort(byDate);
-      ntry.innerHTML = `<button id="back">◂ timelines</button> · nested · ${ptrs.length}${picked.size ? ` · <button class="chip" id="viewbtn" title="the checked timelines' cards on one band">view ${picked.size} ▸</button>` : ""}${youChip()}${localChip()}`;
+      ntry.innerHTML = `<button id="back">◂ timelines</button> · nested · ${ptrs.length}${picked.size ? ` · <button class="chip gold" id="viewbtn" title="the checked timelines' cards on one band">view ${picked.size} ▸</button>` : ` · <span class="t2">▢ check timelines to view together</span>`}${youChip()}${localChip()}`;
       document.getElementById("back").onclick = () => { nested = false; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
       const vb = document.getElementById("viewbtn"); if (vb) vb.onclick = () => { multi = true; open = null; colKey = null; setUrl(); scrollTo(0, 0); render(); };
       }
