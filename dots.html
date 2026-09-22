@@ -49,8 +49,8 @@ header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:
 main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window: the line wants every px of width */
 #top{position:sticky;top:0;z-index:2;background:var(--bg);min-width:0}   /* header and band stay while the column scrolls under them; min-width:0 = a long header line cannot widen the grid item and shove the band */
 #band{position:relative;user-select:none;overflow:hidden;cursor:grab} #band.drag{cursor:grabbing}   /* height = what the line needs to reach the window's right edge; an edge ring sits on the band edge and is cut to a half: more, that way */
-#now{position:absolute;top:-14px;height:30px;width:0;border-left:1px dashed var(--t1)}
-#now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
+#now{position:absolute;top:-44px;height:44px;width:0;border-left:1px dashed var(--t1)}   /* now rises from the line, above the year row; below the line is the titles' plane, nothing of now crosses it */
+#now i{position:absolute;bottom:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1);white-space:nowrap}
 .tick{position:absolute;top:-30px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
 .tick::before{content:"";position:absolute;bottom:-14px;left:50%;height:3px;width:1px;background:var(--t2)}
 .dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%);border:1.5px solid var(--sub);background:transparent;opacity:.6}   /* one card: a hollow, quiet mark; the size says how many cards sit under it */
