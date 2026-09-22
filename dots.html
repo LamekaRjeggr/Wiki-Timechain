@@ -48,7 +48,7 @@ header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
-#band{position:relative;height:146px;user-select:none;overflow:hidden}   /* an edge ring sits on the band edge and is cut to a half: more, that way */
+#band{position:relative;height:146px;user-select:none;overflow:hidden} #band.tilt{cursor:grab} #band.tilt.drag{cursor:grabbing}   /* an edge ring sits on the band edge and is cut to a half: more, that way */
 #axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2);z-index:1;pointer-events:none}   /* drawn over the dots: a grown dot straddles it and the line still says which side it is on */
 #now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
@@ -66,7 +66,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #arcs{position:absolute;inset:0;width:100%;height:100%;overflow:visible}   /* a card's span: an arc from its start foot to its end, bowing to its side — height is width, so nested spans nest */
 #arcs path{fill:none;stroke:var(--sub);stroke-width:1.5;opacity:.6;pointer-events:stroke;cursor:pointer} #arcs path.acc{stroke:var(--acc)} #arcs path.ref{opacity:.2} #arcs path.on,#arcs path:hover{opacity:1;stroke-width:2.5}
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
-#band.tilt{height:max(300px,40vh)} #band.tilt #axis{display:none}   /* ?tilt=1: the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
+#band.tilt{height:max(300px,40vh)} #band.tilt #axis{display:none}   /* the default; ?tilt=0 = the flat band. The line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)} #line .tick{top:-30px} #line .tick::before{top:auto;bottom:-14px} #line #now{top:-14px}   /* years above the line, titles below: two planes, nothing crosses */
 #line .ttl{position:absolute;top:9px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl i{color:var(--t2);font-style:normal}   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
 
@@ -146,7 +146,7 @@ const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1" || !!Q.get("pick"), picked = new Set((Q.get("pick") || "").split(",").filter(Boolean)), multi = !!Q.get("pick"), unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false, raw = new Set();   // nested: the room of timelines that point at timelines; picked: rows checked there; multi: those timelines' cards on one band; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // raw: card ids whose json is open   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
-const tilt = Q.get("tilt") === "1", TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // tilt: seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
+const tilt = Q.get("tilt") !== "0", TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // tilt: seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -537,7 +537,7 @@ function render(){
       if (last && px - last.px < 14 / Math.sin(TA)) last.n += n; else lbls.push({ px, n, d:dist(o), t:o.title || o.summary || "" }); }
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
-    e.onclick = deep ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
+    e.onclick = deep && !tilt ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
     e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${n} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
     e.onmouseleave = () => line(open);
     host.appendChild(e);
@@ -636,7 +636,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i; line(i); if (tilt && x.date !== seatD){ seatD = x.date; render(); }   // on the line the open card is the seat: the line slides so its dot lands there   // the ledger carries the open one's count and span: the menu row is only a title
+  const x = dots[i]; open = i; line(i); if (tilt && !pull && x.date !== seatD){ seatD = x.date; render(); }   // on the line the open card is the seat: the line slides so its dot lands there — unless a drag holds the seat   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   if (scroll && nested && !coord && x.tl && !x.nTl){ for (const t of byD.values()) if (t.nTl && t.mem.some(m => m.d === x.tl)) unfolded.add(t.tl); column(); }   // a member's dot opens the rows that hold it
@@ -665,6 +665,15 @@ band.addEventListener("wheel", e => {
   if (n1 - n0 < 864e5 || (n0 === W0 && n1 === W1)) return;
   win = [n0, n1]; render();   // out to the ends = the whole record, held as a window; null (the mass) is the first-load rest only
 }, { passive:false });
+// drag the line (tilt): the seat's date follows the pointer along the line; on release the first card at or past the seat takes the seat. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
+let pull = null;   // {x, y, seat, moved}
+band.onpointerdown = ev => { if (!tilt || !dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
+band.onpointermove = ev => {
+  if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
+  if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); } seatD = new Date(pull.seat - d / ppy * YR).toISOString(); render();
+};
+band.onpointerup = () => { if (!pull) return; const t = T(seatD); swallow = pull.moved; pull = null; band.classList.remove("drag"); if (!swallow) return; const j = dots.findIndex(x => T(x.date) >= t); go(j < 0 ? dots.length - 1 : j); };
+let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
 // scrub, like histography: drag an edge = resize, drag the box = move, press elsewhere = the box jumps there keeping its width; never narrower than a day
 let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a move
 const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
