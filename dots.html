@@ -118,7 +118,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
       <span class="st" id="bst"></span><span class="st" id="st">connecting…</span>
     </header>
     <div id="band" aria-label="timeline, one dot per card"><div id="empty" hidden>no cards yet</div></div>
-    <div id="scrub" tabindex="0" aria-label="whole record: press or drag to seat a card, up and down zoom, home and end jump, escape fits the record"></div>
+    <div id="scrub" tabindex="0" aria-label="whole record: press or drag to move the line, up and down zoom, home and end jump, escape fits the record"></div>
     <div id="ledger">&nbsp;</div>
   </div>
   <section id="card" aria-label="the cards, in date order"></section>
@@ -611,7 +611,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i; line(i); if (!pull && x.date !== seatD){ seatD = x.date; render(); }   // on the line the open card is the seat: the line slides so its dot lands there — unless a drag holds the seat   // the ledger carries the open one's count and span: the menu row is only a title
+  const x = dots[i]; open = i; line(i); if (scroll && dots.length){ const [W0, W1] = windowOf(), t = T(x.date); if (t < W0 || t >= W1){ seatD = x.date; render(); } }   // the line holds still; only aiming at a card off the line (dot, arrow, version button) slides it so its dot lands at the seat — a render or the scroll-spy never moves it   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   if (scroll && nested && !coord && x.tl && !x.nTl){ for (const t of byD.values()) if (t.nTl && t.mem.some(m => m.d === x.tl)) unfolded.add(t.tl); column(); }   // a member's dot opens the rows that hold it
@@ -628,18 +628,18 @@ const ntry = document.getElementById("ntry"),
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(0.2, Math.min(400, ppy * k)); render(); };
 band.addEventListener("wheel", e => { e.preventDefault(); zoom(e.deltaY > 0 ? 0.8 : 1.25); }, { passive:false });
-// drag the line: the seat's date follows the pointer along the line; on release the first card at or past the seat takes the seat. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
+// drag the line: the seat's date follows the pointer along the line and stays there on release. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
 let pull = null;   // {x, y, seat, moved}
 band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); } seatD = new Date(pull.seat - d / ppy * YR).toISOString(); render();
 };
-band.onpointerup = () => { if (!pull) return; const t = T(seatD); swallow = pull.moved; pull = null; band.classList.remove("drag"); if (!swallow) return; const j = dots.findIndex(x => T(x.date) >= t); go(j < 0 ? dots.length - 1 : j); };
+band.onpointerup = () => { if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
 let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
-// scrub: press or drag = seat the card under the pointer; under focus, up/down zoom, home/end = first/last card, escape = fit the record from the seat
+// scrub: press or drag = the date under the pointer takes the seat; under focus, up/down zoom, home/end = first/last card, escape = fit the record from the seat
 const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
-const seatAt = t => { const j = dots.findIndex(x => T(x.date) >= t); go(j < 0 ? dots.length - 1 : j); };
+const seatAt = t => { seatD = new Date(t).toISOString(); render(); };
 scrub.onpointerdown = ev => { ev.preventDefault(); scrub.setPointerCapture(ev.pointerId); seatAt(atX(ev)); };   // no focus from the pointer: arrows keep stepping cards after a drag; Tab still reaches the bar
 scrub.onpointermove = ev => { if (ev.buttons) seatAt(atX(ev)); };
 scrub.onkeydown = e => {
