@@ -514,15 +514,15 @@ function render(){
     const fs = Math.max(8, 13 - d * 0.055), k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (fs * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.fontSize = fs + "px"; l.style.opacity = Math.max(0.25, 1 - d * 0.011);
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   });
-  // cards beyond an edge: a half ring on that end with their count; click seats the farthest
+  // cards beyond an edge: a half ring on that end with their count; click brings the nearest in
   const seen = dots.filter(x => showRef || !refused.has(x.id)); for (const [side, off] of [["l", seen.filter(x => x.x < 0)], ["r", seen.filter(x => x.x > 100)]]){
     if (!off.length) continue;
-    const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
+    const n = off.length, near = off.reduce((m, o) => (side === "l" ? o.date > m.date : o.date < m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
     const d = Math.max(32, SZ(n)); e.style.left = (side === "l" ? 0 : L) + "px"; e.style.top = AY + "px"; e.style.width = e.style.height = d + "px";
     e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px"; e.style[side === "l" ? "paddingRight" : "paddingLeft"] = "0";   // the count sits mid-way across the half that shows
-    e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
-    e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
+    e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings the nearest in`);
+    e.onclick = () => go(near.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click brings the nearest in</span>`; }; e.onmouseleave = () => line(open);
     host.appendChild(e);
   }
 
@@ -587,7 +587,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i; line(i); if (scroll && dots.length){ const [W0, W1] = windowOf(), t = T(x.date); if (t < W0 || t >= W1){ seatD = x.date; render(); } }   // the line holds still; only aiming at a card off the line (dot, arrow, version button) slides it so its dot lands at the seat — a render or the scroll-spy never moves it   // the ledger carries the open one's count and span: the menu row is only a title
+  const x = dots[i]; open = i; line(i); if (scroll && dots.length){ const [W0, W1] = windowOf(), t = T(x.date); if (t < W0) seatD = x.date; else if (t >= W1) seatD = new Date(t - (W1 - W0) * 2 / 3).toISOString(); if (t < W0 || t >= W1) render(); }   // the line holds still; only aiming at a card off the line (dot, arrow, edge ring, version button) slides it, and by the least: an earlier card lands at the seat, a later one 2/3 up the line, so what you had stays in view — a render or the scroll-spy never moves it   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   if (scroll && nested && !coord && x.tl && !x.nTl){ for (const t of byD.values()) if (t.nTl && t.mem.some(m => m.d === x.tl)) unfolded.add(t.tl); column(); }   // a member's dot opens the rows that hold it
