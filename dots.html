@@ -79,11 +79,12 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 .c.ref{border-left-style:dashed;opacity:.6} #card .refs{margin-top:16px;font-size:12px;color:var(--t2);border-top:1px solid var(--line);padding-top:6px}   /* refused: one closing line, the cards behind it on request */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card:not(.menu) h2{font-family:var(--sans);font-size:18px;line-height:1.3;letter-spacing:-.01em}
-#card .meta{color:var(--t2);font-size:12px;margin-bottom:8px} #card .meta b{font-weight:400;color:var(--t1)}
-#card .a{color:var(--acc)} .meta .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
+#card .when{font-size:13px;color:var(--t1);margin-bottom:2px} #card .when i{color:var(--t2);font-style:normal}   /* the event's own axis: when, then what */
+#card .a{color:var(--acc)} .actions .a{border:1px solid var(--acc);padding:0 6px}   /* the ✓ N pill */
 #card .abtn{border:1px dashed var(--acc);color:var(--acc);padding:0 6px} #card .abtn:disabled{opacity:.5;cursor:default}
 #card .rbtn{border:1px dashed var(--t2);color:var(--t2);padding:0 6px} #card .rbtn:disabled{opacity:.5;cursor:default}   /* refuse / restore: the grey twin of the accept pill */   /* the same pill, dashed = not yet: press it and it fills */
-#card .actions{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+#card .rec,#card .actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:6px;border-top:1px solid var(--line);font-size:12px;color:var(--t2)}   /* two rules below the fact: the record (who wrote it, its json), then your act on it */
+#card .rec b{font-weight:400;color:var(--t1)} #card .rec .rawbtn{margin-left:auto;color:var(--t2)} #card pre.raw{margin:6px 0 0;font-size:11px;line-height:1.4;color:var(--t2);white-space:pre-wrap;word-break:break-all}
 #card .actions button{padding:2px 8px;border-radius:4px}
 #card .sum{color:var(--sep);margin:0 0 12px;font:500 14px/1.5 var(--sans)}   /* summary = the plain fact, full size, sepia */
 #card p{margin:0 0 10px;color:var(--t1);font:14px/1.6 var(--sans)}   /* prose is for reading; the surrounding record and provenance stay mono */
@@ -92,7 +93,6 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
 #card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
 #card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
-#card .foot{margin-top:12px;font-size:12px;color:var(--t2)} #card .foot a{color:var(--t2)}
 #card.menu{gap:4px} #card.menu .c{padding:8px 12px} .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px} .c.tl .row .row{margin:6px 0 0 calc(14px + 4px);padding-left:10px;border-left:2px solid var(--line)} .c.tl .fold{color:var(--t2);width:14px;text-align:left} .c.tl .pick{color:var(--t2)} .c.tl .pick[aria-pressed="true"]{color:var(--acc)} .c.tl .drop[data-arm]{color:var(--acc)} .c.tl .row.on > h2 .go{color:var(--acc)}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
 
 #scrub{position:relative;height:34px;margin-bottom:10px;border-top:1px solid var(--line);cursor:pointer;touch-action:none;user-select:none}
@@ -142,7 +142,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1" || !!Q.get("pick"), picked = new Set((Q.get("pick") || "").split(",").filter(Boolean)), multi = !!Q.get("pick"), unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false;   // nested: the room of timelines that point at timelines; picked: rows checked there; multi: those timelines' cards on one band; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
+let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1" || !!Q.get("pick"), picked = new Set((Q.get("pick") || "").split(",").filter(Boolean)), multi = !!Q.get("pick"), unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false, raw = new Set();   // nested: the room of timelines that point at timelines; picked: rows checked there; multi: those timelines' cards on one band; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // raw: card ids whose json is open   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -571,22 +571,24 @@ function line(i){
     : `<b>${esc(showDate(x.date))}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : `<span class="s">submitted</span>`} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
 }
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
-  const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d), day = new Date(c.created_at * 1000).toISOString().slice(0, 10);
+  const c = x.card || x, accs = accsOf(c.id), i = x.i, vers = dots.filter(o => o.d === x.d);
   const drop = x.tl && coord && canSign() && sourcesOf(notaries.get(myCoord()) || { tags:[] }).some(c => c.endsWith(":" + x.tl));   // my head points at it: the row carries its ✕
   if (x.tl){
     if (nested && !coord && !x.nTl && !multi) return "";   // in the nested room a member shows inside its pointer's row, not as its own
     return `<article class="c tl${x.kind === "acc" ? " acc" : ""}" data-i="${i}">${tlRow(x, drop)}</article>`;
   }   // a timeline row: title, count, the notary's own summary
-  const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? " · still accepted" : "";   // a refusal hides; it does not withdraw
-  const actions = [abtn(x), rbtn(x)].filter(Boolean).join("");
+  const ref = refused.has(c.id), held = ref && x.accs.includes(myCoord()) ? "<span>still accepted</span>" : "";   // a refusal hides; it does not withdraw
+  const actions = [accs.length ? mark(accs.length) : "", abtn(x), rbtn(x), held].filter(Boolean).join("");   // the act row: what notaries did, then what you can do
+  const ev = raw.has(c.id) && [...cards.values()].find(e => e.id === c.id);   // the record itself, opened: d, id, sig, created_at all live here, not on the card
   return `<article class="c${x.kind === "acc" ? " acc" : ""}${ref ? " ref" : ""}" data-i="${i}">
+  <div class="when">${esc(showDate(c.date))}${c.time ? " " + esc(c.time) : ""}${c.date > NOW ? " <i>· upcoming</i>" : ""}</div>
   <h2>${esc(c.title) || "<i>untitled</i>"}</h2>
-  <div class="meta"><b>${esc(showDate(c.date))}${c.time ? " " + esc(c.time) : ""}</b> · ${accs.length ? mark(accs.length) : "submitted"} · by <b>${esc(who(c.author))}</b> · ${day}${c.date > NOW ? " · upcoming" : ""}${isMine(c) ? " · yours" : ""}${held}${x.of ? ` · in <b>${esc(titleOf(x.of))}</b>` : ""}</div>
-  ${actions ? `<div class="actions" aria-label="Card actions">${actions}</div>` : ""}
   ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ""}
   ${prose(c.content)}
   ${vers.length > 1 ? `<div class="vers">${vers.map(o => `<button data-i="${o.i}"${o.i === i ? ' class="on"' : ""}>${esc(who(o.author))} · ${new Date(o.created_at * 1000).toISOString().slice(0, 10)}${accsOf(o.id).length ? " " + mark(accsOf(o.id).length) : ""}</button>`).join("")}</div>` : ""}
-  <div class="foot">d ${esc(c.d)} · <a href="https://njump.me/${esc(c.id)}" target="_blank" rel="noopener noreferrer">njump</a></div></article>`;
+  <div class="rec"><b>${esc(who(c.author))}</b>${isMine(c) ? "· yours" : ""}${x.of ? `· in <b>${esc(titleOf(x.of))}</b>` : ""}<button class="rawbtn" data-id="${esc(c.id)}" aria-expanded="${!!ev}">json ${ev ? "▾" : "▸"}</button></div>
+  ${ev ? `<pre class="raw">${esc(JSON.stringify(ev, null, 1))}</pre>` : ""}
+  ${actions ? `<div class="actions" aria-label="Card actions">${actions}</div>` : ""}</article>`;
 }
 function tlRow(x, drop = false, depth = 0){   // a timeline's row: title = the door, count, summary; in the nested room a ▸ unfolds the timelines it points at, so you see inside before entering
   const kids = nested && !coord && x.nTl ? x.mem.map(m => byD.get(m.d) || m) : [], on = unfolded.has(x.tl), pk = nested && !coord && !multi && x.n;   // pk: in the room a timeline holding cards can be checked for the many-at-once view
@@ -594,7 +596,7 @@ function tlRow(x, drop = false, depth = 0){   // a timeline's row: title = the d
 }
 const countOf = x => [x.n ? `${x.n} card${x.n === 1 ? "" : "s"}` : "", x.nTl ? `${x.nTl} timeline${x.nTl === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";   // cards it holds, timelines it points at — both when both
 function column(){   // rebuilt only when the cards themselves change, so a zoom never loses the reader's place
-  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl + unfolded.has(x.tl) + picked.has(x.tl) : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
+  const key = dots.map(x => x.id + x.kind + (x.tl ? x.tl + x.title + x.summary + x.n + x.nTl + unfolded.has(x.tl) + picked.has(x.tl) : "") + accsOf(x.id).length + (refused.has(x.id) ? "r" : "") + (raw.has(x.id) ? "j" : "")).join("|") + canSign() + myPk + showRef; if (key === colKey) return; colKey = key;   // myPk: the first sign tells the page who you are, and your pills change
   card.classList.toggle("menu", !coord);
   const vis = dots.filter(x => !refused.has(x.id)), refs = dots.filter(x => refused.has(x.id));   // refused cards leave the column; one line at its end holds them
   card.innerHTML = vis.map((x, i) => {
@@ -607,6 +609,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
     return `<div class="day">${esc(showDate(x.date))} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x) + end;
   }).join("") + (refs.length ? `<div class="refs"><button class="peek">${refs.length} refused ${showRef ? "▾" : "▸"}</button></div>${showRef ? refs.map(article).join("") : ""}` : "");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
+  card.querySelectorAll(".rawbtn").forEach(b => b.onclick = () => { raw.has(b.dataset.id) ? raw.delete(b.dataset.id) : raw.add(b.dataset.id); column(); });   // the card grows; the column scrolls, the json never does on its own
   card.querySelectorAll(".go").forEach(b => b.onclick = () => choose(b.dataset.d));
   card.querySelectorAll(".fold").forEach(b => b.onclick = () => { unfolded.has(b.dataset.d) ? unfolded.delete(b.dataset.d) : unfolded.add(b.dataset.d); colKey = null; column(); });
   card.querySelectorAll(".pick").forEach(b => b.onclick = () => { picked.has(b.dataset.d) ? picked.delete(b.dataset.d) : picked.add(b.dataset.d); colKey = null; render(); });
