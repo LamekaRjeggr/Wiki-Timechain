@@ -41,12 +41,12 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 .lhost{color:var(--t2);font-size:12px}
 .lhost::before{content:" ⟨"} .lhost::after{content:"⟩"}
 
-header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto}
+header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;width:100%}
 header .ntry{color:var(--t2);flex:1 1 0;min-width:0} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
 header .st{margin-left:auto;color:var(--t2);font-size:12px;white-space:nowrap} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
 header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)} header .chip.gold{background:var(--acc);color:var(--bg);border-color:var(--acc)}   /* gold: the chip that acts on what you checked */ header .title{color:var(--t2);border-bottom:1px dotted var(--line)} header select{font:inherit;color:var(--t1);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-width:22ch}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
-main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
+main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window: the line wants every px of width */
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
 #band{position:relative;user-select:none;overflow:hidden;cursor:grab} #band.drag{cursor:grabbing}   /* height = what the line needs to reach the window's right edge; an edge ring sits on the band edge and is cut to a half: more, that way */
 #now{position:absolute;top:-14px;height:30px;width:0;border-left:1px dashed var(--t1)}
@@ -67,7 +67,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 /* the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
-#line .ttl{position:absolute;top:14px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl i{color:var(--t2);font-style:normal}   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
+#line .ttl{position:absolute;top:14px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
 
 #ledger{height:22px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ledger b{color:var(--t0);font-weight:400}
@@ -520,10 +520,10 @@ function render(){
     e.onmouseleave = () => line(open);
     host.appendChild(e);
   });
-  for (const { px, n, d, t } of lbls){   // the title, flat, hung from the dot: one number — years from the seat — takes its chars (44→3), size (13→8) and ink (1→.25)
-    const k = Math.max(3, Math.floor(44 - d * 0.55)), l = document.createElement("span"); l.className = "ttl"; l.style.left = px + "px"; l.style.fontSize = Math.max(8, 13 - d * 0.055) + "px"; l.style.opacity = Math.max(0.25, 1 - d * 0.011);
+  lbls.forEach(({ px, n, d, t }, li) => {   // the title, flat, hung from the dot: years from the seat take its size (13→8) and ink (1→.25); its chars = what fits to the window's edge
+    const fs = Math.max(8, 13 - d * 0.055), k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (fs * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.fontSize = fs + "px"; l.style.opacity = Math.max(0.25, 1 - d * 0.011);
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
-  }
+  });
   // cards beyond an edge: a half ring on that end with their count; click seats the farthest
   const seen = dots.filter(x => showRef || !refused.has(x.id)); for (const [side, off] of [["l", seen.filter(x => x.x < 0)], ["r", seen.filter(x => x.x > 100)]]){
     if (!off.length) continue;
