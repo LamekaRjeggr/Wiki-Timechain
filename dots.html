@@ -48,27 +48,26 @@ header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:
 
 main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin:0 auto}
 #top{position:sticky;top:0;z-index:2;background:var(--bg);padding-bottom:10px;min-width:0}   /* header, band, scrub and ledger stay while the column scrolls under them; min-width:0 = a long ledger line cannot widen the grid item and shove the band (hover jitter) */
-#band{position:relative;height:146px;user-select:none;overflow:hidden} #band.tilt{cursor:grab} #band.tilt.drag{cursor:grabbing}   /* an edge ring sits on the band edge and is cut to a half: more, that way */
-#axis{position:absolute;left:0;right:0;top:78px;height:1px;background:var(--t2);z-index:1;pointer-events:none}   /* drawn over the dots: a grown dot straddles it and the line still says which side it is on */
-#now{position:absolute;top:64px;height:30px;width:0;border-left:1px dashed var(--t1)}
+#band{position:relative;user-select:none;overflow:hidden;cursor:grab} #band.drag{cursor:grabbing}   /* height = what the line needs to reach the window's right edge; an edge ring sits on the band edge and is cut to a half: more, that way */
+#now{position:absolute;top:-14px;height:30px;width:0;border-left:1px dashed var(--t1)}
 #now i{position:absolute;top:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1)}
-.tick{position:absolute;top:118px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
-.tick::before{content:"";position:absolute;top:-40px;left:50%;height:3px;width:1px;background:var(--t2)}
+.tick{position:absolute;top:-30px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
+.tick::before{content:"";position:absolute;bottom:-14px;left:50%;height:3px;width:1px;background:var(--t2)}
 .dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%);border:1.5px solid var(--sub);background:transparent;opacity:.6}   /* one card: a hollow, quiet mark; the size says how many cards sit under it */
 .dot::before{content:"";position:absolute;inset:-10px}   /* the finger gets 31px, the eye keeps the dot */
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub);color:#000;font:bold 10px var(--mono)} .dot.many.acc{background:var(--acc)}   /* the count sits inside once the dot is big enough */
 .dot.future{background:transparent}
 .dot.ref{opacity:.2}   /* a version you refused, unfolded: on the band, barely */
-.dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot; the axis stops at its flat side */
+.dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .tail{position:absolute;height:3px;background:var(--line);transform:translateY(-50%)}   /* a timeline's reach, first card to last */
-#arcs{position:absolute;inset:0;width:100%;height:100%;overflow:visible}   /* a card's span: an arc from its start foot to its end, bowing to its side — height is width, so nested spans nest */
-#arcs path{fill:none;stroke:var(--sub);stroke-width:1.5;opacity:.6;pointer-events:stroke;cursor:pointer} #arcs path.acc{stroke:var(--acc)} #arcs path.ref{opacity:.2} #arcs path.on,#arcs path:hover{opacity:1;stroke-width:2.5}
+.bar{position:absolute;height:0;border-top:1.5px solid;color:var(--sub);opacity:.6;transform-origin:0 0;transform:rotate(22deg);pointer-events:none} .bar.acc{color:var(--acc)} .bar.ref{opacity:.2} .bar.on{opacity:1}   /* a card's span: a flat rule from its dot to under its end date, above the title; every date has its own height on the line, so rules never share one */
+.bar::after{content:"";position:absolute;right:0;top:-3px;height:5px;border-right:1px solid}   /* the end says where it stops */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
-#band.tilt{height:max(300px,40vh)} #band.tilt #axis{display:none}   /* the default; ?tilt=0 = the flat band. The line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
-#line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)} #line .tick{top:-30px} #line .tick::before{top:auto;bottom:-14px} #line #now{top:-14px}   /* years above the line, titles below: two planes, nothing crosses */
-#line .ttl{position:absolute;top:9px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl i{color:var(--t2);font-style:normal}   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
+/* the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
+#line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
+#line .ttl{position:absolute;top:14px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl i{color:var(--t2);font-style:normal}   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
 
 #ledger{height:22px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ledger b{color:var(--t0);font-weight:400}
@@ -102,9 +101,7 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
 #scrub:focus-visible{outline:none;border-top-color:var(--t0)}
 #scrub .d{position:absolute;top:5px;width:5px;height:5px;border-radius:50%;background:var(--sub);transform:translateX(-50%)}
 #scrub .d.acc{background:var(--acc)} #scrub .d.future{background:transparent;border:1px solid var(--sub)}
-#scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t0);border-bottom:none;background:color-mix(in srgb,var(--t1) 16%,transparent);cursor:grab}
-#scrub .h{position:absolute;top:-1px;bottom:0;width:9px;cursor:ew-resize} #scrub .h.l{left:-5px} #scrub .h.r{right:-5px}
-#scrub .h::after{content:"";position:absolute;left:3px;top:9px;bottom:6px;width:3px;background:var(--t0)}   /* handles you can see */
+#scrub .win{position:absolute;top:4px;bottom:0;min-width:6px;border:1px solid var(--t0);border-bottom:none;background:color-mix(in srgb,var(--t1) 16%,transparent)}   /* what the line shows, seat to far end */
 #scrub .now{position:absolute;top:2px;bottom:0;border-left:1px dashed var(--t2);pointer-events:none}
 #scrub .ed{position:absolute;top:15px;font-size:13px;color:var(--t1);pointer-events:none;white-space:nowrap;padding:0 5px}
 #scrub .ed.l{transform:translateX(-100%)} #scrub .ed.in.l{transform:none} #scrub .ed.in.r{transform:translateX(-100%)}
@@ -120,8 +117,8 @@ main{display:grid;grid-template-rows:auto 1fr;max-width:1100px;width:100%;margin
       <span class="ntry" id="ntry"></span>
       <span class="st" id="bst"></span><span class="st" id="st">connecting…</span>
     </header>
-    <div id="band" aria-label="timeline, one dot per card"><div id="axis"></div><div id="empty" hidden>no cards yet</div></div>
-    <div id="scrub" tabindex="0" aria-label="whole record: arrows move, up and down zoom, home and end jump, escape shows everything"></div>
+    <div id="band" aria-label="timeline, one dot per card"><div id="empty" hidden>no cards yet</div></div>
+    <div id="scrub" tabindex="0" aria-label="whole record: press or drag to seat a card, up and down zoom, home and end jump, escape fits the record"></div>
     <div id="ledger">&nbsp;</div>
   </div>
   <section id="card" aria-label="the cards, in date order"></section>
@@ -144,9 +141,9 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
-let want = Q.get("c"), coord = null, askT = null, win = spanOf(Q.get("y")), open = null, dots = [], renderT = null, colKey = null;
+let want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, nested = Q.get("nested") === "1" || !!Q.get("pick"), picked = new Set((Q.get("pick") || "").split(",").filter(Boolean)), multi = !!Q.get("pick"), unfolded = new Set(), byD = new Map(), refused = new Map(), showRef = false, raw = new Set();   // nested: the room of timelines that point at timelines; picked: rows checked there; multi: those timelines' cards on one band; unfolded: their rows opened in place; byD: that room's dots by d   // refused: card id → my whole-card refusal in the open timeline; showRef: the refused cards unfolded below the column   // raw: card ids whose json is open   // me: the page narrows to your marks (cards you wrote, cards your notary holds); names: the notary chip unfolded
-const tilt = Q.get("tilt") !== "0", TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // tilt: seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
+const TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -256,7 +253,7 @@ function subjectDot(d, projections, all, hop = true){   // a whole timeline as O
   return dot;
 }
 function choose(c){   // c = a subject d → that timeline; null → the timeline of timelines
-  coord = c; open = null; want = null; win = c ? spanOf(Q.get("y")) : null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
+  coord = c; open = null; want = null; seatD = null; ppy = null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
@@ -391,21 +388,10 @@ const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<but
 const rbtn = x => !coord || !canSign() ? "" : refused.has(x.id) ? `<button class="rbtn" data-r="${x.i}">restore</button>` : `<button class="rbtn" data-i="${x.i}">refuse</button>`;   // the grey pill: refuse this version, or lift the refusal
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
-function spanOf(z){                        // "YYYY" or "YYYY-MM" → [from, to) ms; anything else → null (whole record)
-  if (z && /^\d{4}-\d{2}$/.test(z)){ const [y, m] = z.split("-").map(Number); return [utc(y, m - 1), utc(y, m)]; }
-  if (z && /^\d{4}$/.test(z)){ const y = +z; return [utc(y), utc(y + 1)]; }
-  return null;
-}
 const lineL = () => Math.min((band.clientHeight - 52 - 14) / Math.sin(TA), (band.clientWidth - 14) / Math.cos(TA));   // the line's length: it stops where it would leave the band, top or right
-function windowOf(whole){                  // win: null = the record's mass, else any [from, to) the user dragged; whole=true = first card to last
-  if (tilt && !whole && dots.length){ const s = T(seatD || dots[0].date); ppy ??= (lineL() - SEAT) / Math.max(0.5, (T(dots[dots.length - 1].date) - s) / YR); return [s, s + (lineL() - SEAT) / ppy * YR]; }   // the seat is the window's left edge; the far edge is where the line leaves the band
-  if (win && !whole) return win;
-  const ts = dots.map(x => T(x.date)).sort((a, b) => a - b); if (!ts.length) return [utc(2026), utc(2027)];
-  // the mass: the shortest span holding 9 in 10 cards — a lone outlier stays on the bar, not in the band, until the reader scrubs to it
-  const k = whole ? ts.length : Math.ceil(ts.length * 0.9); let a = ts[0], b = ts[ts.length - 1];
-  for (let i = 0; i + k <= ts.length; i++) if (ts[i + k - 1] - ts[i] < b - a){ a = ts[i]; b = ts[i + k - 1]; }
-  const pad = Math.max((b - a) * 0.04, 864e5 * 15);
-  return [a - pad, b + pad];
+function windowOf(){                       // [seat, far end): the seat is the open card's date; the far edge is where the line leaves the band
+  if (!dots.length) return [utc(2026), utc(2027)];
+  const s = T(seatD || dots[0].date); ppy ??= (lineL() - SEAT) / Math.max(0.5, (T(dots[dots.length - 1].date) - s) / YR); return [s, s + (lineL() - SEAT) / ppy * YR];
 }
 
 function render(){
@@ -472,26 +458,26 @@ function render(){
 
   // the band
   const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
-  band.querySelectorAll(".dot,.tick,.tail,#arcs,#now,#line").forEach(e => e.remove()); band.classList.toggle("tilt", tilt);
-  const L = tilt ? lineL() : band.clientWidth, AY = tilt ? 0 : 78, PX = tilt ? (L - SEAT) / 100 : band.clientWidth / 100, X = f => tilt ? SEAT + f * PX + "px" : f + "%", Wd = f => tilt ? f * PX + "px" : f + "%", xp = f => (tilt ? SEAT : 0) + f * (L - (tilt ? SEAT : 0));   // positions in % of the window; on the line they become px from the seat
-  let host = band; if (tilt){ host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 52 + "px"; host.style.width = L + "px"; band.appendChild(host); }
-  const dist = x => tilt ? (T(x.date) - W0) / YR : 0, fm = x => 1 + dist(x) / 40;   // years from the seat, and the merge gap it grows
+  band.querySelectorAll("#line").forEach(e => e.remove()); band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 66)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
+  const L = lineL(), AY = 0, PX = (L - SEAT) / 100, X = f => SEAT + f * PX + "px", Wd = f => f * PX + "px", xp = f => SEAT + f * (L - SEAT);   // positions in % of the window become px from the seat
+  const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 52 + "px"; host.style.width = L + "px"; band.appendChild(host);
+  const dist = x => (T(x.date) - W0) / YR, fm = x => 1 + dist(x) / 40;   // years from the seat, and the merge gap it grows
   const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
-    const per = (L - (tilt ? SEAT : 0)) / (span / YR), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
+    const per = (L - SEAT) / (span / YR), step = [1, 2, 5, 10, 20, 50, 100].find(k => k * per >= 44) || 100;
     for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; utc(y) < W1; y += step) ticks.push([utc(y), String(y)]);
   }
   else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = utc(y, m); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12]]); }
   else for (let t = W0; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if (n % 5 === 1) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); }   // days say their month at its start and at the window's first tick
-  for (const [t, label] of ticks){ const f = frac(t, W0, W1); if (!tilt && (f < 0.015 || f > 0.985)) continue;   // a label on the edge would clip
+  for (const [t, label] of ticks){ const f = frac(t, W0, W1);
     const e = document.createElement("div"); e.className = "tick"; e.style.left = X(f * 100); e.textContent = label; host.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = X(frac(nowT, W0, W1) * 100); e.innerHTML = "<i>now</i>"; host.appendChild(e); }
 
-  // zooming in grows the dots: 11px at the whole record, up to 22px at a month; a dot's size then says how many cards it holds (log, so 40 is not 40x)
-  const full = windowOf(true), DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt((full[1] - full[0]) / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
+  // zooming in grows the dots: 11px at the whole record, up to 22px close in; a dot's size then says how many cards it holds (log, so 40 is not 40x)
+  const full = dots.length ? T(dots[dots.length - 1].date) - T(dots[0].date) || span : span, DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt(full / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
   // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
   // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
-  const AX = 78, groups = [], lbls = [];
+  const groups = [], lbls = [];
   dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.g = null; });
   // two sides of the line: accepted rests on it, the rest hangs under it — a side is a channel of its own, so clusters never cross it
   const side = x => x.kind === "acc" ? -1 : 1, OFF = 5.5;   // the centre sits half the smallest dot off the axis and stays there while the dot grows
@@ -511,20 +497,13 @@ function render(){
   }
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AY + "px";
     e.style.left = X(Math.max(0, x.x)); e.style.width = Wd(Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x)); host.insertBefore(e, host.firstChild); }
-  // a span card bows an arc from its start foot to its end: up if accepted, down if not; radius = half its width, capped at the band's room on that side,
-  // past the cap it flattens along the top — below 2px it is only its dot
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "arcs"; svg.setAttribute("viewBox", `0 0 ${L} 146`); svg.setAttribute("preserveAspectRatio", "none"); if (tilt) svg.style.cssText = `top:-${AX}px;width:${L}px;height:146px`;   // on the line the svg keeps its own axis at 78, hung so it lands on the line
-  for (const x of [...dots].sort((a, b) => T(endOf(b.date)) - T(endOf(a.date)) - (T(b.date) - T(a.date)))){   // widest first: a small arc sits over its container and stays hoverable
+  // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot
+  for (const x of dots){
     if (!endOf(x.date) || (refused.has(x.id) && !showRef)) continue;
-    const x0 = xp(frac(T(x.date), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < 0 || x0 > L || x1 - x0 < 2) continue;
-    const sd = side(x), foot = OFF + DOT / 2, CAP = (sd < 0 ? 70 : 38) - foot, r = Math.min((x1 - x0) / 2, CAP), dy = sd * r, y = AX + sd * foot;   // feet at the dot's far edge (dots sit OFF px off the axis on their side), so the arc hangs from the rim; the cap gives up that room
-    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    p.setAttribute("d", r < CAP ? `M${x0} ${y} A${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${x1} ${y}` : `M${x0} ${y} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${dy} H${x1 - r} a${r} ${r} 0 0 ${sd < 0 ? 1 : 0} ${r} ${-dy}`);
-    p.setAttribute("class", (sd < 0 ? "acc" : "sub") + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "")); p.dataset.i = x.i;
-    p.onclick = () => go(x.i); p.onmouseenter = () => line(x.i); p.onmouseleave = () => line(open);
-    svg.appendChild(p);
+    const x0 = xp(frac(T(x.date), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;
+    const b = document.createElement("div"); b.className = "bar " + x.kind + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "");
+    b.style.left = x0 + "px"; b.style.top = side(x) * OFF + "px"; b.style.width = (Math.min(x1, L) - x0) * Math.cos(TA) + "px"; host.appendChild(b);   // flat on the screen: its length is the line's run times cos22
   }
-  host.insertBefore(svg, host.firstChild);
   groups.sort((a, b) => mx(a) - mx(b)).forEach((ids, gi) => {
     const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length, n = ids.length;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
@@ -533,12 +512,11 @@ function render(){
     e.className = "dot " + x.kind + (n > 1 ? " many" : "") + (ids.every(o => refused.has(o.id)) ? " ref" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = X(cx); e.style.top = AY + side(x) * OFF + "px"; e.style.width = e.style.height = SZ(n) + "px";
     if (n > 1 && SZ(n) >= 15) e.textContent = n;
-    if (tilt){ const o = ids.includes(dots[open]) ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card names its group; flat titles stack at gap·sin22, so groups nearer than a line-height share one label
-      if (last && px - last.px < 14 / Math.sin(TA)) last.n += n; else lbls.push({ px, n, d:dist(o), t:o.title || o.summary || "" }); }
-    const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date), deep = hi > lo;
-    e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}` + (deep ? ", click spreads them" : ""));
-    e.onclick = deep && !tilt ? () => { const pad = Math.max((T(hi) - T(lo)) * 0.08, 864e5); win = [T(lo) - pad, T(hi) + pad]; render(); } : () => go(x.i);
-    e.onmouseenter = deep ? () => { ledger.innerHTML = `<b>${n} here</b> · ${lo} → ${hi} · <span class="t2">click to spread</span>`; } : () => line(x.i);
+    const o = ids.includes(dots[open]) ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card names its group; flat titles stack at gap·sin22, so groups nearer than a line-height share one label
+    if (last && px - last.px < 14 / Math.sin(TA)) last.n += n; else lbls.push({ px, n, d:dist(o), t:o.title || o.summary || "" });
+    const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date);
+    e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}`);
+    e.onclick = () => go(x.i); e.onmouseenter = () => line(x.i);
     e.onmouseleave = () => line(open);
     host.appendChild(e);
   });
@@ -546,14 +524,13 @@ function render(){
     const k = Math.max(3, Math.floor(44 - d * 0.55)), l = document.createElement("span"); l.className = "ttl"; l.style.left = px + "px"; l.style.fontSize = Math.max(8, 13 - d * 0.055) + "px"; l.style.opacity = Math.max(0.25, 1 - d * 0.011);
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   }
-  // cards beyond an edge: a half ring on that end with their count; click grows the window to take them in
-  const axis = document.getElementById("axis"); axis.style.left = axis.style.right = 0;
+  // cards beyond an edge: a half ring on that end with their count; click seats the farthest
   const seen = dots.filter(x => showRef || !refused.has(x.id)); for (const [side, off] of [["l", seen.filter(x => x.x < 0)], ["r", seen.filter(x => x.x > 100)]]){
     if (!off.length) continue;
     const n = off.length, far = off.reduce((m, o) => (side === "l" ? o.date < m.date : o.date > m.date) ? o : m, off[0]), lo = off.reduce((m, o) => o.date < m ? o.date : m, off[0].date), hi = off.reduce((m, o) => o.date > m ? o.date : m, off[0].date);
     const e = document.createElement("button"); e.className = "dot edge"; e.textContent = n;
-    const d = Math.max(32, SZ(n)); e.style.left = tilt ? (side === "l" ? 0 : L) + "px" : side === "l" ? "0" : "100%"; e.style.top = AY + "px"; e.style.width = e.style.height = d + "px";
-    if (!tilt) axis.style[side === "l" ? "left" : "right"] = d / 2 + "px"; e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px"; e.style[side === "l" ? "paddingRight" : "paddingLeft"] = "0";   // the count sits mid-way across the half that shows
+    const d = Math.max(32, SZ(n)); e.style.left = (side === "l" ? 0 : L) + "px"; e.style.top = AY + "px"; e.style.width = e.style.height = d + "px";
+    e.style[side === "l" ? "paddingLeft" : "paddingRight"] = d / 2 + "px"; e.style[side === "l" ? "paddingRight" : "paddingLeft"] = "0";   // the count sits mid-way across the half that shows
     e.setAttribute("aria-label", `${n} beyond, ${lo} to ${hi}, click brings them in`);
     e.onclick = () => go(far.i); e.onmouseenter = () => { ledger.innerHTML = `<b>${n} beyond</b> · ${lo} → ${hi} · <span class="t2">click to bring them in</span>`; }; e.onmouseleave = () => line(open);
     host.appendChild(e);
@@ -565,7 +542,7 @@ function render(){
   const A0 = utc(Math.min(...ys)), A1 = utc(Math.max(...ys) + 1), pct = t => Math.max(0, Math.min(1, frac(t, A0, A1))) * 100 + "%";
   for (const x of [...dots].sort((a, b) => (a.kind === "acc" ? 1 : 0) - (b.kind === "acc" ? 1 : 0))){ const e = document.createElement("div"); e.className = "d" + (x.kind === "acc" ? " acc" : "") + (x.date > NOW ? " future" : ""); e.style.left = pct(T(x.date)); scrub.appendChild(e); }
   if (nowT > A0 && nowT < A1){ const e = document.createElement("div"); e.className = "now"; e.style.left = pct(nowT); scrub.appendChild(e); }
-  const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; w.innerHTML = '<div class="h l"></div><div class="h r"></div>'; scrub.appendChild(w);
+  const w = document.createElement("div"); w.className = "win"; w.style.left = pct(W0); w.style.width = `calc(${pct(W1)} - ${pct(W0)})`; scrub.appendChild(w);
   // the window says its own dates at each edge, like histography; a label that would run off the bar flips inside
   // (LW = one label's width; a flipped-in label on a box narrower than that pushes the other label out past it)
   const LW = 88, room = LW / scrub.clientWidth, fl = frac(W0, A0, A1) < room, fr = frac(W1, A0, A1) > 1 - room;
@@ -578,9 +555,7 @@ function render(){
 
 function line(i){
   if (i === null || !dots[i]){
-    const n = dots.filter(x => x.x >= 0 && x.x <= 100).length;   // nothing open: say what the window holds (cards, not drawn dots), so an empty scrub stop is not a dead screen
-    const [a, b] = windowOf(), lbl = new Date(a).toISOString().slice(0, 10) + " → " + new Date(b - 864e5).toISOString().slice(0, 10);
-    ledger.innerHTML = win ? `<span class="t2">${n ? `${n} in ${lbl}` : `nothing in ${lbl}`}</span>` : "&nbsp;"; return; }
+    ledger.innerHTML = "&nbsp;"; return; }
   const x = dots[i], vers = dots.filter(o => o.d === x.d).length, same = x.g === null ? 0 : dots.filter(o => o.g === x.g).length - 1;
   ledger.innerHTML = x.tl ? `<b>${esc(x.title)}</b> · ${countOf(x)}${same > 0 ? ` · ${same} more here` : ""}`
     : `<b>${esc(showDate(x.date))}</b> · ${esc(x.title || x.summary || x.content.slice(0, 60))} · ${accsOf(x.id).length ? mark(accsOf(x.id).length) : `<span class="s">submitted</span>`} · ${esc(who(x.author))}${vers > 1 ? ` · ${vers} versions` : ""}${same > 0 ? ` · ${same} more here` : ""}${refused.has(x.id) ? " · refused" : ""}`;
@@ -636,7 +611,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i; line(i); if (tilt && !pull && x.date !== seatD){ seatD = x.date; render(); }   // on the line the open card is the seat: the line slides so its dot lands there — unless a drag holds the seat   // the ledger carries the open one's count and span: the menu row is only a title
+  const x = dots[i]; open = i; line(i); if (!pull && x.date !== seatD){ seatD = x.date; render(); }   // on the line the open card is the seat: the line slides so its dot lands there — unless a drag holds the seat   // the ledger carries the open one's count and span: the menu row is only a title
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   if (scroll && nested && !coord && x.tl && !x.nTl){ for (const t of byD.values()) if (t.nTl && t.mem.some(m => m.d === x.tl)) unfolded.add(t.tl); column(); }   // a member's dot opens the rows that hold it
@@ -644,65 +619,33 @@ function show(i, scroll = true){   // open = card i: its dot and block light up;
   card.querySelectorAll(".row").forEach(e => e.classList.toggle("on", x.tl && e.dataset.d === x.tl));
   if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - mapEl.offsetHeight - 14);   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
 }
-function reveal(i){   // card i off a zoomed window? the window grows that way to take it in; the other edge stays put
-  if (tilt || !dots[i]) return;
-  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = T(dots[i].date), was = windowOf(); let [W0, W1] = was; const pad = Math.max(864e5, (W1 - W0) / 20);
-  if (t < W0) W0 = Math.max(a0, snap(t - pad)); else if (t >= W1) W1 = Math.min(a1, snap(t + pad));
-  if (W0 !== was[0] || W1 !== was[1]){ win = [W0, W1]; render(); }
-}
-const go = i => { reveal(i); if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
+const go = i => { if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
 
 // ── controls ──
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   ledger = document.getElementById("ledger"), card = document.getElementById("card"), scrub = document.getElementById("scrub"), mapEl = document.getElementById("top");
-// wheel over the band: zoom about the day under the pointer, never past the record's years or under a day; at the ends it stays put
-band.addEventListener("wheel", e => {
-  e.preventDefault(); if (tilt){ ppy = Math.max(0.2, Math.min(400, ppy * (e.deltaY > 0 ? 0.8 : 1.25))); return render(); }   // on the line the seat holds; the wheel stretches the years
-  const [W0, W1] = windowOf(), a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, k = e.deltaY > 0 ? 1.25 : 0.8;
-  const t = W0 + (e.clientX - band.getBoundingClientRect().left) / band.clientWidth * (W1 - W0);
-  let n0 = Math.max(a0, t - (t - W0) * k), n1 = Math.min(a1, t + (W1 - t) * k);
-  if (n1 - n0 < 864e5 || (n0 === W0 && n1 === W1)) return;
-  win = [n0, n1]; render();   // out to the ends = the whole record, held as a window; null (the mass) is the first-load rest only
-}, { passive:false });
-// drag the line (tilt): the seat's date follows the pointer along the line; on release the first card at or past the seat takes the seat. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
+// wheel over the band: the seat holds, the years stretch or squeeze
+const zoom = k => { ppy = Math.max(0.2, Math.min(400, ppy * k)); render(); };
+band.addEventListener("wheel", e => { e.preventDefault(); zoom(e.deltaY > 0 ? 0.8 : 1.25); }, { passive:false });
+// drag the line: the seat's date follows the pointer along the line; on release the first card at or past the seat takes the seat. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
 let pull = null;   // {x, y, seat, moved}
-band.onpointerdown = ev => { if (!tilt || !dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
+band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); } seatD = new Date(pull.seat - d / ppy * YR).toISOString(); render();
 };
 band.onpointerup = () => { if (!pull) return; const t = T(seatD); swallow = pull.moved; pull = null; band.classList.remove("drag"); if (!swallow) return; const j = dots.findIndex(x => T(x.date) >= t); go(j < 0 ? dots.length - 1 : j); };
 let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
-// scrub, like histography: drag an edge = resize, drag the box = move, press elsewhere = the box jumps there keeping its width; never narrower than a day
-let grab = null;   // {mode:"l"|"r"|"m", off}  off = pointer − W0 in ms, for a move
+// scrub: press or drag = seat the card under the pointer; under focus, up/down zoom, home/end = first/last card, escape = fit the record from the seat
 const atX = ev => { const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; return a0 + Math.max(0, Math.min(1, (ev.clientX - scrub.getBoundingClientRect().left) / scrub.clientWidth)) * (a1 - a0); };
-const snap = t => Math.round(t / 864e5) * 864e5;
-scrub.onpointerdown = ev => {
-  ev.preventDefault(); scrub.setPointerCapture(ev.pointerId);   // no focus from the pointer: arrows keep stepping cards after a drag; Tab still reaches the bar
-  const [W0, W1] = windowOf(), t = atX(ev), h = ev.target.closest(".h");
-  grab = h ? { mode: h.classList.contains("l") ? "l" : "r" } : ev.target.closest(".win") ? { mode: "m", off: t - W0 } : { mode: "m", off: (W1 - W0) / 2 };
-  drag(ev);
-};
-scrub.onpointermove = ev => { if (ev.buttons && grab) drag(ev); };
-scrub.onpointerup = () => { grab = null; };
-function drag(ev){
-  if (tilt){ const t = atX(ev), j = dots.findIndex(x => T(x.date) >= t); return go(j < 0 ? dots.length - 1 : j); }   // on the line the bar seats the card under the pointer
-  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1, t = snap(atX(ev)); let [W0, W1] = windowOf();
-  if (grab.mode === "l") W0 = Math.min(t, W1 - 864e5);
-  else if (grab.mode === "r") W1 = Math.max(t, W0 + 864e5);
-  else { const w = W1 - W0; W0 = Math.max(a0, Math.min(a1 - w, snap(t - grab.off))); W1 = W0 + w; }
-  if (W0 !== win?.[0] || W1 !== win?.[1]){ win = [W0, W1]; render(); }
-}
-// the bar under focus steers the window: arrows move it a tenth of its width, up/down zoom about its middle, home/end jump, escape = whole record
+const seatAt = t => { const j = dots.findIndex(x => T(x.date) >= t); go(j < 0 ? dots.length - 1 : j); };
+scrub.onpointerdown = ev => { ev.preventDefault(); scrub.setPointerCapture(ev.pointerId); seatAt(atX(ev)); };   // no focus from the pointer: arrows keep stepping cards after a drag; Tab still reaches the bar
+scrub.onpointermove = ev => { if (ev.buttons) seatAt(atX(ev)); };
 scrub.onkeydown = e => {
-  const a0 = +scrub.dataset.a0, a1 = +scrub.dataset.a1; let [W0, W1] = windowOf(); const w = W1 - W0, m = (W0 + W1) / 2;
-  const k = { ArrowLeft: -1, ArrowRight: 1 }[e.key], z = { ArrowUp: 0.8, ArrowDown: 1.25 }[e.key];
-  if (k){ W0 = Math.max(a0, Math.min(a1 - w, snap(W0 + k * Math.max(864e5, w / 10)))); W1 = W0 + w; }
-  else if (z){ W0 = Math.max(a0, snap(m - w / 2 * z)); W1 = Math.min(a1, snap(m + w / 2 * z)); if (W1 - W0 < 864e5) return; }
-  else if (e.key === "Home"){ W0 = a0; W1 = a0 + w; } else if (e.key === "End"){ W1 = a1; W0 = a1 - w; }
-  else if (e.key === "Escape"){ W0 = a0; W1 = a1; } else return;
-  e.preventDefault(); win = W0 <= a0 && W1 >= a1 ? null : [W0, W1]; render();
+  const z = { ArrowUp: 1.25, ArrowDown: 0.8 }[e.key];
+  if (z) zoom(z); else if (e.key === "Home") go(0); else if (e.key === "End") go(dots.length - 1); else if (e.key === "Escape"){ ppy = null; render(); } else return;
+  e.preventDefault();
 };
 document.addEventListener("keydown", e => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" || e.target.matches("select,input,textarea") || e.target === scrub) return;
@@ -712,7 +655,7 @@ document.addEventListener("keydown", e => {
 addEventListener("scroll", () => {
   const at = mapEl.getBoundingClientRect().bottom + 30; let hit = null;   // show() parks a block 14px under the map; Safari lands a fraction off, so the threshold sits well past that or the spy snaps `open` straight back
   for (const a of card.querySelectorAll("article")) if (a.getBoundingClientRect().top <= at) hit = a; else break;
-  const i = hit ? +hit.dataset.i : 0; if (card.children.length && i !== open){ reveal(i); show(i, false); }
+  const i = hit ? +hit.dataset.i : 0; if (card.children.length && i !== open) show(i, false);
 }, { passive:true });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
