@@ -111,7 +111,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { dotsOf, byDate, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
+import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
@@ -289,6 +289,8 @@ const prose = t => esc(t).split(/\n\s*\n/).map(b => "<p>" + b.trim()
 
 const utc = (y, m = 0, d = 1) => new Date(0).setUTCFullYear(y, m, d);   // Date.UTC reads 0–99 as 1900–1999; year 1 is year 1 here
 const T = d => Date.parse(d.slice(0, 10) + "T12:00:00Z");   // a range YYYY-MM-DD/YYYY-MM-DD sits at its start
+const at = x => { const m = timeMin((x.card || x).time); return m < 0 ? T(x.date) : T(x.date) - 432e5 + m * 6e4; };   // a card with a time sits at its hour (UTC, through the offset); without one, at noon
+const MAXZ = 5e5;   // px per year at the closest: an hour is 57px
 const endOf = d => d.split("/")[1] || "", showDate = d => d.replace("/", " – ");
 const frac = (t, a, b) => (t - a) / (b - a);
 const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
@@ -393,8 +395,8 @@ const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : ""; 
 const lineL = () => Math.min((band.clientHeight - 14 - 14) / Math.sin(TA), (band.clientWidth - 14) / Math.cos(TA));   // the line's length: it stops where it would leave the band, top or right
 function windowOf(){                       // [seat, far end): the seat is the open card's date; the far edge is where the line leaves the band
   if (!dots.length) return [utc(2026), utc(2027)];
-  const s = T(seatD || dots[0].date), k = dots[0].date + dots[dots.length - 1].date;   // the record's ends: while they still arrive, a fit is refit; a zoom by hand holds
-  if (ppy == null || (fitK && fitK !== k)){ ppy = (lineL() - SEAT) / Math.max(0.5, (T(dots[dots.length - 1].date) - s) / YR); fitK = k; } return [s, s + (lineL() - SEAT) / ppy * YR];
+  const s = seatD ? T(seatD) : at(dots[0]), k = dots[0].date + dots[dots.length - 1].date;   // the record's ends: while they still arrive, a fit is refit; a zoom by hand holds
+  if (ppy == null || (fitK && fitK !== k)){ ppy = (lineL() - SEAT) / Math.max(0.5, (at(dots[dots.length - 1]) - s) / YR); fitK = k; } return [s, s + (lineL() - SEAT) / ppy * YR];
 }
 
 function render(){
@@ -430,24 +432,27 @@ function render(){
   band.querySelectorAll("#line").forEach(e => e.remove()); band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
   const L = lineL(), AY = 0, PX = (L - SEAT) / 100, X = f => SEAT + f * PX + "px", Wd = f => f * PX + "px", xp = f => SEAT + f * (L - SEAT);   // positions in % of the window become px from the seat
   const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 14 + "px"; host.style.width = L + "px"; band.appendChild(host);
-  const dist = x => (T(x.date) - W0) / YR, fm = x => 1 + dist(x) / 40;   // years from the seat, and the merge gap it grows
+  const dist = x => (at(x) - W0) / YR, fm = x => 1 + dist(x) / 40;   // years from the seat, and the merge gap it grows
   const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
     const per = (L - SEAT) / (span / YR), step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(k => k * per >= 44) || 5000;
     for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; utc(y) < W1; y += step) if (utc(y) >= W0) ticks.push([utc(y), String(y)]);   // the seat's own year, begun before the seat, has no place on the line
   }
   else if (span > 864e5 * 40) for (let t = new Date(W0), i = 0; i < 14; i++){ const y = t.getUTCFullYear(), m = t.getUTCMonth() + i; const at = utc(y, m); if (at >= W1) break; if (at >= W0) ticks.push([at, MON[m % 12]]); }
-  else for (let t = W0; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if (n % 5 === 1) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); }   // days say their month at its start and at the window's first tick
+  else if (span > 864e5 * 3){ const per = (L - SEAT) / (span / 864e5), step = [1, 2, 5, 10].find(k => k * per >= 44) || 10;   // days, thinned the same way; the month is said at its start and at the window's first tick
+    for (let t = Math.ceil(W0 / 864e5) * 864e5; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if ((n - 1) % step === 0 && (step === 1 || n < 31)) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); } }
+  else { const per = (L - SEAT) / (span / 36e5), step = [1, 2, 3, 6, 12].find(k => k * per >= 44) || 12;   // hours (UTC); midnight says the day instead — the seat's card says the rest
+    for (let t = Math.ceil(W0 / 36e5) * 36e5; t < W1; t += 36e5){ const d = new Date(t), h = d.getUTCHours(); if (h % step === 0) ticks.push([t, h ? String(h).padStart(2, "0") + ":00" : MON[d.getUTCMonth()] + " " + d.getUTCDate()]); } }
   for (const [t, label] of ticks){ const f = frac(t, W0, W1);
     const e = document.createElement("div"); e.className = "tick"; e.style.left = X(f * 100); e.textContent = label; host.appendChild(e); }
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = X(frac(nowT, W0, W1) * 100); e.innerHTML = "<i>now</i>"; host.appendChild(e); }
 
   // zooming in grows the dots: 11px at the whole record, up to 22px close in; a dot's size then says how many cards it holds (log, so 40 is not 40x)
-  const full = dots.length ? T(dots[dots.length - 1].date) - T(dots[0].date) || span : span, DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt(full / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
+  const full = dots.length ? at(dots[dots.length - 1]) - at(dots[0]) || span : span, DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt(full / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
   // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
   // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
   const groups = [], lbls = [];
-  dots.forEach((x, i) => { x.i = i; x.x = frac(T(x.date), W0, W1) * 100; x.g = null; });
+  dots.forEach((x, i) => { x.i = i; x.x = frac(at(x), W0, W1) * 100; x.g = null; });
   // two sides of the line: accepted rests on it, the rest hangs under it — a side is a channel of its own, so clusters never cross it
   const side = x => x.kind === "acc" ? -1 : 1, OFF = 5.5;   // the centre sits half the smallest dot off the axis and stays there while the dot grows
   const mx = ids => ids.reduce((s, x) => s + x.x, 0) / ids.length * PX;
@@ -464,12 +469,12 @@ function render(){
     }
     groups.push(...gs);
   }
-  for (const x of dots) if (x.last > x.date && T(x.last) > W0 && T(x.date) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AY + "px";
+  for (const x of dots) if (x.last > x.date && T(x.last) > W0 && at(x) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AY + "px";
     e.style.left = X(Math.max(0, x.x)); e.style.width = Wd(Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x)); host.insertBefore(e, host.firstChild); }
   // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot
   for (const x of dots){
     if (!endOf(x.date) || (refused.has(x.id) && !showRef)) continue;
-    const x0 = xp(frac(T(x.date), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;
+    const x0 = xp(frac(at(x), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;
     const b = document.createElement("div"); b.className = "bar " + x.kind + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "");
     b.style.left = x0 + "px"; b.style.top = side(x) * OFF + "px"; b.style.width = (Math.min(x1, L) - x0) * Math.cos(TA) + "px"; if (x1 <= L) b.classList.add("end"); host.appendChild(b);   // flat on the screen: its length is the line's run times cos22
   }
@@ -484,11 +489,11 @@ function render(){
     const o = ids.includes(dots[open]) ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card is the foot, its title is the card, so its group hangs nothing
     const y = Math.max(14, SZ(n) / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
     if (ids.includes(dots[open])){} else if (last && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
-    const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date);
-    e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}`);
-    e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a same-day cluster cannot spread, so its first card opens
-      if (n > 1 && T(hi) > T(lo)) zoom(Math.min(400, (lineL() - SEAT) / 2 / ((T(hi) - T(lo)) / YR)) / ppy);   // through zoom(): it draws — go() alone only scrolls, and a first card already at the seat scrolls nowhere
-      go(ids.reduce((m, o) => o.date < m.date ? o : m, x).i); };
+    const lo = ids.reduce((m, o) => at(o) < at(m) ? o : m, x), hi = ids.reduce((m, o) => at(o) > at(m) ? o : m, x);
+    e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo.date} to ${hi.date}`);
+    e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a cluster on one instant cannot spread, so its first card opens
+      if (n > 1 && at(hi) > at(lo)) zoom(Math.min(MAXZ, (lineL() - SEAT) / 2 / ((at(hi) - at(lo)) / YR)) / ppy);   // through zoom(): it draws — go() alone only scrolls, and a first card already at the seat scrolls nowhere
+      go(lo.i); };
     host.appendChild(e);
   });
   lbls.forEach(({ px, y, n, t }, li) => {   // the title, flat, hung from the dot, one size at every distance: room is the merge rule's job; its chars = what fits to the window's edge
@@ -572,22 +577,22 @@ const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   card = document.getElementById("card"), mapEl = document.getElementById("top");
 // wheel over the band: the seat holds, the years stretch or squeeze
-const zoom = k => { ppy = Math.max(0.2, Math.min(400, ppy * k)); fitK = null; render(); };
+const zoom = k => { ppy = Math.max(0.2, Math.min(MAXZ, ppy * k)); fitK = null; render(); };
 band.addEventListener("wheel", e => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
-  e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = T(seatD || dots[0].date) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
+  e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = (seatD ? T(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
   zoom(Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); seat(tp - (px - SEAT) / ppy * YR);   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
 }, { passive:false });
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
 let held = false;
 function seat(t){
-  const arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => T(dots[+e.dataset.i].date) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
-  if (!a) return; const f = b && T(dn.date) > T(dj.date) ? Math.min(1, (t - T(dj.date)) / (T(dn.date) - T(dj.date))) : 0;
-  seatD = new Date(Math.max(T(dj.date), b ? Math.min(t, T(dn.date)) : T(dj.date))).toISOString(); held = true; render();
+  const arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
+  if (!a) return; const f = b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0;
+  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); held = true; render();
   const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false;   // no scroll = no spy pass to clear the flag
 }
 // drag the line: the date under the pointer scrolls the column to its place, and the spy seats the line there — scroll and drag are one motion. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
 let pull = null;   // {x, y, seat, moved}
-band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
+band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: seatD ? T(seatD) : at(dots[0]), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); }
@@ -605,10 +610,10 @@ document.addEventListener("keydown", e => {
 // scrolling the column: the card at the foot is the seat — its dot sits at the foot, and between two cards the seat's date runs with the scroll, so the line slides as you read and never jumps
 const PARK = () => mapEl.offsetHeight + 14;   // where a card's top lands under the stuck map
 let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = requestAnimationFrame(() => {
-  if (!card.children.length) return; const at = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits a px past it
-  for (const a of arts) if (a.getBoundingClientRect().top <= at) k++; else break;
+  if (!card.children.length) return; const park = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits a px past it
+  for (const a of arts) if (a.getBoundingClientRect().top <= park) k++; else break;
   const a = arts[Math.max(0, k)], b = arts[k + 1], i = +a.dataset.i, n = b && +b.dataset.i, f = k < 0 || !b ? 0 : Math.max(0, Math.min(1, (PARK() - a.getBoundingClientRect().top) / (b.getBoundingClientRect().top - a.getBoundingClientRect().top)));
-  if (dots[i] && !held) seatD = new Date(T(dots[i].date) + f * (dots[n] ? T(dots[n].date) - T(dots[i].date) : 0)).toISOString();
+  if (dots[i] && !held) seatD = new Date(at(dots[i]) + f * (dots[n] ? at(dots[n]) - at(dots[i]) : 0)).toISOString();
   held = false; if (i !== open) open = i; render();
 }); }, { passive:true });
 
