@@ -580,6 +580,7 @@ band.onpointermove = ev => {
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); }
   const t = pull.seat - d / ppy * YR, arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => T(dots[+e.dataset.i].date) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];   // the date under the pointer → the column's place for it: between block j and the next, by date; blocks, not dots — a refused card or a nested member has no block
   if (!a) return; const f = b && T(dn.date) > T(dj.date) ? Math.min(1, (t - T(dj.date)) / (T(dn.date) - T(dj.date))) : 0;
+  seatD = new Date(Math.max(T(dj.date), b ? Math.min(t, T(dn.date)) : T(dj.date))).toISOString(); render();   // the seat is the pointer's date, exactly — the spy only re-reads it from the scroll once the drag is over, and blocks are too short for that to be smooth mid-drag
   scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK());
 };
 band.onpointerup = () => { if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
@@ -594,10 +595,10 @@ document.addEventListener("keydown", e => {
 // scrolling the column: the card at the foot is the seat — its dot sits at the foot, and between two cards the seat's date runs with the scroll, so the line slides as you read and never jumps
 const PARK = () => mapEl.offsetHeight + 14;   // where a card's top lands under the stuck map
 let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = requestAnimationFrame(() => {
-  if (!card.children.length) return; const at = PARK() + 16, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits past it
+  if (!card.children.length) return; const at = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits a px past it
   for (const a of arts) if (a.getBoundingClientRect().top <= at) k++; else break;
   const a = arts[Math.max(0, k)], b = arts[k + 1], i = +a.dataset.i, n = b && +b.dataset.i, f = k < 0 || !b ? 0 : Math.max(0, Math.min(1, (PARK() - a.getBoundingClientRect().top) / (b.getBoundingClientRect().top - a.getBoundingClientRect().top)));
-  if (dots[i]) seatD = new Date(T(dots[i].date) + f * (dots[n] ? T(dots[n].date) - T(dots[i].date) : 0)).toISOString();
+  if (dots[i] && !pull) seatD = new Date(T(dots[i].date) + f * (dots[n] ? T(dots[n].date) - T(dots[i].date) : 0)).toISOString();
   if (i !== open) open = i; render();
 }); }, { passive:true });
 
