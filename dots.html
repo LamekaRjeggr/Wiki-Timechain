@@ -67,7 +67,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 /* the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
-#line .ttl{position:absolute;top:14px;margin-left:7px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat; its chars, size and ink fall with the years from the seat */
+#line .ttl{position:absolute;top:14px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
 
 
 #card{max-width:68ch;align-self:start;margin:0 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
@@ -483,7 +483,7 @@ function render(){
     if (n > 1 && SZ(n) >= 15) e.textContent = n;
     const o = ids.includes(dots[open]) ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card is the foot, its title is the card, so its group hangs nothing
     const y = Math.max(14, SZ(n) / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
-    if (ids.includes(dots[open])){} else if (last && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, d:dist(o), t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
+    if (ids.includes(dots[open])){} else if (last && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date);
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}`);
     e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a same-day cluster cannot spread, so its first card opens
@@ -491,8 +491,8 @@ function render(){
       go(ids.reduce((m, o) => o.date < m.date ? o : m, x).i); };
     host.appendChild(e);
   });
-  lbls.forEach(({ px, y, n, d, t }, li) => {   // the title, flat, hung from the dot: years from the seat take its size (13→8), never its ink; its chars = what fits to the window's edge
-    const fs = Math.max(8, 13 - d * 0.055), k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (fs * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.top = y + "px"; l.style.fontSize = fs + "px";
+  lbls.forEach(({ px, y, n, t }, li) => {   // the title, flat, hung from the dot, one size at every distance: room is the merge rule's job; its chars = what fits to the window's edge
+    const k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (13 * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.top = y + "px";
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   });
   // cards beyond an edge: a half ring on that end with their count; click brings the nearest in
