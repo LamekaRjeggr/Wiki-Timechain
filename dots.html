@@ -474,8 +474,9 @@ function render(){
   for (const x of dots) if (x.last > x.date && T(x.last) > W0 && at(x) < W1){ const e = document.createElement("div"); e.className = "tail"; e.style.top = AY + "px";
     e.style.left = X(Math.max(0, x.x)); e.style.width = Wd(Math.min(100, frac(T(x.last), W0, W1) * 100) - Math.max(0, x.x)); host.insertBefore(e, host.firstChild); }
   // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot
+  const sg = (so && groups.find(g => g.includes(so))) || [], spurUp = sg.length > 1 && !sg.includes(dots[open]) ? sg : [];   // an open spur's members draw no rule: from the hub it would run through the titles beside it
   for (const x of dots){
-    if (!endOf(x.date) || (refused.has(x.id) && !showRef)) continue;
+    if (!endOf(x.date) || (refused.has(x.id) && !showRef) || spurUp.includes(x)) continue;
     const x0 = xp(frac(at(x), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;
     const b = document.createElement("div"); b.className = "bar " + x.kind + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "");
     b.style.left = x0 + "px"; b.style.top = side(x) * OFF + "px"; b.style.width = (Math.min(x1, L) - x0) * Math.cos(TA) + "px"; if (x1 <= L) b.classList.add("end"); host.appendChild(b);   // flat on the screen: its length is the line's run times cos22
@@ -501,7 +502,7 @@ function render(){
     if (moment && !seated){ const nb = document.createElement("div"); nb.className = "nib"; nb.style.left = e.style.left; nb.style.top = e.style.top; nb.style.height = SZ(n) + 12 + "px"; host.appendChild(nb); }
     host.appendChild(e);
     if (up){   // the spur: perpendicular to the line, in record order — the first stays on the line, the rest alternate up-left and down-right, so each arm is half as long; a member's title hangs flat under it; click seats it, the spur folds
-      const STEP = DOT + 10, ms = [...ids].sort((a, b) => a.created_at - b.created_at), reach = Math.ceil((n - 1) / 2) * STEP;
+      const STEP = DOT + 10, ms = [...ids].sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id)), reach = Math.ceil((n - 1) / 2) * STEP;
       e.textContent = ""; e.className += " up"; const nb = host.querySelector(".nib:last-of-type"); nb.style.height = 2 * reach + SZ(n) + "px";
       spurBox = { px, top:side(x) * OFF - reach, bot:side(x) * OFF + reach };
       const beside = (dy, r, dir) => { const sx = dir < 0 ? -(r + 6) : r - 1, sy = -6.5; return { px:px + sx * Math.cos(TA) - sy * Math.sin(TA), y:dy + sx * Math.sin(TA) + sy * Math.cos(TA), n:1, sp:true, dir }; };   // a title level with its member, on the side where the line falls away
