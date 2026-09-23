@@ -491,8 +491,8 @@ function render(){
       go(ids.reduce((m, o) => o.date < m.date ? o : m, x).i); };
     host.appendChild(e);
   });
-  lbls.forEach(({ px, y, n, d, t }, li) => {   // the title, flat, hung from the dot: years from the seat take its size (13→8) and ink (1→.25); its chars = what fits to the window's edge
-    const fs = Math.max(8, 13 - d * 0.055), k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (fs * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.top = y + "px"; l.style.fontSize = fs + "px"; l.style.opacity = Math.max(0.25, 1 - d * 0.011);
+  lbls.forEach(({ px, y, n, d, t }, li) => {   // the title, flat, hung from the dot: years from the seat take its size (13→8), never its ink; its chars = what fits to the window's edge
+    const fs = Math.max(8, 13 - d * 0.055), k = Math.max(3, Math.floor((band.clientWidth - px * Math.cos(TA) - 20) / (fs * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 ? " alt" : ""); l.style.left = px + "px"; l.style.top = y + "px"; l.style.fontSize = fs + "px";
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   });
   // cards beyond an edge: a half ring on that end with their count; click brings the nearest in
