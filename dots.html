@@ -75,7 +75,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #card{max-width:68ch;align-self:start;margin:0 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
 #card::after{content:"";height:100vh}   /* room for the last card to reach the foot */
 #card:empty{display:none}
-#card{margin-left:46px} #card .c:not(.on){opacity:.5}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node — no box, the rest wait dimmer below — timelines and cards alike */
+#card{margin-left:46px} #card .c+.c{border-top:1px solid var(--t2);padding-top:14px}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node; every card at full ink, the darkest rule on the page parts one card from the next */
 .c.ref{opacity:.6} #card .refs{margin-top:16px;font-size:12px;color:var(--t2);border-top:1px solid var(--line);padding-top:6px}   /* refused: one closing line, the cards behind it on request */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card h2{font-family:var(--sans);font-size:18px;line-height:1.3;letter-spacing:-.01em}
@@ -91,8 +91,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #card .vers{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
 #card .vers button{border:1px dashed var(--line);padding:1px 8px;font-size:12px;color:var(--t1)}
 #card .vers button.on{border-style:solid;border-color:var(--t1)}
-#card .day{margin:16px 0 4px;font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{margin-top:0}
-#card .dayend{width:48px;margin:-4px 0 6px;border-bottom:1px solid var(--line)}   /* a short rule closes the day group, so the next card reads as its own day */
+#card .day{margin:0 0 4px;padding-top:14px;border-top:1px solid var(--t2);font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{padding-top:0;border-top:0}   /* a new day: its line takes the card rule's place */
 .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px} .c.tl .fold{color:var(--t2);width:14px;text-align:left} .c.tl .drop[data-arm]{color:var(--acc)} .c.tl .row.on > h2 .go{color:var(--acc)}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
 
 @media (max-width:640px){ header{gap:10px} header .st{margin-left:0} }
@@ -563,11 +562,11 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   card.innerHTML = vis.map((x, i) => {
     if (x.tl) return article(x);   // the menu: titles only, no day lines
     // a day holding several cards gets a day line above its group: the neighbours are visible, nothing is claimed about them
-    const g = vis.filter(o => o.date === x.date), end = g.length > 1 && x.date !== vis[i + 1]?.date ? '<div class="dayend"></div>' : "";
-    if (x.date === vis[i - 1]?.date) return article(x) + end;
+    const g = vis.filter(o => o.date === x.date);
+    if (x.date === vis[i - 1]?.date) return article(x);
     if (g.length < 2) return article(x);
     const ts = g.map(o => (o.card || o).time).filter(Boolean);
-    return `<div class="day">${esc(showDate(x.date))} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x) + end;
+    return `<div class="day">${esc(showDate(x.date))} · ${g.length} ${coord ? "cards" : "timelines"}${ts.length ? ` · ${esc(ts[0])}${ts.length > 1 ? " → " + esc(ts[ts.length - 1]) : ""}` : ""}</div>` + article(x);
   }).join("") + (refs.length ? `<div class="refs"><button class="peek">${refs.length} refused ${showRef ? "▾" : "▸"}</button></div>${showRef ? refs.map(article).join("") : ""}` : "");
   card.querySelectorAll(".vers button").forEach(b => b.onclick = () => go(+b.dataset.i));
   card.querySelectorAll(".rawbtn").forEach(b => b.onclick = () => { raw.has(b.dataset.id) ? raw.delete(b.dataset.id) : raw.add(b.dataset.id); column(); });   // the card grows; the column scrolls, the json never does on its own
