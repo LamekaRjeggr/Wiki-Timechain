@@ -571,17 +571,25 @@ const ntry = document.getElementById("ntry"),
   card = document.getElementById("card"), mapEl = document.getElementById("top");
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(0.2, Math.min(400, ppy * k)); fitK = null; render(); };
-band.addEventListener("wheel", e => { e.preventDefault(); zoom(e.deltaY > 0 ? 0.8 : 1.25); }, { passive:false });
+band.addEventListener("wheel", e => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
+  e.preventDefault(); const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = T(seatD || dots[0].date) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
+  zoom(e.deltaY > 0 ? 0.8 : 1.25); seat(tp - (px - SEAT) / ppy * YR);
+}, { passive:false });
+// the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
+let held = false;
+function seat(t){
+  const arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => T(dots[+e.dataset.i].date) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
+  if (!a) return; const f = b && T(dn.date) > T(dj.date) ? Math.min(1, (t - T(dj.date)) / (T(dn.date) - T(dj.date))) : 0;
+  seatD = new Date(Math.max(T(dj.date), b ? Math.min(t, T(dn.date)) : T(dj.date))).toISOString(); held = true; render();
+  scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK());
+}
 // drag the line: the date under the pointer scrolls the column to its place, and the spy seats the line there — scroll and drag are one motion. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
 let pull = null;   // {x, y, seat, moved}
 band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: T(seatD || dots[0].date), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); }
-  const t = pull.seat - d / ppy * YR, arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => T(dots[+e.dataset.i].date) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];   // the date under the pointer → the column's place for it: between block j and the next, by date; blocks, not dots — a refused card or a nested member has no block
-  if (!a) return; const f = b && T(dn.date) > T(dj.date) ? Math.min(1, (t - T(dj.date)) / (T(dn.date) - T(dj.date))) : 0;
-  seatD = new Date(Math.max(T(dj.date), b ? Math.min(t, T(dn.date)) : T(dj.date))).toISOString(); render();   // the seat is the pointer's date, exactly — the spy only re-reads it from the scroll once the drag is over, and blocks are too short for that to be smooth mid-drag
-  scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK());
+  seat(pull.seat - d / ppy * YR);
 };
 band.onpointerup = () => { if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
 let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
@@ -598,8 +606,8 @@ let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = reques
   if (!card.children.length) return; const at = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits a px past it
   for (const a of arts) if (a.getBoundingClientRect().top <= at) k++; else break;
   const a = arts[Math.max(0, k)], b = arts[k + 1], i = +a.dataset.i, n = b && +b.dataset.i, f = k < 0 || !b ? 0 : Math.max(0, Math.min(1, (PARK() - a.getBoundingClientRect().top) / (b.getBoundingClientRect().top - a.getBoundingClientRect().top)));
-  if (dots[i] && !pull) seatD = new Date(T(dots[i].date) + f * (dots[n] ? T(dots[n].date) - T(dots[i].date) : 0)).toISOString();
-  if (i !== open) open = i; render();
+  if (dots[i] && !held) seatD = new Date(T(dots[i].date) + f * (dots[n] ? T(dots[n].date) - T(dots[i].date) : 0)).toISOString();
+  held = false; if (i !== open) open = i; render();
 }); }, { passive:true });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
