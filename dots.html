@@ -484,7 +484,9 @@ function render(){
     if (ids.includes(dots[open])){} else if (last && px - last.px < 14 / Math.sin(TA)) last.n += n; else lbls.push({ px, n, d:dist(o), t:o.title || o.summary || "" });
     const lo = ids.reduce((m, o) => o.date < m ? o.date : m, x.date), hi = ids.reduce((m, o) => o.date > m ? o.date : m, x.date);
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + " " + x.title : `${n} here, ${lo} to ${hi}`);
-    e.onclick = () => go(x.i);
+    e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a same-day cluster cannot spread, so its first card opens
+      if (n > 1 && T(hi) > T(lo)){ ppy = Math.min(400, (lineL() - SEAT) / 2 / ((T(hi) - T(lo)) / YR)); fitK = null; }
+      go(ids.reduce((m, o) => o.date < m.date ? o : m, x).i); };
     host.appendChild(e);
   });
   lbls.forEach(({ px, n, d, t }, li) => {   // the title, flat, hung from the dot: years from the seat take its size (13→8) and ink (1→.25); its chars = what fits to the window's edge
