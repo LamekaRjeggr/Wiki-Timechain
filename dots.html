@@ -517,7 +517,7 @@ function render(){
   const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = X(frac(nowT, W0, W1) * 100); e.innerHTML = "<i>now</i>"; host.appendChild(e); }
   // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot — a card in a column draws none, it would run through the titles beside it
   for (const x of dots){
-    if (x.tl){ const x0 = xp(frac(at(x), W0, W1)), x1 = Math.min(L, xp(frac(T(x.last), W0, W1))), c = Math.cos(TA); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;   // a timeline: a flat rule from its head to its last date, beaded
+    if (x.tl){ const x0 = xp(frac(at(x), W0, W1)), x1 = Math.min(L, xp(frac(T(x.last), W0, W1))), c = Math.cos(TA); if (unfolded.has(x.tl) || x1 < SEAT || x0 > L || x1 - x0 < 2) continue;   // a timeline: a flat rule from its head to its last date, beaded; unfolded, its members stand on the line and the rule would only repeat them
       const b = document.createElement("div"); b.className = "bar tl " + x.kind; b.style.left = x0 + "px"; b.style.top = AY + x.off + "px"; b.style.width = (x1 - x0) * c + "px";
       b.innerHTML = [...[...x.all.values()].map(m => [m, ""]), ...x.mem.map(m => [m, "t"])].map(([m, k]) => [(xp(frac(at(m), W0, W1)) - x0) * c, k]).filter(([o]) => o > 6 && o <= (x1 - x0) * c).map(([o, k]) => `<i class="${k}" style="left:${o}px"></i>`).join("");
       host.appendChild(b); continue; }
