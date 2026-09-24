@@ -77,7 +77,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #line .ttl{position:absolute;top:17px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
 
 
-#card{max-width:68ch;align-self:start;margin:0 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
+#card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
 #card::after{content:"";height:100vh}   /* room for the last card to reach the foot */
 #card:empty{display:none}
 #card{margin-left:46px} #card .c+.c{border-top:1px solid var(--t2);padding-top:14px}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node; every card at full ink, the darkest rule on the page parts one card from the next */
@@ -653,12 +653,12 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
   const pk = card.querySelector(".peek"); if (pk) pk.onclick = () => { showRef = !showRef; render(); };   // unfold or fold the refused cards, page-local
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
-  const x = dots[i]; open = i;   // the seat is not set here: the scroll below lands the card at the foot and the spy seats the line there
+  const x = dots[i]; open = i;   // seat() parks the block and sets the date exactly; the spy's pixel guess would miss it
   band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", e.dataset.g ? +e.dataset.g === x.g : +e.dataset.i === i));   // a column member lights alone
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   card.querySelectorAll(".row").forEach(e => e.classList.toggle("on", x.tl && e.dataset.d === x.tl));
-  if (scroll && art) scrollTo(0, scrollY + art.getBoundingClientRect().top - PARK());   // the map sticks at the top once the header has scrolled off, so aim under its stuck height, not where it sits now
+  if (scroll && art) seat(at(x), art);
 }
 const tog = d => { unfolded.has(d) ? unfolded.delete(d) : unfolded.add(d); setUrl(); render(); };   // a head clicked: its members pour onto the line or go back in; the line does not move
 const go = i => { if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
@@ -678,8 +678,8 @@ band.addEventListener("wheel", e => {   // the date under the pointer stays unde
 }, { passive:false });
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
 let held = false;
-function seat(t){
-  const arts = [...card.querySelectorAll("article")], j = Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t)), a = arts[j], b = arts[j + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
+function seat(t, a){   // a = the block to park, else the last one at or before t
+  const arts = [...card.querySelectorAll("article")]; a ??= arts[Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t))]; const b = arts[arts.indexOf(a) + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
   if (!a) return; const f = b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0;
   seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); held = true; render();
   const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false;   // no scroll = no spy pass to clear the flag
