@@ -74,7 +74,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 /* the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
 #line .ttl.l{margin-left:0;transform:rotate(22deg) translateX(-100%)}   /* runs left from its point: a column member above the line, where the line falls away leftward */
-#line .ttl{position:absolute;top:14px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
+#line .ttl{position:absolute;top:17px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
 
 
 #card{max-width:68ch;align-self:start;margin:0 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
@@ -156,7 +156,7 @@ const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timeweaves walked through to get here, oldest first; tab: the Library tab picked by hand
 let fitK = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
-const TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
+const TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -420,11 +420,19 @@ const abtn = x => !coord || !canSign() ? "" : x.accs.includes(myCoord()) ? `<but
 const rbtn = x => !coord || !canSign() ? "" : refused.has(x.id) ? `<button class="rbtn" data-r="${x.i}">restore</button>` : `<button class="rbtn" data-i="${x.i}">refuse</button>`;   // the grey pill: refuse this version, or lift the refusal
 const mark = (n, say = "") => n ? `<span class="a">✓ ${n}${say}</span>` : "";   // ✓ N = accepted by N notaries; the pill is a dead end for now, on purpose
 
+function fitPpy(s){   // the default zoom: fit the record, then zoom in until no two titles share a row — or only 8 dots would remain on the line; gaps no zoom can part are not counted
+  const L = lineL() - SEAT, ts = dots.map(at).filter(t => t >= s).sort((a, b) => a - b), need = ROW / Math.sin(TA) * YR;   // need: title rows are ROW px apart on the screen, along the line that is ROW/sin
+  let p = L / Math.max(0.5, (ts[ts.length - 1] - s) / YR);
+  for (let prev = p; p < MAXZ; prev = p, p = Math.min(MAXZ, p * 1.25)){
+    const on = ts.filter(t => (t - s) / YR * p <= L); if (on.length < 8) return prev;
+    if (!on.slice(1).some((t, i) => { const g = t - on[i]; return g * MAXZ >= need && g * p < need; })) return p; }   // a gap the closest zoom could not part is a moment: skipped
+  return p;
+}
 const lineL = () => Math.min((band.clientHeight - 14 - 14) / Math.sin(TA), (band.clientWidth - 14) / Math.cos(TA));   // the line's length: it stops where it would leave the band, top or right
 function windowOf(){                       // [seat, far end): the seat is the open card's date; the far edge is where the line leaves the band
   if (!dots.length) return [utc(2026), utc(2027)];
   const s = seatD ? T(seatD) : at(dots[0]), k = dots[0].date + dots[dots.length - 1].date;   // the record's ends: while they still arrive, a fit is refit; a zoom by hand holds
-  if (ppy == null || (fitK && fitK !== k)){ ppy = (lineL() - SEAT) / Math.max(0.5, (at(dots[dots.length - 1]) - s) / YR); fitK = k; } return [s, s + (lineL() - SEAT) / ppy * YR];
+  if (ppy == null || (fitK && fitK !== k)){ ppy = fitPpy(s); fitK = k; } return [s, s + (lineL() - SEAT) / ppy * YR];
 }
 
 function render(){
@@ -544,8 +552,8 @@ function render(){
     if (x.tl) e.innerHTML = `<b>${x.nTl || x.n}</b>`; else if (n > 1 && sz >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => at(o) < at(m) ? o : m, x), hi = ids.reduce((m, o) => at(o) > at(m) ? o : m, x), seated = ids.includes(dots[open]);
     const o = seated ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card is the foot, its title is the card, so its group hangs nothing
-    const y = x.tl ? side(x) > 0 ? Math.max(14, sz * (x.nTl ? 1.3 : .9) * (1 - (x.nTl ? 7 : 14) / sz) + 3) : 14 : Math.max(14, sz / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
-    if (seated){} else if (last && !last.sp && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
+    const y = x.tl ? side(x) > 0 ? Math.max(ROW, sz * (x.nTl ? 1.3 : .9) * (1 - (x.nTl ? 7 : 14) / sz) + 3) : ROW : Math.max(ROW, sz / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
+    if (seated){} else if (last && !last.sp && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < ROW) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + (x.tl ? (x.nTl ? " timeweave " : " timeline ") : " ") + x.title : `${n} here, ${lo.date} to ${hi.date}`);
     e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a head with members toggles instead
       if (x.tl && (x.n || x.nTl)) return tog(x.tl);
@@ -554,7 +562,7 @@ function render(){
     host.appendChild(e);
   });
   lbls.forEach(({ px, y, n, t, sp, dir }, li) => {   // the title, flat, hung from the dot, one size at every distance: room is the merge rule's job; its chars = what fits to the window's edge
-    if (cols.some(c => { const dx = c.px - px, yy = y + dx * Math.tan(TA); return dx * (dir || 1) > 0 && yy > Math.min(0, c.sd * c.r) - 14 && yy < Math.max(0, c.sd * c.r) + 14 && Math.abs(dx) / Math.cos(TA) < t.length * 8; })) return;   // a title that would run through a column is dropped, not dimmed
+    if (cols.some(c => { const dx = c.px - px, yy = y + dx * Math.tan(TA); return dx * (dir || 1) > 0 && yy > Math.min(0, c.sd * c.r) - ROW && yy < Math.max(0, c.sd * c.r) + ROW && Math.abs(dx) / Math.cos(TA) < t.length * 8; })) return;   // a title that would run through a column is dropped, not dimmed
     const k = Math.max(3, Math.floor((dir < 0 ? px * Math.cos(TA) - 20 : band.clientWidth - px * Math.cos(TA) - 20) / (13 * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 && !sp ? " alt" : "") + (dir < 0 ? " l" : ""); l.style.left = px + "px"; l.style.top = y + "px";
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   });
