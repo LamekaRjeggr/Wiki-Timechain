@@ -61,7 +61,8 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 .dot.ref{opacity:.2}   /* a version you refused, unfolded: on the band, barely */
 .dot.edge{opacity:1;border-color:var(--t1);color:var(--t1);font:11px var(--mono);background:var(--bg);z-index:2}   /* cards beyond this end: a half ring with their count, grown by it like any dot */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
-.nib{position:absolute;width:1px;background:var(--t2);transform:translate(-50%,-50%);pointer-events:none}   /* a moment: cards no zoom can part; the nib is the spur folded — click the dot, it opens */
+.nib{position:absolute;width:1px;background:var(--t2);transform:translate(-50%,-50%);pointer-events:none}   /* a moment: cards no zoom can part stand on a stem off their side of the line */
+#line .mo{position:absolute;font:bold 11px var(--mono);color:var(--t1);transform-origin:0 0;transform:rotate(22deg) translate(-50%,-100%);white-space:nowrap;pointer-events:none}   /* the moment's date, flat, centred over its column */
 .dot.tl{border:0;border-radius:0;background:none;opacity:1;isolation:isolate;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-end;padding:0 0 2px;color:#000;font:bold 10px var(--mono);transform:translate(-50%,-100%)} .dot.tl.sub{transform:translate(-50%,0);align-items:flex-start;padding:2px 0 0} .dot.tl b{transform:rotate(22deg)}   /* a head turns with the line, base on its point: accepted stands above, submitted hangs below; only its count turns back flat */
 .dot.tl::after{content:"";position:absolute;inset:0;z-index:-1;background:var(--sub);clip-path:polygon(50% 0,100% 100%,0 100%)} .dot.tl.sub::after{clip-path:polygon(0 0,100% 0,50% 100%)} .dot.tl.acc::after{background:var(--acc)}   /* timeline: a triangle, its base on the line */
 .dot.tw,.dot.tw.sub{align-items:center;padding:0} .dot.tw::after,.dot.tw.sub::after{clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}   /* timeweave: a diamond, its tip on the point */
@@ -72,7 +73,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 /* the line IS the column — it rises 22° from the seat at the left edge; the open card sits at the seat, the rest fall away up and right */
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
-#line .ttl.l{margin-left:0;transform:rotate(22deg) translateX(-100%)}   /* runs left from its point: a spur member above the line, where the line falls away leftward */
+#line .ttl.l{margin-left:0;transform:rotate(22deg) translateX(-100%)}   /* runs left from its point: a column member above the line, where the line falls away leftward */
 #line .ttl{position:absolute;top:14px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
 
 
@@ -153,7 +154,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timeweaves walked through to get here, oldest first; tab: the Library tab picked by hand
-let fitK = null, want = Q.get("c"), coord = null, askT = null, open = null, spur = null, dots = [], renderT = null, colKey = null;   // spur: the moment (its first card's id) whose members stand off the line
+let fitK = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 const TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25; let ppy = null, seatD = null;   // seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
@@ -253,12 +254,12 @@ function dotsFor(d, projections, all){
   return [...byId.values()].sort(byDate);
 }
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d, summaryOf = d => notariesOf(d).map(([, n]) => tag(n, "summary")).find(Boolean) || "";
-function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card, coloured by whether any card is held, reaching to its last; null when empty
+function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card you have not refused, coloured by whether any card is held, reaching to its last; null when empty
   const dl = dotsFor(d, projections, all).filter(x => keep(x, d)), ns = notariesOf(d);
   const srcs = hop ? sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a head reaches as far as the timelines it points at; one hop
   const mineEmpty = ns.some(([c]) => c === myCoordOf(d)) && !dl.length && !srcs.length;   // my own head, still empty: it stays on the menu so it can be filled, dot at today
   if (!dl.length && !srcs.length && !mineEmpty) return null;
-  const first = [...dl, ...srcs].sort(byDate)[0] || { id:"tl:" + d, author:ns[0][1].pubkey, created_at:ns[0][1].created_at, accs:[], date:new Date().toISOString().slice(0, 10) };
+  const first = [...dl, ...srcs].sort((a, b) => refused.has(a.id) - refused.has(b.id) || byDate(a, b))[0] || { id:"tl:" + d, author:ns[0][1].pubkey, created_at:ns[0][1].created_at, accs:[], date:new Date().toISOString().slice(0, 10) };
   const dot = { ...first, date:first.date.split("/")[0], tl:d, tls:[d], card:dl[0], d, title:titleOf(d), summary:summaryOf(d), last:[...dl.map(x => x.date), ...srcs.map(x => x.last)].sort().pop() || first.date,
     n:dl.length, nTl:srcs.length, mem:srcs, nAcc:dl.filter(x => x.kind === "acc").length, ns:ns.map(([, n]) => who(n.pubkey)), all:new Map(dl.map(x => [x.id, x])) };
   dot.kind = dot.nAcc ? "acc" : "sub";
@@ -282,7 +283,7 @@ function members(d, projections, all, of){   // what a timeline holds: its cards
   return out;
 }
 function choose(c, path = []){   // c = a subject d → that timeline; null → the Library. path = the timeweaves walked through on the way
-  coord = c; trail = c ? path : []; open = null; spur = null; want = null; seatD = null; ppy = null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
+  coord = c; trail = c ? path : []; open = null; want = null; seatD = null; ppy = null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
@@ -462,7 +463,7 @@ function render(){
   const L = lineL(), AY = 0, PX = (L - SEAT) / 100, X = f => SEAT + f * PX + "px", xp = f => SEAT + f * (L - SEAT);   // positions in % of the window become px from the seat
   const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 14 + "px"; host.style.width = L + "px"; band.appendChild(host);
   const dist = x => (at(x) - W0) / YR, fm = x => 1 + dist(x) / 40;   // years from the seat, and the merge gap it grows
-  const ticks = [], so = spur && dots.find(x => x.id === spur), spx = so ? xp(frac(at(so), W0, W1)) : null;   // an open spur's arm runs through the tick row: those ticks step aside
+  const ticks = [];
   if (span > 864e5 * 400){   // years, thinned so labels sit ≥44px apart (1/2/5/10/20/50…)
     const per = (L - SEAT) / (span / YR), step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(k => k * per >= 44) || 5000;
     for (let y = Math.ceil(new Date(W0).getUTCFullYear() / step) * step; utc(y) < W1; y += step) if (utc(y) >= W0) ticks.push([utc(y), String(y)]);   // the seat's own year, begun before the seat, has no place on the line
@@ -472,15 +473,12 @@ function render(){
     for (let t = Math.ceil(W0 / 864e5) * 864e5; t < W1; t += 864e5){ const d = new Date(t), n = d.getUTCDate(); if ((n - 1) % step === 0 && (step === 1 || n < 31)) ticks.push([t, (n === 1 || !ticks.length ? MON[d.getUTCMonth()] + " " : "") + n]); } }
   else { const per = (L - SEAT) / (span / 36e5), step = [1, 2, 3, 6, 12].find(k => k * per >= 44) || 12;   // hours (UTC); midnight says the day instead — the seat's card says the rest
     for (let t = Math.ceil(W0 / 36e5) * 36e5; t < W1; t += 36e5){ const d = new Date(t), h = d.getUTCHours(); if (h % step === 0) ticks.push([t, h ? String(h).padStart(2, "0") + ":00" : MON[d.getUTCMonth()] + " " + d.getUTCDate()]); } }
-  for (const [t, label] of ticks){ const f = frac(t, W0, W1); if (spx !== null && Math.abs(xp(f) - spx) < 28) continue;
-    const e = document.createElement("div"); e.className = "tick"; e.style.left = X(f * 100); e.textContent = label; host.appendChild(e); }
-  const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = X(frac(nowT, W0, W1) * 100); e.innerHTML = "<i>now</i>"; host.appendChild(e); }
 
   // zooming in grows the dots: 11px at the whole record, up to 22px close in; a dot's size then says how many cards it holds (log, so 40 is not 40x)
   const full = dots.length ? at(dots[dots.length - 1]) - at(dots[0]) || span : span, DOT = Math.round(11 * Math.max(1, Math.min(2, Math.sqrt(full / span)))), SZ = n => Math.round(DOT * Math.min(2.6, 0.75 + 0.4 * Math.log2(n)));
   // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
   // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
-  const groups = [], lbls = []; let spurBox = null;
+  const groups = [], lbls = [], mo = (a, b) => Math.abs(at(a) - at(b)) / YR * MAXZ < DOT + 2;   // a moment: members the closest zoom still cannot part
   dots.forEach((x, i) => { x.i = i; x.x = frac(at(x), W0, W1) * 100; x.g = null; });
   // two sides of the line: accepted rests on it, the rest hangs under it — a side is a channel of its own, so clusters never cross it
   const side = x => x.kind === "acc" ? -1 : 1, OFF = 5.5;   // the centre sits half the smallest dot off the axis and stays there while the dot grows
@@ -489,61 +487,73 @@ function render(){
     const gs = [];
     for (const x of [...dots].filter(x => side(x) === sd).sort((a, b) => a.x - b.x)){
       if (x.x < -SEAT / PX || x.x > 100 || (refused.has(x.id) && !showRef)) continue;   // the line runs 46px left of the seat too: the top card, half scrolled past the foot, keeps its dot   // refused: off the band until the closing line unfolds
-      const g = gs[gs.length - 1];
-      if (g && !x.tl && !g[0].tl && (x.x - g[0].x) * PX <= (DOT + 2) * fm(x)) g.push(x); else gs.push([x]);
+      const g = gs[gs.length - 1];   // heads never merge by pixels, only into a moment they share
+      if (g && (mo(x, g[0]) && mo(x, g[g.length - 1]) || !x.tl && !g.some(o => o.tl) && (x.x - g[0].x) * PX <= (DOT + 2) * fm(x))) g.push(x); else gs.push([x]);
     }
     for (let i = 0; i < gs.length - 1;){   // grown dots that would touch merge too, so no two dots overlap and every solid one has room for its count
-      const a = gs[i], b = gs[i + 1];
-      if (!a[0].tl && !b[0].tl && mx(b) - mx(a) < ((SZ(a.length) + SZ(b.length)) / 2 + 2) * fm(b[0])){ gs.splice(i, 2, a.concat(b)); i = Math.max(0, i - 1); } else i++;
+      const a = gs[i], b = gs[i + 1], w = g => g.length > 1 && mo(g[0], g[g.length - 1]) ? DOT : SZ(g.length);   // a moment is as wide as its column
+      if (!a.some(o => o.tl) && !b.some(o => o.tl) && mx(b) - mx(a) < ((w(a) + w(b)) / 2 + 2) * fm(b[0])){ gs.splice(i, 2, a.concat(b)); i = Math.max(0, i - 1); } else i++;
     }
     groups.push(...gs);
   }
-  // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot
-  const sg = (so && groups.find(g => g.includes(so))) || [], spurUp = sg.length > 1 && !sg.includes(dots[open]) ? sg : [];   // an open spur's members draw no rule: from the hub it would run through the titles beside it
+  // a moment stands open as a column off its side of the line: heads nearest, then cards in record order; 5 at most, the 5th holds the rest in its count
+  const cols = []; dots.forEach(x => { x.off = 0; x.col = false; });
+  for (const g of groups){ if (g.length < 2 || !mo(g[0], g[g.length - 1])) continue;
+    const sd = side(g[0]), ms = [...g].sort((a, b) => !!b.tl - !!a.tl || a.created_at - b.created_at || a.id.localeCompare(b.id)), shown = ms.slice(0, 5); let r = 0;
+    ms.forEach(m => m.col = true);
+    shown.forEach((m, k) => { const cnt = k === 4 && ms.length > 5, hd = m.tl && !cnt, w = hd ? Math.max(18, SZ(m.n + m.nTl)) : cnt ? SZ(ms.length - 4) : DOT, h = hd ? w * (m.nTl ? 1.3 : .9) : w;
+      const c = hd ? r + h / 2 : r ? r + h / 2 : OFF; m.off = sd * (hd ? r : c); m.cy = sd * c; m.w = w; m.h = h; m.cnt = cnt; r = c + h / 2 + 4; });
+    cols.push({ g, ms, shown, sd, r:r - 4, px:mx(g) + SEAT }); }
+  for (const [t, label] of ticks){ const f = frac(t, W0, W1); if (cols.some(c => Math.abs(xp(f) - c.px) < 28)) continue;   // a column and its date run through the tick row: those ticks step aside
+    const e = document.createElement("div"); e.className = "tick"; e.style.left = X(f * 100); e.textContent = label; host.appendChild(e); }
+  const nowT = T(NOW); if (nowT > W0 && nowT < W1){ const e = document.createElement("div"); e.id = "now"; e.style.left = X(frac(nowT, W0, W1) * 100); e.innerHTML = "<i>now</i>"; host.appendChild(e); }
+  // a span card draws a flat rule from its dot to under its end date, above its title; below 2px it is only its dot — a card in a column draws none, it would run through the titles beside it
   for (const x of dots){
     if (x.tl){ const x0 = xp(frac(at(x), W0, W1)), x1 = Math.min(L, xp(frac(T(x.last), W0, W1))), c = Math.cos(TA); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;   // a timeline: a flat rule from its head to its last date, beaded
-      const b = document.createElement("div"); b.className = "bar tl " + x.kind; b.style.left = x0 + "px"; b.style.top = AY + "px"; b.style.width = (x1 - x0) * c + "px";
+      const b = document.createElement("div"); b.className = "bar tl " + x.kind; b.style.left = x0 + "px"; b.style.top = AY + x.off + "px"; b.style.width = (x1 - x0) * c + "px";
       b.innerHTML = [...[...x.all.values()].map(m => [m, ""]), ...x.mem.map(m => [m, "t"])].map(([m, k]) => [(xp(frac(at(m), W0, W1)) - x0) * c, k]).filter(([o]) => o > 6 && o <= (x1 - x0) * c).map(([o, k]) => `<i class="${k}" style="left:${o}px"></i>`).join("");
       host.appendChild(b); continue; }
-    if (!endOf(x.date) || (refused.has(x.id) && !showRef) || spurUp.includes(x)) continue;
+    if (!endOf(x.date) || (refused.has(x.id) && !showRef) || x.col) continue;
     const x0 = xp(frac(at(x), W0, W1)), x1 = xp(frac(T(endOf(x.date)), W0, W1)); if (x1 < SEAT || x0 > L || x1 - x0 < 2) continue;
     const b = document.createElement("div"); b.className = "bar " + x.kind + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "");
     b.style.left = x0 + "px"; b.style.top = side(x) * OFF + "px"; b.style.width = (Math.min(x1, L) - x0) * Math.cos(TA) + "px"; if (x1 <= L) b.classList.add("end"); host.appendChild(b);   // flat on the screen: its length is the line's run times cos22
   }
+  const beside = (px, dy, r, dir) => { const sx = dir < 0 ? -(r + 6) : r - 1, sy = -6.5; return { px:px + sx * Math.cos(TA) - sy * Math.sin(TA), y:dy + sx * Math.sin(TA) + sy * Math.cos(TA), n:1, sp:true, dir }; };   // a title level with its member, on the side where the line falls away
+  const when = ms => { const ds = ms.map(m => m.date.slice(0, 10)), ts = ms.map(m => ((m.card || m).time || "").slice(0, 5)), [y, mm, d] = ds[0].split("-"), yr = String(+y);   // the moment's date, as fine as all its members say: 1 Jan reads as a year, a 1st as a month
+    return ds.every(v => v.endsWith("-01-01")) ? yr : ds.every(v => v.endsWith("-01")) ? MON[mm - 1] + " " + yr : +d + " " + MON[mm - 1] + " " + yr + (ts[0] && ts.every(t => t === ts[0]) ? " " + ts[0] : ""); };
   groups.sort((a, b) => mx(a) - mx(b)).forEach((ids, gi) => {
     const cx = ids.reduce((s, x) => s + x.x, 0) / ids.length, n = ids.length;
     ids.sort((a, b) => (a.kind === "acc" ? 0 : 1) - (b.kind === "acc" ? 0 : 1) || b.created_at - a.created_at);
     ids.forEach(x => x.g = gi);
+    const col = cols.find(c => c.g === ids);
+    if (col){   // a moment: its column — each member its own shape, its title level with it where the line falls away, the date over the top; click seats it
+      const { ms, shown, sd, r, px } = col, nb = document.createElement("div"); nb.className = "nib"; nb.style.left = px + "px"; nb.style.top = AY + sd * r / 2 + "px"; nb.style.height = r + "px"; host.appendChild(nb);
+      shown.forEach(m => { const d = document.createElement("button"), rest = ms.length - 4, hd = m.tl && !m.cnt;
+        d.className = "dot " + m.kind + (hd ? " tl" + (m.nTl ? " tw" : "") : m.cnt ? " many" : "") + (refused.has(m.id) ? " ref" : "") + (m.date > NOW ? " future" : "") + (dots[open] === m ? " on" : "");
+        d.dataset.i = m.i; d.style.left = px + "px"; d.style.top = AY + m.off + "px"; d.style.width = m.w + "px"; d.style.height = m.h + "px";
+        if (hd) d.innerHTML = `<b>${m.nTl || m.n}</b>`; else if (m.cnt) d.textContent = rest;
+        d.setAttribute("aria-label", m.cnt ? `${rest} more here` : showDate(m.date) + (m.time ? " " + m.time : "") + (hd ? (m.nTl ? " timeweave " : " timeline ") : " ") + m.title); d.onclick = () => go(m.i); host.appendChild(d);
+        lbls.push({ ...beside(px, m.cy, m.w / 2, sd), t:m.cnt ? `${rest} more` : m.title || m.summary || "" }); });
+      if (sd < 0 || !cols.some(c => c.sd < 0 && mo(c.g[0], ms[0]))){ const w = document.createElement("span"), ty = sd < 0 ? -r - 4 : -18; w.className = "mo"; w.textContent = when(ms); w.style.left = px + "px"; w.style.top = AY + ty + "px"; host.appendChild(w);   // blue alone: over the line; gold and blue: once, over the gold
+        const d = 2 - (w.getBoundingClientRect().left - band.getBoundingClientRect().left); if (d > 0){ w.style.left = px + d * Math.cos(TA) + "px"; w.style.top = AY + ty + d * Math.sin(TA) + "px"; } }   // at the seat it slides right, onto the screen
+      return;
+    }
     const x = ids[0], e = document.createElement("button"), sz = x.tl ? Math.max(18, SZ(x.n + x.nTl)) : SZ(n);   // a head is big enough for its count
     e.className = "dot " + x.kind + (x.tl ? " tl" + (x.nTl ? " tw" : "") : "") + (n > 1 ? " many" : "") + (ids.every(o => refused.has(o.id)) ? " ref" : "") + (x.date > NOW ? " future" : "") + (open !== null && dots[open] && dots[open].g === gi ? " on" : "");
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = X(cx); e.style.top = AY + (x.tl ? 0 : side(x) * OFF) + "px"; e.style.width = sz + "px"; e.style.height = sz * (x.tl ? x.nTl ? 1.3 : .9 : 1) + "px";
     if (x.tl) e.innerHTML = `<b>${x.nTl || x.n}</b>`; else if (n > 1 && sz >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => at(o) < at(m) ? o : m, x), hi = ids.reduce((m, o) => at(o) > at(m) ? o : m, x), seated = ids.includes(dots[open]);
-    const moment = n > 1 && (at(hi) - at(lo)) / YR * MAXZ < DOT + 2, up = moment && spur === lo.id && !seated; if (seated && spur === lo.id) spur = null;   // a moment: members the closest zoom still cannot part; open, they stand off the line on a spur — at the foot the column already lists them, so no spur there
     const o = seated ? dots[open] : x, px = SEAT + cx * PX, last = lbls[lbls.length - 1];   // the open card is the foot, its title is the card, so its group hangs nothing
-    const y = x.tl ? side(x) > 0 ? sz * (x.nTl ? 1.3 : .9) + 4 : 14 : Math.max(14, sz / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
-    if (seated || up){} else if (last && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
+    const y = x.tl ? side(x) > 0 ? Math.max(14, sz * (x.nTl ? 1.3 : .9) * (1 - (x.nTl ? 7 : 14) / sz) + 3) : 14 : Math.max(14, sz / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
+    if (seated){} else if (last && !last.sp && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < 14) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + (x.tl ? (x.nTl ? " timeweave " : " timeline ") : " ") + x.title : `${n} here, ${lo.date} to ${hi.date}`);
-    e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat; a moment opens its spur instead, and folds it
-      if (moment && !seated){ spur = spur === lo.id ? null : lo.id; render(); return; }
+    e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span takes half the line from the seat
       if (n > 1 && at(hi) > at(lo)) zoom(Math.min(MAXZ, (lineL() - SEAT) / 2 / ((at(hi) - at(lo)) / YR)) / ppy);   // through zoom(): it draws — go() alone only scrolls, and a first card already at the seat scrolls nowhere
       go(lo.i); };
-    if (moment && !seated){ const nb = document.createElement("div"); nb.className = "nib"; nb.style.left = e.style.left; nb.style.top = e.style.top; nb.style.height = SZ(n) + 12 + "px"; host.appendChild(nb); }
     host.appendChild(e);
-    if (up){   // the spur: perpendicular to the line, in record order — the first stays on the line, the rest alternate up-left and down-right, so each arm is half as long; a member's title hangs flat under it; click seats it, the spur folds
-      const STEP = DOT + 10, ms = [...ids].sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id)), reach = Math.ceil((n - 1) / 2) * STEP;
-      e.textContent = ""; e.className += " up"; const nb = host.querySelector(".nib:last-of-type"); nb.style.height = 2 * reach + SZ(n) + "px";
-      spurBox = { px, top:side(x) * OFF - reach, bot:side(x) * OFF + reach };
-      const beside = (dy, r, dir) => { const sx = dir < 0 ? -(r + 6) : r - 1, sy = -6.5; return { px:px + sx * Math.cos(TA) - sy * Math.sin(TA), y:dy + sx * Math.sin(TA) + sy * Math.cos(TA), n:1, sp:true, dir }; };   // a title level with its member, on the side where the line falls away
-      ms.forEach((m, k) => { if (!k) return; const dir = k % 2 ? -1 : 1, dy = side(x) * OFF + dir * Math.ceil(k / 2) * STEP, d = document.createElement("button");
-        d.className = "dot " + m.kind + " sp" + (refused.has(m.id) ? " ref" : "") + (m.date > NOW ? " future" : ""); d.dataset.i = m.i; d.style.left = e.style.left; d.style.top = AY + dy + "px"; d.style.width = d.style.height = DOT + "px";
-        d.setAttribute("aria-label", showDate(m.date) + (m.time ? " " + m.time : "") + " " + m.title); d.onclick = () => { spur = null; go(m.i); }; host.appendChild(d);
-        lbls.push({ ...beside(dy, DOT / 2, dir), t:m.title || m.summary || "" }); });
-      lbls.push({ ...beside(side(x) * OFF, SZ(n) / 2, 1), t:ms[0].title || ms[0].summary || "" });
-    }
   });
   lbls.forEach(({ px, y, n, t, sp, dir }, li) => {   // the title, flat, hung from the dot, one size at every distance: room is the merge rule's job; its chars = what fits to the window's edge
-    if (spurBox && !sp && px < spurBox.px && y + (spurBox.px - px) * Math.tan(TA) > spurBox.top - 14 && y + (spurBox.px - px) * Math.tan(TA) < spurBox.bot + 14 && (spurBox.px - px) / Math.cos(TA) < t.length * 8) return;   // a title that would run through an open spur is dropped, not dimmed
+    if (cols.some(c => { const dx = c.px - px, yy = y + dx * Math.tan(TA); return dx * (dir || 1) > 0 && yy > Math.min(0, c.sd * c.r) - 14 && yy < Math.max(0, c.sd * c.r) + 14 && Math.abs(dx) / Math.cos(TA) < t.length * 8; })) return;   // a title that would run through a column is dropped, not dimmed
     const k = Math.max(3, Math.floor((dir < 0 ? px * Math.cos(TA) - 20 : band.clientWidth - px * Math.cos(TA) - 20) / (13 * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 && !sp ? " alt" : "") + (dir < 0 ? " l" : ""); l.style.left = px + "px"; l.style.top = y + "px";
     l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
   });
@@ -635,7 +645,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i;   // the seat is not set here: the scroll below lands the card at the foot and the spy seats the line there
-  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", +e.dataset.g === x.g));
+  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", e.dataset.g ? +e.dataset.g === x.g : +e.dataset.i === i));   // a column member lights alone
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   card.querySelectorAll(".row").forEach(e => e.classList.toggle("on", x.tl && e.dataset.d === x.tl));
