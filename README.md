@@ -5,7 +5,8 @@ publishing them. Reads straight from relays — no server, no login required, no
 build step.
 
 **Live:** https://lamekarjeggr.github.io/Wiki-Timechain/ ·
-**Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html)
+**Write a card:** [/add.html](https://lamekarjeggr.github.io/Wiki-Timechain/add.html) ·
+**Dots:** [/dots.html](https://lamekarjeggr.github.io/Wiki-Timechain/dots.html) — the same cards, read another way
 
 ## The convention
 
@@ -35,7 +36,7 @@ python3 -m http.server 8000
 
 To host a copy: fork, then GitHub Pages, deploy from `main`, root.
 
-`MARKER` and `RELAYS` are the two knobs, set in **both** HTML files. The marker lives on
+`MARKER` and `RELAYS` are the two knobs, set in **every** HTML file. The marker lives on
 the notary; the viewer shows a card only if its notary is known and its `event_date` parses.
 
 ## Built on
@@ -60,11 +61,10 @@ code license.
 
 ## License
 
-Code — `index.html`, `add.html`, `nip46.js` — is
+Code — `index.html`, `add.html`, `dots.html`, `lib/`, `nip46.js` — is
 [MIT](LICENSE).
 
 Specification — `CONVENTION.md`, `NIP-DRAFT.md`, `NIP-DRAFT-ACTS.md` — is
 [CC0 1.0 Universal](LICENSE-SPEC), matching the
 [nips repo](https://github.com/nostr-protocol/nips), so the text can be absorbed
-there without an attribution clause riding along. `cards/` is CC0 too; it is staging
-copy — the relays hold the truth.
+there without an attribution clause riding along.
