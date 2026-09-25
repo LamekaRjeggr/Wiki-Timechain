@@ -43,7 +43,7 @@ del{color:var(--t2)} ins{text-decoration:none;color:var(--t0)}
 
 header{display:flex;gap:18px;align-items:baseline;padding-block:12px 6px;flex-wrap:wrap;width:100%}
 header .ntry{color:var(--t2);flex:1 1 0;min-width:0} header .a{color:var(--acc)} header .ntry b{color:var(--acc);font-weight:400} header .ntry button{color:var(--t1)}
-header .st{margin-left:auto;color:var(--t2);font-size:12px;white-space:nowrap} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0}
+header .st{margin-left:auto;color:var(--t2);font-size:12px;white-space:nowrap} header #bst{margin-left:auto} header #bst:empty{display:none} header #bst + .st{margin-left:0} header .nav ~ #bst, header .nav ~ .st{margin-left:0} header .nav a{color:inherit}
 header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:var(--t1)} header .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)} header .chip.gold{background:var(--acc);color:var(--bg);border-color:var(--acc)}   /* gold: the chip that acts on what you checked */ header .title{color:var(--t2);border-bottom:1px dotted var(--line)} header select{font:inherit;color:var(--t1);background:var(--panel);border:1px solid var(--line);border-radius:9px;max-width:22ch}   /* a chip: folded until pressed; the you chip fills when the filter is on */
 
 main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window: the line wants every px of width */
@@ -120,7 +120,7 @@ header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:
   <div id="top">
     <header>
       <span class="ntry" id="ntry"></span>
-      <span class="st" id="bst"></span><span class="st" id="st">connecting…</span>
+      <span class="st nav"><a id="towiki" href="./">wiki</a> · <a id="toadd" href="add.html">add</a></span><span class="st" id="bst"></span><span class="st" id="st">connecting…</span>
     </header>
     <div id="band" aria-label="timeline, one dot per card"><div id="empty" hidden>no cards yet</div></div>
   </div>
@@ -308,6 +308,8 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
   const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (local) q.set("local", "1");
   for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
+  const c = coord ? "?c=" + encodeURIComponent(coord) : "";   // the other two pages read c= the same way: land on this timeline there
+  document.getElementById("towiki").href = "./" + c; document.getElementById("toadd").href = "add.html" + c;
 }
 const keep = (x, d) => (!Q.get("add") || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
 const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room

@@ -815,7 +815,7 @@
              Copy hides when no timeline is selected, so it can't hold the first slot. -->
         <a id="addlink" class="linkbtn go" href="add.html"
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
-        <a class="linkbtn" href="dots.html"
+        <a id="dotslink" class="linkbtn" href="dots.html"
           title="The same cards, read another way — a dot for each on one line">◦ Dots</a>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
@@ -1057,7 +1057,7 @@ const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
-const addLink  = document.getElementById("addlink");   // → add.html, the write side
+const addLink  = document.getElementById("addlink"), dotsLink = document.getElementById("dotslink");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // the name's notaries — see renderNotaries
 rosterEl.addEventListener("click", e => {
   const b = e.target.closest(".rchip"); if (!b || b.dataset.n === activeN) return;
@@ -1941,6 +1941,7 @@ function renderTabs(V){
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
+  dotsLink.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html";
   renderNotaries();
   if (!slugs.size) return;                       // status line shows "connecting…"
 

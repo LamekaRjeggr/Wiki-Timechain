@@ -307,7 +307,7 @@
   </div>
   <p class="sub">Write a kind-30828 card: start a timeline, add an entry to someone
     else's, or revise a card that is already there. Your key signs it, the relays keep
-    it, and <a href="./">the viewer</a> reads it on the next load — nothing here is
+    it, and <a id="toview" href="./">the viewer</a> (or <a id="todots" href="dots.html">dots</a>) reads it on the next load — nothing here is
     stored on a server. <a href="CONVENTION.md">How to write one</a> ·
     <a href="NIP-DRAFT.md">the spec</a>.</p>
 </header>
@@ -1654,6 +1654,7 @@ $("b-pub").addEventListener("click", publish);
 // timeline already chosen.
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
+if (qc) for (const [id, pg] of [["toview", "./"], ["todots", "dots.html"]]) $(id).href = pg + "?c=" + encodeURIComponent(qc);   // back to the timeline you came from
 
 // ?d/&e/&p: a card arrives addressed — the "revise" link beside any card's pyramid in the
 // viewer. Which door it opens is decided late: the fork fields fill NOW, so a visitor can
