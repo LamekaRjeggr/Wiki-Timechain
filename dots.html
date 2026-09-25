@@ -182,8 +182,17 @@ function settle(id, ok){
 
 // ── ingest ──
 const tag = (ev, n) => (ev.tags.find(t => t[0] === n) || [])[1] || "";
+const gone = new Map();   // what a kind 5 took back: id → its author, or kind:pk:d → as of when; a copy arriving later from another relay stays out
+const isGone = ev => gone.get(ev.id) === ev.pubkey || (gone.get(ev.kind + ":" + ev.pubkey + ":" + tag(ev, "d")) ?? -1) >= ev.created_at;
+function ingestDelete(ev){   // NIP-09: only the author can take a record back; a coord takes every version up to the delete's own time
+  for (const [n, v] of ev.tags){
+    if (n === "e" && v) gone.set(v, ev.pubkey);
+    if (n === "a" && v && v.split(":")[1] === ev.pubkey) gone.set(v, Math.max(gone.get(v) ?? -1, ev.created_at)); }
+  for (const m of [notaries, cards, acts]) for (const [k, e] of m) if (isGone(e)) m.delete(k);
+  schedule();
+}
 function ingestNotary(ev){
-  const d = tag(ev, "d"); if (!d) return;
+  const d = tag(ev, "d"); if (!d || isGone(ev)) return;
   const c = NOTARY_KIND + ":" + ev.pubkey + ":" + d, cur = notaries.get(c);
   if (cur && cur.created_at >= ev.created_at) return;
   notaries.set(c, ev);
@@ -191,13 +200,13 @@ function ingestNotary(ev){
   clearTimeout(askT); askT = setTimeout(ask, 300); schedule();
 }
 function ingestCard(ev){
-  const d = tag(ev, "d"); if (!d) return;
+  const d = tag(ev, "d"); if (!d || isGone(ev)) return;
   const k = ev.pubkey + ":" + d, cur = cards.get(k);
   if (cur && cur.created_at >= ev.created_at) return;
-  cards.set(k, ev); askProfile(ev.pubkey); schedule();
+  cards.set(k, ev); askProfile(ev.pubkey); if (!askedDel.includes(ev.pubkey)){ clearTimeout(askT); askT = setTimeout(ask, 300); } schedule();
 }
 function ingestAct(ev){
-  if (acts.has(ev.id)) return;
+  if (acts.has(ev.id) || isGone(ev)) return;
   const keep = () => { acts.set(ev.id, ev); if (!actE.has(ev.id)){ actE.add(ev.id); clearTimeout(askT); askT = setTimeout(ask, 300); } schedule(); };
   let snap = null; try { snap = JSON.parse(tag(ev, "snapshot") || "null"); } catch {}
   // the act's signature cannot vouch for the card it carries — that snapshot walks the gate too
@@ -218,31 +227,38 @@ function askProfile(pk){
 }
 
 // ── relays ──
-const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)));
+const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && (m[0] === "REQ" && hold(ws, m[1]), ws.send(JSON.stringify(m))));
+const hold = (ws, sub) => { ws.wait.set(sub, Date.now()); setTimeout(schedule, 8100); };   // a sub is loading on a relay until its EOSE, 8s at most: a slow relay cannot hold the page in "loading" forever
+const loading = () => { const on = sockets.filter(w => w.readyState === WebSocket.OPEN);   // nothing open yet, or an open relay still sending what it had: "empty" would be a guess; so would records still in the signature check, or a timeline whose cards are not asked for yet
+  return pend.size > 0 || askT !== null || !on.length && performance.now() < 1e4 || on.some(w => ["ntry", "wtc"].some(k => Date.now() - (w.wait.get(k) ?? -1e9) < 8000)); };
 const write = ev => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && !(local && MAIN.includes(ws.relay)) && ws.send(JSON.stringify(["EVENT", ev])));   // the chip on `local` = your acts stay on your relay; the network never hears them
-let asked = "";
+let asked = "", askedDel = "";
 function ask(){   // one sub over every timeline known so far; same sub id = the relay swaps the filter AND replays it, so re-send only what grew
-  const cs = [...new Set([...notaries.keys(), ...[...notaries.values()].flatMap(sourcesOf)])]; if (!cs.length) return;   // one hop out: a source's cards and acts too
+  askT = null; const cs = [...new Set([...notaries.keys(), ...[...notaries.values()].flatMap(sourcesOf)])]; if (!cs.length) return;   // one hop out: a source's cards and acts too
   if (asked !== cs.join()){ asked = cs.join(); send(["REQ", "wtc", { kinds:[KIND], "#a":cs }]); }
   send(["REQ", "act", { kinds:[ACT_KIND], "#a":cs }, ...(actE.size ? [{ kinds:[ACT_KIND], "#e":[...actE] }] : [])]);
+  const pks = [...new Set([...notaries.values(), ...cards.values(), ...acts.values()].map(e => e.pubkey))].sort();   // deletes: by everyone whose records are in the room, and stays open — a take-back lands live
+  if (askedDel !== pks.join()){ askedDel = pks.join(); send(["REQ", "del", { kinds:[5], authors:pks }]); }
 }
 let up = 0;
 function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
-  ws.relay = url; const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
-  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = ""; ask(); };   // a late relay has heard nothing yet
+  ws.relay = url; ws.wait = new Map(); const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
+  ws.onopen = () => { wait = 2000; up++; status(); hold(ws, "ntry"); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = askedDel = ""; ask(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
+    if (d[0] === "EOSE" || d[0] === "CLOSED"){ ws.wait.delete(d[1]); return schedule(); }
     if (d[0] !== "EVENT") return;
     if (d[1] === "ntry") admit(d[2], ingestNotary, url);
     if (d[1] === "wtc")  admit(d[2], ingestCard, url);
     if (d[1] === "act")  admit(d[2], ingestAct, url);
     if (d[1] === "prof") admit(d[2], ingestProfile, url);
+    if (d[1] === "del" && d[2]?.kind === 5) admit(d[2], ingestDelete, url);
   };
   ws.onerror = () => status();
   ws.onclose = () => { status(); setTimeout(() => connect(url, Math.min(60000, wait * 2)), wait); };   // an error always ends in a close: one retry per drop
 }
-const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays`; };
+const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays${loading() ? " · loading…" : ""}`; };
 
 // a timeline is its subject `d`, whole — every notary that carries that d pours its dots in, then ONE dot per card:
 // gold if any notary accepted it, blue otherwise; `accs` = the notaries that did (the ✓ N pill), so the band never repeats a card
@@ -393,7 +409,7 @@ async function deleteHead(){   // a kind 5 on my head: id and coord both named; 
   const cur = notaries.get(myCoord()); if (!cur || !confirm(`delete "${tag(cur, "title")}"?`)) return;
   const { sign } = await signer();
   const del = await sign({ kind:5, created_at:Math.floor(Date.now() / 1000), content:"", tags:[["e", cur.id], ["a", myCoord()], ["k", String(NOTARY_KIND)]] });
-  write(del); notaries.delete(myCoord()); choose(null);
+  write(del); ingestDelete(del); choose(null);
 }
 const after = id => Math.max(0, ...[...acts.values()].filter(a => a.pubkey === myPk && a.tags.some(t => t[0] === "e" && t[1] === id)).map(a => a.created_at));   // a new act on the same card sorts after my last one
 async function accept(i){   // the accept as the viewer writes it: my notary names the context, the exact card rides along as its snapshot
@@ -464,7 +480,7 @@ function render(){
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
   const pushbtn = document.getElementById("pushbtn"); if (pushbtn) pushbtn.onclick = () => { if (pushT){ clearInterval(pushT); pushT = null; } else { pushT = setInterval(tick, 60000); tick(); } render(); };
-  empty.hidden = dots.length > 0;
+  status(); empty.hidden = dots.length > 0; empty.textContent = loading() ? "loading…" : "no cards yet";
   band.hidden = card.hidden = !coord; lib.hidden = !!coord; if (!coord) return library();
   column(); draw();
 }
@@ -588,7 +604,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
 
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timeweave points at other timelines; a timeline only holds events
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const lrow = x => `<button class="lrow" data-d="${esc(x.tl)}"><span><b>${esc(x.title)}</b><small>${esc([x.nTl ? plural(x.nTl, "timeline") : "", x.n ? plural(x.n, "event") : ""].filter(Boolean).join(" · ") || "empty")}</small></span><span class="go1">Open</span></button>`;
+const lrow = x => `<button class="lrow" data-d="${esc(x.tl)}"><span><b>${esc(x.title)}</b><small>${esc([x.nTl ? plural(x.nTl, "timeline") : "", x.n ? plural(x.n, "event") : ""].filter(Boolean).join(" · ") || (loading() ? "…" : "empty"))}</small></span><span class="go1">Open</span></button>`;
 const libList = (xs, n) => { const w = xs.filter(isWeave), t = xs.filter(x => !isWeave(x)), c = k => n ? ` <i>(${k})</i>` : "";
   return (w.length || !n ? `<h3>Timeweaves${c(w.length)}</h3><p class="plain">Groups of timelines</p>${w.map(lrow).join("") || `<p class="note"><i>None yet.</i></p>`}` : "")
     + (t.length || !n ? `<h3>Timelines${c(t.length)}</h3><p class="plain">Lists of events</p>${t.map(lrow).join("") || `<p class="note"><i>None yet.</i></p>`}` : ""); };
@@ -597,11 +613,11 @@ function library(){   // My collection = the timelines you keep as a notary; Sea
   const cur = myPk ? tab || "mine" : "find", q = document.getElementById("q").value.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
   const mine = dots.filter(x => myPk && x.tls.some(d => notaries.has(myCoordOf(d)))).sort((a, b) => a.title.localeCompare(b.title));
   const hits = dots.filter(x => { const h = [x.title, x.summary, ...x.tls].join(" ").toLowerCase(); return words.every(w => h.includes(w)); }).sort((a, b) => a.title.localeCompare(b.title));
-  const key = cur + q + canSign() + [...mine, ...hits].map(x => x.tl + x.title + x.n + x.nTl).join("|"); if (key === libKey) return; libKey = key;
+  const key = cur + q + canSign() + loading() + [...mine, ...hits].map(x => x.tl + x.title + x.n + x.nTl).join("|"); if (key === libKey) return; libKey = key;
   tmine.disabled = !myPk; tmine.setAttribute("aria-selected", cur === "mine"); tfind.setAttribute("aria-selected", cur === "find");
   pmine.hidden = cur !== "mine"; pfind.hidden = cur !== "find"; nosign.hidden = !!myPk;
   pmine.innerHTML = libList(mine) + (canSign() ? `<button class="big" id="newtl">New timeline</button>` : "");
-  fres.innerHTML = hits.length ? libList(hits, true) : `<p class="note">Nothing found for “${esc(q)}”.</p>`;
+  fres.innerHTML = hits.length ? libList(hits, true) : `<p class="note">${loading() ? "Looking…" : q ? `Nothing found for “${esc(q)}”.` : "No timelines yet."}</p>`;
   lib.querySelectorAll(".lrow").forEach(b => b.onclick = () => choose(b.dataset.d));
   const nt = document.getElementById("newtl"); if (nt) nt.onclick = newTimeline;
 }
