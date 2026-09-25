@@ -80,7 +80,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px;overflow-anchor:none}   /* every card, in date order; the one nearest the top is open; the seat keeps the scroll, not the browser */
 #card::after{content:"";height:100vh}   /* room for the last card to reach the foot */
 #card:empty{display:none}
-#card{margin-left:46px} #card .c+.c{border-top:1px solid var(--t2);padding-top:14px}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node; every card at full ink, the darkest rule on the page parts one card from the next */
+#card{margin-left:var(--seat,46px)} #card .c+.c{border-top:1px solid var(--t2);padding-top:14px}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node; every card at full ink, the darkest rule on the page parts one card from the next */
 .c.ref{opacity:.6} #card .refs{margin-top:16px;font-size:12px;color:var(--t2);border-top:1px solid var(--line);padding-top:6px}   /* refused: one closing line, the cards behind it on request */
 #card h2{margin:0 0 2px;font-size:17px;font-weight:600;color:var(--t0);text-wrap:balance}
 #card h2{font-family:var(--sans);font-size:18px;line-height:1.3;letter-spacing:-.01em}
@@ -156,9 +156,10 @@ const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timeweaves walked through to get here, oldest first; tab: the Library tab picked by hand
 let fitK = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
-const TA = 22 * Math.PI / 180, SEAT = 46, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
+const TA = 22 * Math.PI / 180, SEAT = 150, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
+document.documentElement.style.setProperty("--seat", Math.round(SEAT * Math.cos(TA)) + "px");   // the column hangs under the seat, wherever the seat sits on the line
 
 // ── the gate: every event is id-hashed and signature-checked before it counts — in a pool of workers, so the page never waits on the math ──
 const pend = new Map();   // id → { ev, fns } out for verify; a copy from another relay joins the wait instead of being checked again
@@ -498,7 +499,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
   for (const sd of [-1, 1]){
     const gs = [];
     for (const x of [...dots].filter(x => side(x) === sd).sort((a, b) => a.x - b.x)){
-      if (x.x < -SEAT / PX || x.x > 100 || (refused.has(x.id) && !showRef)) continue;   // the line runs 46px left of the seat too: the top card, half scrolled past the foot, keeps its dot   // refused: off the band until the closing line unfolds
+      if (x.x < -SEAT / PX || x.x > 100 || (refused.has(x.id) && !showRef)) continue;   // the line runs SEAT px behind the seat too: the top card, half scrolled past the foot, keeps its dot   // refused: off the band until the closing line unfolds
       const g = gs[gs.length - 1];   // heads never merge by pixels, only into a moment they share
       if (g && (mo(x, g[0]) && mo(x, g[g.length - 1]) || !x.tl && !g.some(o => o.tl) && (x.x - g[0].x) * PX <= (DOT + 2) * fm(x))) g.push(x); else gs.push([x]);
     }
