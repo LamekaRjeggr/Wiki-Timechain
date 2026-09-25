@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- No key lives here. The writes are the accept and the refuse (kind 8828, plus the 30829 that
      names your timeline), signed by a NIP-07 extension or a resumed bunker; with the local chip on
-     they reach only your add= relay. ws: is here for the lab relay
-     (?relay=ws://127.0.0.1:7777); every http(s) channel stays barred. -->
+     they reach only your add= relay. ws: is here for a relay you run
+     yourself (?relay=ws://…); every http(s) channel stays barred. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
   script-src 'self' 'unsafe-inline';
   worker-src 'self';
   style-src 'unsafe-inline';
-  connect-src wss: ws://127.0.0.1:7777 ws:;
+  connect-src wss: ws:;
   base-uri 'none';
   form-action 'none'">
 <title>Wiki-Timechain · dots</title>
