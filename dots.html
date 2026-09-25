@@ -141,8 +141,8 @@ import { fold8828 } from "./lib/fold-8828.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
-const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.mostr.pub",
-  "wss://relay.nostr.band", "wss://offchain.pub", "wss://nostr.mom"];
+const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.ditto.pub",
+  "wss://offchain.pub", "wss://nostr.mom"];
 const RELAYS = (Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(Q.get("add") || "").split(",").filter(Boolean)]).map(u => /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? u : u.replace(/127\.0\.0\.1|localhost/, location.hostname));   // relay= replaces the network, add= joins it; a loopback relay follows the page's host, so one URL serves the Mac and the iPad
 const KIND = 30828, ACT_KIND = 8828, NOTARY_KIND = 30829, MARKER = "wikitimechain";
 
@@ -226,10 +226,10 @@ function ask(){   // one sub over every timeline known so far; same sub id = the
   send(["REQ", "act", { kinds:[ACT_KIND], "#a":cs }, ...(actE.size ? [{ kinds:[ACT_KIND], "#e":[...actE] }] : [])]);
 }
 let up = 0;
-function connect(url){
+function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
-  ws.relay = url; sockets.push(ws);
-  ws.onopen = () => { up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = ""; ask(); };   // a late relay has heard nothing yet
+  ws.relay = url; const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
+  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }])); asked = ""; ask(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
     if (d[0] !== "EVENT") return;
@@ -238,7 +238,8 @@ function connect(url){
     if (d[1] === "act")  admit(d[2], ingestAct, url);
     if (d[1] === "prof") admit(d[2], ingestProfile, url);
   };
-  ws.onclose = ws.onerror = () => status();
+  ws.onerror = () => status();
+  ws.onclose = () => { status(); setTimeout(() => connect(url, Math.min(60000, wait * 2)), wait); };   // an error always ends in a close: one retry per drop
 }
 const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays`; };
 
@@ -726,7 +727,7 @@ let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = reques
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (fitK) ppy = null; render(); }, 120); });   // label thinning depends on width; a fit refits to the new line, a hand zoom holds
 render();
-RELAYS.forEach(connect);
+RELAYS.forEach(u => connect(u));   // not forEach(connect): the index would ride in as the first wait
 </script>
 </body>
 </html>
