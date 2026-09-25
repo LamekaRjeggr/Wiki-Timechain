@@ -442,7 +442,7 @@ function render(){
   const oKey = open !== null && dots[open] ? dots[open].tl || dots[open].id : null;   // the open one, by key: a card arriving before it shifts every index
   dots = members(coord, fold.projections, all); const have = new Set(dots.map(x => x.tl || x.id));
   for (let i = 0; i < dots.length; i++){ const x = dots[i]; if (x.tl && unfolded.has(x.tl)) for (const m of members(x.tl, fold.projections, all, x.tl)) if (!have.has(m.tl || m.id)){ have.add(m.tl || m.id); dots.push(m); } }   // members of members too: the list grows while it walks
-  dots.sort(byDate); if (oKey){ const k = dots.findIndex(x => (x.tl || x.id) === oKey); open = k < 0 ? null : k; }
+  dots.sort(byDate); dots.forEach((x, i) => x.i = i); if (oKey){ const k = dots.findIndex(x => (x.tl || x.id) === oKey); open = k < 0 ? null : k; }
   const nC = dots.filter(x => !x.tl).length, nT = dots.length - nC, what = [nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";
   if (coord){
     whole = dotsFor(coord, fold.projections, all);   // whole: the timeline, whichever side the chips show — the push queue reads it
@@ -464,8 +464,11 @@ function render(){
   const pushbtn = document.getElementById("pushbtn"); if (pushbtn) pushbtn.onclick = () => { if (pushT){ clearInterval(pushT); pushT = null; } else { pushT = setInterval(tick, 60000); tick(); } render(); };
   empty.hidden = dots.length > 0;
   band.hidden = card.hidden = !coord; lib.hidden = !!coord; if (!coord) return library();
+  column(); draw();
+}
 
-  // the band
+function draw(){   // the band alone, from the dots render() left: a scroll, a drag or a zoom only moves the seat, so it redraws nothing else
+  if (!coord) return;
   const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
   band.querySelectorAll("#line").forEach(e => e.remove()); band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
   const L = lineL(), AY = 0, PX = (L - SEAT) / 100, X = f => SEAT + f * PX + "px", xp = f => SEAT + f * (L - SEAT);   // positions in % of the window become px from the seat
@@ -487,7 +490,7 @@ function render(){
   // one dot per cluster: dots whose centres would land within a dot-width of each other merge, accepted first;
   // a cluster over several days is a door — click spreads it (window = its days); on one day there is nothing to spread, so it opens the head card
   const groups = [], lbls = [], mo = (a, b) => Math.abs(at(a) - at(b)) / YR * MAXZ < DOT + 2;   // a moment: members the closest zoom still cannot part
-  dots.forEach((x, i) => { x.i = i; x.x = frac(at(x), W0, W1) * 100; x.g = null; });
+  dots.forEach(x => { x.x = frac(at(x), W0, W1) * 100; x.g = null; });
   // two sides of the line: accepted rests on it, the rest hangs under it — a side is a channel of its own, so clusters never cross it
   const side = x => x.kind === "acc" ? -1 : 1, OFF = 5.5;   // the centre sits half the smallest dot off the axis and stays there while the dot grows
   const mx = ids => ids.reduce((s, x) => s + x.x, 0) / ids.length * PX;
@@ -578,7 +581,7 @@ function render(){
     host.appendChild(e);
   }
 
-  column(); if (dots.length) show(open !== null && dots[open] ? open : 0, false);   // something is always open: the first card until the reader moves
+  if (dots.length) show(open !== null && dots[open] ? open : 0, false);   // something is always open: the first card until the reader moves
 }
 
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timeweave points at other timelines; a timeline only holds events
@@ -671,7 +674,7 @@ const ntry = document.getElementById("ntry"),
 tmine.onclick = () => { tab = "mine"; library(); }; tfind.onclick = () => { tab = "find"; library(); document.getElementById("q").focus(); };
 document.getElementById("q").oninput = () => library(); document.getElementById("sform").onsubmit = e => { e.preventDefault(); library(); };
 // wheel over the band: the seat holds, the years stretch or squeeze
-const zoom = k => { ppy = Math.max(0.2, Math.min(MAXZ, ppy * k)); fitK = null; render(); };
+const zoom = k => { ppy = Math.max(0.2, Math.min(MAXZ, ppy * k)); fitK = null; draw(); };
 band.addEventListener("wheel", e => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
   e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = (seatD ? T(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
   zoom(Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); seat(tp - (px - SEAT) / ppy * YR);   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
@@ -681,7 +684,7 @@ let held = false;
 function seat(t, a){   // a = the block to park, else the last one at or before t
   const arts = [...card.querySelectorAll("article")]; a ??= arts[Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t))]; const b = arts[arts.indexOf(a) + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
   if (!a) return; const f = b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0;
-  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); held = true; render();
+  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); held = true; draw();
   const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false;   // no scroll = no spy pass to clear the flag
 }
 // drag the line: the date under the pointer scrolls the column to its place, and the spy seats the line there — scroll and drag are one motion. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
@@ -698,7 +701,7 @@ let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallo
 document.addEventListener("keydown", e => {
   if (e.target.matches("select,input,textarea") || !dots.length || !coord) return;
   const z = { ArrowUp: 1.25, ArrowDown: 0.8 }[e.key], k = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-  if (z) zoom(z); else if (k) go(Math.max(0, Math.min(dots.length - 1, (open ?? -1) + k))); else if (e.key === "Home") go(0); else if (e.key === "End") go(dots.length - 1); else if (e.key === "Escape"){ ppy = null; render(); } else return;
+  if (z) zoom(z); else if (k) go(Math.max(0, Math.min(dots.length - 1, (open ?? -1) + k))); else if (e.key === "Home") go(0); else if (e.key === "End") go(dots.length - 1); else if (e.key === "Escape"){ ppy = null; draw(); } else return;
   e.preventDefault();
 });
 // scrolling the column: the card at the foot is the seat — its dot sits at the foot, and between two cards the seat's date runs with the scroll, so the line slides as you read and never jumps
@@ -708,7 +711,7 @@ let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = reques
   for (const a of arts) if (a.getBoundingClientRect().top <= park) k++; else break;
   const a = arts[Math.max(0, k)], b = arts[k + 1], i = +a.dataset.i, n = b && +b.dataset.i, f = k < 0 || !b ? 0 : Math.max(0, Math.min(1, (PARK() - a.getBoundingClientRect().top) / (b.getBoundingClientRect().top - a.getBoundingClientRect().top)));
   if (dots[i] && !held) seatD = new Date(at(dots[i]) + f * (dots[n] ? at(dots[n]) - at(dots[i]) : 0)).toISOString();
-  held = false; if (i !== open) open = i; render();
+  held = false; if (i !== open) open = i; draw();
 }); }, { passive:true });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (fitK) ppy = null; render(); }, 120); });   // label thinning depends on width; a fit refits to the new line, a hand zoom holds
