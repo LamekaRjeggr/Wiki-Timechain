@@ -77,7 +77,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #line .ttl{position:absolute;top:17px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
 
 
-#card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px}   /* every card, in date order; the one nearest the top is open */
+#card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px;overflow-anchor:none}   /* every card, in date order; the one nearest the top is open; the seat keeps the scroll, not the browser */
 #card::after{content:"";height:100vh}   /* room for the last card to reach the foot */
 #card:empty{display:none}
 #card{margin-left:46px} #card .c+.c{border-top:1px solid var(--t2);padding-top:14px}   /* the column starts under the foot, flush with the seat; the top card is the line's bottom node; every card at full ink, the darkest rule on the page parts one card from the next */
@@ -431,7 +431,7 @@ function fitPpy(s){   // the default zoom: fit the record, then zoom in until no
 const lineL = () => Math.min((band.clientHeight - 14 - 14) / Math.sin(TA), (band.clientWidth - 14) / Math.cos(TA));   // the line's length: it stops where it would leave the band, top or right
 function windowOf(){                       // [seat, far end): the seat is the open card's date; the far edge is where the line leaves the band
   if (!dots.length) return [utc(2026), utc(2027)];
-  const s = seatD ? T(seatD) : at(dots[0]), k = dots[0].date + dots[dots.length - 1].date;   // the record's ends: while they still arrive, a fit is refit; a zoom by hand holds
+  const s = seatD ? Date.parse(seatD) : at(dots[0]), k = dots[0].date + dots[dots.length - 1].date;   // the record's ends: while they still arrive, a fit is refit; a zoom by hand holds
   if (ppy == null || (fitK && fitK !== k)){ ppy = fitPpy(s); fitK = k; } return [s, s + (lineL() - SEAT) / ppy * YR];
 }
 
@@ -469,7 +469,7 @@ function render(){
 
 function draw(){   // the band alone, from the dots render() left: a scroll, a drag or a zoom only moves the seat, so it redraws nothing else
   if (!coord) return;
-  const [W0, W1] = windowOf(), span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
+  const [W0, W1] = windowOf(); space(); const span = W1 - W0, ISO = t => new Date(t).toISOString().slice(0, 10);
   band.querySelectorAll("#line").forEach(e => e.remove()); band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
   const L = lineL(), AY = 0, PX = (L - SEAT) / 100, X = f => SEAT + f * PX + "px", xp = f => SEAT + f * (L - SEAT);   // positions in % of the window become px from the seat
   const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 14 + "px"; host.style.width = L + "px"; band.appendChild(host);
@@ -676,20 +676,30 @@ document.getElementById("q").oninput = () => library(); document.getElementById(
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(0.2, Math.min(MAXZ, ppy * k)); fitK = null; draw(); };
 band.addEventListener("wheel", e => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
-  e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = (seatD ? T(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
+  e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = (seatD ? Date.parse(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
   zoom(Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); seat(tp - (px - SEAT) / ppy * YR);   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
 }, { passive:false });
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
 let held = false;
-function seat(t, a){   // a = the block to park, else the last one at or before t
+const place = (t, a) => {   // where t falls in the column: the block at or before it (a, if given), the next, and how far between
   const arts = [...card.querySelectorAll("article")]; a ??= arts[Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t))]; const b = arts[arts.indexOf(a) + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
-  if (!a) return; const f = b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0;
-  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); held = true; draw();
-  const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false;   // no scroll = no spy pass to clear the flag
+  return a && { a, b, dj, dn, f: b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0 }; };
+const park = ({ a, b, f }) => { held = true; const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false; };   // no scroll = no spy pass to clear the flag
+function seat(t, a){   // a = the block to park, else the last one at or before t
+  const p = place(t, a); if (!p) return; const { b, dj, dn } = p;
+  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); draw(); park(p);
+}
+// the column keeps the line's pace: after each block, room for the gap to the next as the line draws it, so a px of scroll moves the line about a px at any zoom; a screen at most, past that a gap crosses faster
+let spK = null;
+function space(){
+  const k = [ppy, colKey, innerWidth, innerHeight].join("|"); if (ppy == null || k === spK) return; spK = k;
+  const arts = [...card.querySelectorAll("article")], top = arts.map(e => e.getBoundingClientRect().top), mb = arts.map(e => parseFloat(e.style.marginBottom) || 0);   // read every block, then write: one layout
+  arts.forEach((e, j) => { const n = arts[j + 1]; e.style.marginBottom = n ? Math.round(Math.max(0, Math.min(innerHeight, (at(dots[+n.dataset.i]) - at(dots[+e.dataset.i])) / YR * ppy - (top[j + 1] - top[j] - mb[j])))) + "px" : ""; });
+  if (seatD){ const p = place(Date.parse(seatD)); p && park(p); }   // the room moved the blocks: put the seat's date back at the park line
 }
 // drag the line: the date under the pointer scrolls the column to its place, and the spy seats the line there — scroll and drag are one motion. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
 let pull = null;   // {x, y, seat, moved}
-band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: seatD ? T(seatD) : at(dots[0]), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
+band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: seatD ? Date.parse(seatD) : at(dots[0]), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); }
