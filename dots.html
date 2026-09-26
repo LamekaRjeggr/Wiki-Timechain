@@ -141,9 +141,11 @@ import { fold8828 } from "./lib/fold-8828.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
+const HOME = /^(127\.0\.0\.1|localhost|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(location.hostname);   // the page served from this machine or its LAN: the local copy
+const ADD = Q.get("add") ?? (HOME && !Q.get("relay") ? "ws://127.0.0.1:7777" : ""), LOCAL0 = HOME && !!ADD;   // the local copy brings the lab relay and opens on the local side; add= (even empty) says otherwise
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.ditto.pub",
   "wss://offchain.pub", "wss://nostr.mom", "wss://relay.nostr.net"];
-const RELAYS = (Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(Q.get("add") || "").split(",").filter(Boolean)]).map(u => /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? u : u.replace(/127\.0\.0\.1|localhost/, location.hostname));   // relay= replaces the network, add= joins it; a loopback relay follows the page's host, so one URL serves the Mac and the iPad
+const RELAYS = (Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(ADD || "").split(",").filter(Boolean)]).map(u => /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? u : u.replace(/127\.0\.0\.1|localhost/, location.hostname));   // relay= replaces the network, add= joins it; a loopback relay follows the page's host, so one URL serves the Mac and the iPad
 const KIND = 30828, ACT_KIND = 8828, NOTARY_KIND = 30829, MARKER = "wikitimechain";
 
 // ── state ──
@@ -155,7 +157,7 @@ const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timeweaves walked through to get here, oldest first; tab: the Library tab picked by hand
 let fitK = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.get("local") === "1", names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
+let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 const TA = 22 * Math.PI / 180, SEAT = 150, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card, SEAT px in from the line's foot; ppy = px per year, fixed once to fit the record from the first seat, wheel changes it
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
@@ -170,7 +172,7 @@ const seenOn = new Map();   // id → Set(relay url): a card no MAIN relay has e
 const isLocal = id => ![...(seenOn.get(id) || [])].some(u => MAIN.includes(u));
 function admit(ev, fn, url){
   if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id)) || vBad.has(ev.id)) return;
-  const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (Q.get("add") && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
+  const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (ADD && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
   if (vOK.has(ev.id)) return fn(ev);
   const p = pend.get(ev.id); if (p) return p.fns.push(fn);
   pend.set(ev.id, { ev, fns:[fn] }); pool[rr++ % pool.length].postMessage([ev.id, ev]);
@@ -288,7 +290,7 @@ function members(d, projections, all, of){   // what a timeline holds: its cards
   if (d){ const ns = notariesOf(d); return [...dotsFor(d, projections, all).filter(x => keep(x, d)), ...sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all)).filter(Boolean)].map(x => of ? { ...x, of } : x); }   // of: the timeline a member came in with
   const out = [], held = new Map(); emptyN = 0;   // held: card set → the dot already showing it — timelines holding exactly the same cards fold into one dot
   for (const s of new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))){
-    const dot = subjectDot(s, projections, all); if (!dot){ if (!me && !Q.get("add")) emptyN++; continue; }
+    const dot = subjectDot(s, projections, all); if (!dot){ if (!me && !ADD) emptyN++; continue; }
     const key = dot.all.size ? [...dot.all.keys()].sort().join(" ") : "tl " + s, prev = held.get(key);
     if (prev){   // same cards, another keeper: add the keeper, pool the accepts
       prev.ns.push(...dot.ns.filter(n => !prev.ns.includes(n))); prev.tls.push(s);
@@ -305,14 +307,14 @@ function choose(c, path = []){   // c = a subject d → that timeline; null → 
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
-  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (local) q.set("local", "1");
+  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (local !== LOCAL0) q.set("local", local ? "1" : "0");
   for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
   const c = coord ? "?c=" + encodeURIComponent(coord) : "";   // the other two pages read c= the same way: land on this timeline there
   document.getElementById("towiki").href = "./" + c; document.getElementById("toadd").href = "add.html" + c;
 }
-const keep = (x, d) => (!Q.get("add") || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
-const localChip = () => Q.get("add") ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
+const keep = (x, d) => (!ADD || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
+const localChip = () => ADD ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
 const tlPick = () => {   // point my head at another timeline; taking one off is the ✕ on its row
   if (!canSign()) return "";
   const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], sub = c => c.split(":").slice(2).join(":");
