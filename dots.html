@@ -48,7 +48,7 @@ header .chip{border:1px solid var(--line);border-radius:9px;padding:0 7px;color:
 
 main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window: the line wants every px of width */
 #top{position:sticky;top:0;z-index:2;background:var(--bg);min-width:0}   /* header and band stay while the column scrolls under them; min-width:0 = a long header line cannot widen the grid item and shove the band */
-#band{position:relative;user-select:none;overflow:hidden;cursor:grab} #band.drag{cursor:grabbing}   /* height = what the line needs to reach the window's right edge; an edge ring sits on the band edge and is cut to a half: more, that way */
+#band{position:relative;user-select:none;overflow:hidden;cursor:grab;touch-action:none} #band.drag{cursor:grabbing}   /* height = what the line needs to reach the window's right edge; an edge ring sits on the band edge and is cut to a half: more, that way */
 #now{position:absolute;top:-44px;height:44px;width:0;border-left:1px dashed var(--t1)}   /* now rises from the line, above the year row; below the line is the titles' plane, nothing of now crosses it */
 #now i{position:absolute;bottom:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1);white-space:nowrap}
 .tick{position:absolute;top:-30px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
@@ -695,10 +695,10 @@ tmine.onclick = () => { tab = "mine"; library(); }; tfind.onclick = () => { tab 
 document.getElementById("q").oninput = () => library(); document.getElementById("sform").onsubmit = e => { e.preventDefault(); library(); };
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(0.2, Math.min(MAXZ, ppy * k)); fitK = null; draw(); };
-band.addEventListener("wheel", e => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
-  e.preventDefault(); if (!dots.length) return; const r = band.getBoundingClientRect(), px = (e.clientX - r.left) * Math.cos(TA) - (e.clientY - r.bottom + 14) * Math.sin(TA), tp = (seatD ? Date.parse(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
-  zoom(Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); seat(tp - (px - SEAT) / ppy * YR);   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
-}, { passive:false });
+const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand, not around its foot
+  const r = band.getBoundingClientRect(), px = (cx - r.left) * Math.cos(TA) - (cy - r.bottom + 14) * Math.sin(TA), tp = (seatD ? Date.parse(seatD) : at(dots[0])) + (px - SEAT) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
+  zoom(k); seat(tp - (px - SEAT) / ppy * YR); };
+band.addEventListener("wheel", e => { e.preventDefault(); if (dots.length) zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); }, { passive:false });   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
 let held = false;
 const place = (t, a) => {   // where t falls in the column: the block at or before it (a, if given), the next, and how far between
@@ -718,14 +718,19 @@ function space(){
   if (seatD){ const p = place(Date.parse(seatD)); p && park(p); }   // the room moved the blocks: put the seat's date back at the park line
 }
 // drag the line: the date under the pointer scrolls the column to its place, and the spy seats the line there — scroll and drag are one motion. A drag past 4px swallows the click that ends it, so a dot under the pointer stays closed
-let pull = null;   // {x, y, seat, moved}
-band.onpointerdown = ev => { if (!dots.length || ev.button) return; pull = { x: ev.clientX, y: ev.clientY, seat: seatD ? Date.parse(seatD) : at(dots[0]), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
+let pull = null, pinch = null; const fingers = new Map();   // pull: {x, y, seat, moved}; pinch: the two fingers' last spread; fingers: pointer id → where it is
+const spread = () => { const [a, b] = fingers.values(); return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+band.onpointerdown = ev => { if (!dots.length || ev.button) return; fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (fingers.size === 2){ pinch = spread(); pull = null; fingers.forEach((_, id) => band.setPointerCapture(id)); return; }   // a second finger turns the drag into a pinch
+  pull = { x: ev.clientX, y: ev.clientY, seat: seatD ? Date.parse(seatD) : at(dots[0]), moved: false, id: ev.pointerId }; };   // no capture yet: a capture retargets the click to the band and a dot could never open
 band.onpointermove = ev => {
+  if (fingers.has(ev.pointerId)) fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch && fingers.size === 2){ const s = spread(); if (pinch.d > 0) zoomAt(s.x, s.y, s.d / pinch.d); pinch = s; return; }   // the fingers part, the years stretch between them
   if (!pull || !ev.buttons) return; const d = (ev.clientX - pull.x) * Math.cos(TA) - (ev.clientY - pull.y) * Math.sin(TA);   // px along the line, which rises to the right
   if (!pull.moved && Math.abs(d) < 4) return; if (!pull.moved){ pull.moved = true; band.classList.add("drag"); band.setPointerCapture(pull.id); }
   seat(pull.seat - d / ppy * YR);
 };
-band.onpointerup = () => { if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
+band.onpointerup = band.onpointercancel = ev => { fingers.delete(ev.pointerId); if (fingers.size < 2) pinch = null; if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
 let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
 // keys anywhere on the page: left/right = next card in date order (on the line or not), up/down = zoom, home/end = first/last card, escape = fit the record from the seat
 document.addEventListener("keydown", e => {
