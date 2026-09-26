@@ -77,8 +77,8 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 .tick.hz{color:var(--hz)} .tick.hz::before{background:var(--hz)}
 #line .seat{position:absolute;top:0;width:18px;height:18px;border:2px solid var(--t1);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}   /* the seat: mid-line */
 #drop{position:absolute;bottom:0;width:0;border-left:1px dashed var(--t2);pointer-events:none}   /* from the seat down to the card that hangs under it */
-#line .ttl.l{margin-left:0;transform:rotate(22deg) translateX(-100%)}   /* runs left from its point: a column member above the line, where the line falls away leftward */
-#line .ttl{position:absolute;top:17px;margin-left:7px;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:1;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size; only its chars fall to the window edge */
+#leads{position:absolute;left:0;top:0;overflow:visible;pointer-events:none} #leads path{stroke:var(--t2);fill:none;opacity:.7}   /* a title set a row out keeps a faint leader to its dot */
+#line .ttl{position:absolute;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:15px;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size, whole or not at all */
 
 
 #card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px;overflow-anchor:none}   /* every card, in date order; the one nearest the top is open; the seat keeps the scroll, not the browser */
@@ -160,7 +160,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timetrees walked through to get here, oldest first; tab: the Library tab picked by hand
-let cardW = null, fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
+let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 const TA = 22 * Math.PI / 180, NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
@@ -494,7 +494,7 @@ function render(){
 
 function draw(){   // the band alone, from the dots render() left: a scroll, a drag or a zoom only moves the seat, so it redraws nothing else
   if (!coord) return;
-  band.querySelectorAll("#line").forEach(e => e.remove()); drop.hidden = !dots.length; if (!dots.length) return; band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
+  band.querySelectorAll("#line,#leads").forEach(e => e.remove()); drop.hidden = !dots.length; if (!dots.length) return; band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
   const { L, M, E, s, aF, aP, tA, tB } = mapOf(), AY = 0, span = M / ppy * YR; space();   // span: the time half the line holds at the seat's pace
   const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 14 + "px"; host.style.width = L + "px"; band.appendChild(host);
   const mx0 = M * Math.cos(TA), cw = Math.min(band.clientWidth, cardW ??= parseFloat(getComputedStyle(card).maxWidth) || 560);   // the card hangs centred under the seat, as far as the window lets it
@@ -537,7 +537,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
       if (gap(tm, te) >= 88) for (let t = tm; t < te; t += 864e5){ if (t > tm) cand.push([5, t, MON[m] + " " + new Date(t).getUTCDate()]);
         if (gap(t, t + 864e5) >= 88) for (let h = 1; h < 24; h++) cand.push([6, t + h * 36e5, String(h).padStart(2, "0") + ":00"]); } } }
   const named = [[M - E, "◂ horizon", aP], [M + E, "horizon ▸", aF]].filter(h => h[2]).map(([p, t]) => ({ p, t, hz:true, w:t.length * 6.6 }));   // where even spacing ends, said first; w = the name's length along the line
-  cand.map(([r, t, l]) => [r, s(t), l]).filter(([, p]) => p >= 24 && p <= L - 24 && !cols.some(c => Math.abs(p - c.px) < 28)).sort((a, b) => a[0] - b[0] || Math.abs(a[1] - M) - Math.abs(b[1] - M))   // a column and its date run through the tick row: those ticks step aside
+  cand.map(([r, t, l]) => [r, s(t), l]).filter(([, p]) => p >= 24 && p <= Math.min(L - 24, (band.clientHeight - 54) / Math.sin(TA)) && !cols.some(c => Math.abs(p - c.px) < 28)).sort((a, b) => a[0] - b[0] || Math.abs(a[1] - M) - Math.abs(b[1] - M))   // a column and its date run through the tick row: those ticks step aside
     .forEach(([, p, t]) => { const w = t.length * 6.6; if (named.every(o => Math.abs(o.p - p) >= Math.max(44, (o.w + w) / 2 + 10))) named.push({ p, t, w }); });
   for (const { p, t, hz } of named){ const e = document.createElement("div"); e.className = "tick" + (hz ? " hz" : ""); e.style.left = p + "px"; e.textContent = t; host.appendChild(e); }
   const yrs = []; for (const [r, t] of cand) if (r <= 3){ const p = s(t); if (p >= 0 && p <= L && !(p - yrs[yrs.length - 1] < 3)) yrs.push(p); }
@@ -554,7 +554,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
     const b = document.createElement("div"); b.className = "bar " + x.kind + (refused.has(x.id) ? " ref" : "") + (open === x.i ? " on" : "");
     b.style.left = x0 + "px"; b.style.top = side(x) * OFF + "px"; b.style.width = (Math.min(x1, L) - x0) * Math.cos(TA) + "px"; if (x1 <= L) b.classList.add("end"); host.appendChild(b);   // flat on the screen: its length is the line's run times cos22
   }
-  const beside = (px, dy, r, dir) => { const sx = dir < 0 ? -(r + 6) : r - 1, sy = -6.5; return { px:px + sx * Math.cos(TA) - sy * Math.sin(TA), y:dy + sx * Math.sin(TA) + sy * Math.cos(TA), n:1, sp:true, dir }; };   // a title level with its member, on the side where the line falls away
+  const beside = (px, dy, r, dir) => { const sx = dir < 0 ? -(r + 6) : r + 4, sy = -6.5; return { px:px + sx * Math.cos(TA) - sy * Math.sin(TA), y:dy + sx * Math.sin(TA) + sy * Math.cos(TA) }; };   // a title level with its member, on the side where the line falls away
   const when = ms => { const ds = ms.map(m => m.date.slice(0, 10)), ts = ms.map(m => ((m.card || m).time || "").slice(0, 5)), [y, mm, d] = ds[0].split("-"), yr = String(+y);   // the moment's date, as fine as all its members say: 1 Jan reads as a year, a 1st as a month
     return ds.every(v => v.endsWith("-01-01")) ? yr : ds.every(v => v.endsWith("-01")) ? MON[mm - 1] + " " + yr : +d + " " + MON[mm - 1] + " " + yr + (ts[0] && ts.every(t => t === ts[0]) ? " " + ts[0] : ""); };
   groups.sort((a, b) => mx(a) - mx(b)).forEach((ids, gi) => {
@@ -569,7 +569,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
         d.dataset.i = m.i; d.style.left = px + "px"; d.style.top = AY + m.off + "px"; d.style.width = m.w + "px"; d.style.height = m.h + "px";
         if (hd) d.innerHTML = `<b>${m.nTl || m.n}</b>`; else if (m.cnt) d.textContent = rest;
         d.setAttribute("aria-label", m.cnt ? `${rest} more here` : showDate(m.date) + (m.time ? " " + m.time : "") + (hd ? (m.nTl ? " timetree " : " timeline ") : " ") + m.title); d.onclick = () => hd && (m.n || m.nTl) ? tog(m.tl) : go(m.i); host.appendChild(d);
-        lbls.push({ ...beside(px, m.cy, m.w / 2, sd), t:m.cnt ? `${rest} more` : m.title || m.summary || "" }); });
+        lbls.push({ col:beside(px, m.cy, m.w / 2, sd), dir:sd, p:px, n:1, t:m.cnt ? `${rest} more` : m.title || m.summary || "" }); });
       if (sd < 0 || !cols.some(c => c.sd < 0 && mo(c.g[0], ms[0]))){ const w = document.createElement("span"), ty = sd < 0 ? -r - 4 : -18; w.className = "mo"; w.textContent = when(ms); w.style.left = px + "px"; w.style.top = AY + ty + "px"; host.appendChild(w);   // blue alone: over the line; gold and blue: once, over the gold
         const d = 2 - (w.getBoundingClientRect().left - band.getBoundingClientRect().left); if (d > 0){ w.style.left = px + d * Math.cos(TA) + "px"; w.style.top = AY + ty + d * Math.sin(TA) + "px"; } }   // at the seat it slides right, onto the screen
       return;
@@ -579,9 +579,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "px"; e.style.top = AY + (x.tl ? 0 : side(x) * OFF) + "px"; e.style.width = sz + "px"; e.style.height = sz * (x.tl ? x.nTl ? 1.3 : .9 : 1) + "px";
     if (x.tl) e.innerHTML = `<b>${x.nTl || x.n}</b>`; else if (n > 1 && sz >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => at(o) < at(m) ? o : m, x), hi = ids.reduce((m, o) => at(o) > at(m) ? o : m, x), seated = ids.includes(dots[open]);
-    const o = seated ? dots[open] : x, px = cx, last = lbls[lbls.length - 1];   // the open card is the foot, its title is the card, so its group hangs nothing
-    const y = x.tl ? side(x) > 0 ? Math.max(ROW, sz * (x.nTl ? 1.3 : .9) * (1 - (x.nTl ? 7 : 14) / sz) + 3) : ROW : Math.max(ROW, sz / 2 + side(x) * OFF + 4);   // the title hangs under the dot's rim: a grown dot on the under side reached into the title's row
-    if (seated){} else if (last && !last.sp && (px - last.px) * Math.sin(TA) - (y - last.y) * Math.cos(TA) < ROW) last.n += n; else lbls.push({ px, y, n, t:o.title || o.summary || "" });   // two labels stack when their rows are a line apart on the screen: along the line rises, under the line falls
+    if (!seated) lbls.push({ el:e, key:x.tl || x.id, p:cx, n, acc:x.kind === "acc", t:x.title || x.summary || "" });   // the open card's title is the card below, so its group hangs none
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + (x.tl ? (x.nTl ? " timetree " : " timeline ") : " ") + x.title : `${n} here, ${lo.date} to ${hi.date}`);
     e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span fills the even part past the seat; a head with members toggles instead
       if (x.tl && (x.n || x.nTl)) return tog(x.tl);
@@ -589,11 +587,30 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
       go(lo.i); };
     host.appendChild(e);
   });
-  lbls.forEach(({ px, y, n, t, sp, dir }, li) => {   // the title, flat, hung from the dot, one size at every distance: room is the merge rule's job; its chars = what fits to the window's edge
-    if (cols.some(c => { const dx = c.px - px, yy = y + dx * Math.tan(TA); return dx * (dir || 1) > 0 && yy > Math.min(0, c.sd * c.r) - ROW && yy < Math.max(0, c.sd * c.r) + ROW && Math.abs(dx) / Math.cos(TA) < t.length * 8; })) return;   // a title that would run through a column is dropped, not dimmed
-    const k = Math.max(3, Math.floor((dir < 0 ? px * Math.cos(TA) - 20 : band.clientWidth - px * Math.cos(TA) - 20) / (13 * 0.6)) - (n > 1 ? 4 : 0)), l = document.createElement("span"); l.className = "ttl" + (li % 2 && !sp ? " alt" : "") + (dir < 0 ? " l" : ""); l.style.left = px + "px"; l.style.top = y + "px";
-    l.innerHTML = esc(t.length > k ? t.slice(0, k - 1) + "…" : t) + (n > 1 ? ` <i>+${n - 1}</i>` : ""); host.appendChild(l);
+  // titles: one size, whole or not at all. By rank — a column's own first, then bigger clusters, accepted, nearer the seat — each takes the first spot that is clear:
+  // where it sat last time, else below-right of its dot, above-left, then a row further out on a faint leader. Clear = inside the band, off the line, off every dot, tick, date and title placed before it
+  const BR = band.getBoundingClientRect(), H0 = band.clientHeight - 14, c = Math.cos(TA), sn = Math.sin(TA);
+  const box = e => { const r = e.getBoundingClientRect(); return [r.left - BR.left, r.top - BR.top, r.right - BR.left, r.bottom - BR.top]; };
+  const taken = [...host.querySelectorAll(".dot,.tick,.mo,.seat,#now")].map(box); taken.push([mx0 - 3, H0 - M * sn, mx0 + 3, band.clientHeight]);   // and the drop to the card
+  const off = ([x0, y0, x1, y1]) => { const d = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([x, y]) => y - H0 + x * sn / c); return Math.max(...d) < 1 || Math.min(...d) > -1; };   // all four corners on one side of the line
+  const clear = b => b[0] >= 4 && b[2] <= band.clientWidth - 4 && b[1] >= 4 && b[3] <= band.clientHeight - 2 && off(b) && !taken.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
+  const put = [], leads = [];
+  const cap = Math.max(16, Math.min(44, Math.floor(band.clientWidth * 0.5 / 7.9)));   // a title too long for one row may also try rows of this many chars, broken at words, three at most — still whole
+  const rows = t => { const out = [""]; for (const wd of t.split(" ")){ const k = out.length - 1; if (!out[k] || out[k].length + 1 + wd.length <= cap) out[k] += (out[k] ? " " : "") + wd; else out.push(wd); } return out; };
+  lbls.sort((a, b) => !!b.col - !!a.col || b.n - a.n || b.acc - a.acc || Math.abs(a.p - M) - Math.abs(b.p - M)).forEach(l => {
+    const t = l.t + (l.n > 1 ? `\u00a0+${l.n - 1}` : ""), shapes = [[t], ...(t.length > cap ? [rows(t)] : [])].filter(ls => ls.length <= 3).map(ls => ({ ls, w:Math.max(...ls.map(x => x.length)) * 7.9, h:ls.length * 15 }));
+    const r = l.col ? null : box(l.el), cx = r ? (r[0] + r[2]) / 2 : 0, cy = r ? (r[1] + r[3]) / 2 : 0;
+    const spots = l.col ? [(w, h) => { const X = l.col.px * c + l.col.y * sn, Y = H0 - l.col.px * sn + l.col.y * c; return [l.dir < 0 ? X - w : X, Y]; }]   // a column's member: level with it, where the line falls away
+      : [0, 1, 2, 3].flatMap(k => [(w, h) => [r[2] + 3, r[3] + 1 + k * ROW], (w, h) => [r[0] - 3 - w, r[1] - h - 3 - k * ROW], (w, h) => [cx - w / 2, r[3] + 1 + k * ROW], (w, h) => [cx - w / 2, r[1] - h - 3 - k * ROW], (w, h) => [r[0] - 3 - w, r[3] + 1 + k * ROW], (w, h) => [r[2] + 3, r[1] - h - 3 - k * ROW]]);   // below-right, above-left, below, above, below-left, above-right; then a row further out, up to three
+    const ord = spots.map((f, k) => k); if (!l.col && spotOf.has(l.key)) ord.unshift(spotOf.get(l.key));   // where it sat last time comes first: no jitter while it still fits
+    for (const k of ord) for (const { ls, w, h } of shapes){ const [x, y] = spots[k](w, h), b = [x, y, x + w, y + h]; if (!clear(b)) continue;
+      taken.push(b); put.push({ ...l, x, y, ls }); if (!l.col) spotOf.set(l.key, k);
+      const nx = Math.max(x, Math.min(x + w, cx)), ny = Math.max(y, Math.min(y + h, cy)); if (!l.col && Math.hypot(nx - cx, ny - cy) > (r[2] - r[0]) / 2 + 12) leads.push(`M${cx} ${cy}L${nx} ${ny}`);   // away from its dot: a leader to the title's nearest point
+      return; }
   });
+  put.sort((a, b) => a.p - b.p).forEach((l, i) => { const e = document.createElement("span"), Yr = l.y - H0; e.className = "ttl" + (i % 2 ? " alt" : ""); e.style.left = l.x * c - Yr * sn + "px"; e.style.top = l.x * sn + Yr * c + "px";   // back from the screen into the line's own turned frame
+    e.innerHTML = l.ls.map(esc).join("<br>").replace(/\u00a0\+(\d+)$/, " <i>+$1</i>"); host.appendChild(e); });
+  if (leads.length) band.insertAdjacentHTML("beforeend", `<svg id="leads" width="1" height="1"><path d="${leads.join("")}"/></svg>`);
 
   if (dots.length) show(open !== null && dots[open] ? open : 0, false);   // something is always open: the first card until the reader moves
 }
