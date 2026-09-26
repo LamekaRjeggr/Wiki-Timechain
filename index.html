@@ -134,6 +134,7 @@
   .wrap{max-width:1000px;margin:0 auto}
   /* masthead frame is left/right chrome; the subject below it stays centre stage */
   .mast{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .mastr{display:flex;align-items:center;gap:14px;margin-left:auto} .mnav{font-size:12px;color:var(--dim)} .mnav a{color:inherit}   /* the other pages, as dots names them: top right */
   .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
     gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
@@ -788,11 +789,12 @@
            never in the URL) so it lives up here with the mark, not among the view controls. -->
       <div class="mast">
         <h1>Wiki <span class="dot">·</span> Timechain</h1>
+        <div class="mastr"><span class="mnav"><a id="dotsnav" href="dots.html">dots</a> · <a id="addnav" href="add.html">add</a></span>
         <div class="dtog" id="thmtog" title="How light this page reads">
           <button class="ds" type="button" data-thm="dark">dark</button>
           <button class="ds" type="button" data-thm="medium">medium</button>
           <button class="ds" type="button" data-thm="light">light</button>
-        </div>
+        </div></div>
       </div>
       <div class="mastsub">
         <div class="sub">Events from the public record, arranged in order, each with its
@@ -815,8 +817,6 @@
              Copy hides when no timeline is selected, so it can't hold the first slot. -->
         <a id="addlink" class="linkbtn go" href="add.html"
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
-        <a id="dotslink" class="linkbtn" href="dots.html"
-          title="The same cards, read another way — a dot for each on one line">◦ Dots</a>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
         <button id="exportbtn" class="linkbtn" type="button"
@@ -1058,7 +1058,7 @@ const statusEl = document.getElementById("status");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
-const addLink  = document.getElementById("addlink"), dotsLink = document.getElementById("dotslink");   // → add.html, the write side
+const addLink  = document.getElementById("addlink"), dotsNav = document.getElementById("dotsnav"), addNav = document.getElementById("addnav");   // → add.html, the write side
 const rosterEl = document.getElementById("roster");    // the name's notaries — see renderNotaries
 rosterEl.addEventListener("click", e => {
   const b = e.target.closest(".rchip"); if (!b || b.dataset.n === activeN) return;
@@ -1942,7 +1942,7 @@ function renderTabs(V){
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
-  dotsLink.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html";
+  dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
   renderNotaries();
   if (!slugs.size) return;                       // status line shows "connecting…"
 
