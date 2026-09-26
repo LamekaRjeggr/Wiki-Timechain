@@ -264,7 +264,7 @@ const status = () => { st.textContent = `${sockets.filter(w => w.readyState === 
 
 // a timeline is its subject `d`, whole — every notary that carries that d pours its dots in, then ONE dot per card:
 // gold if any notary accepted it, blue otherwise; `accs` = the notaries that did (the ✓ N pill), so the band never repeats a card
-const notariesOf = d => [...notaries.entries()].filter(([c]) => c.split(":").slice(2).join(":") === d);
+const notariesOf = d => [...notaries.entries()].filter(([c, n]) => c.split(":").slice(2).join(":") === d && (!ADD || local === isLocal(n.id)));   // heads keep to the side too: on local, only heads your relay has
 function dotsFor(d, projections, all){
   const byId = new Map();
   for (const [c] of notariesOf(d)) for (const x of dotsOf(c, projections, all)){
@@ -347,9 +347,9 @@ const MON = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","
 const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
 const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
-function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here, by date; only what the network has not echoed, never an act
+function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here and did not refuse, by date; only what the network has not echoed, never an act
   if (!coord || !myPk) return [];
-  const cs = whole.filter(x => isLocal(x.id) && x.accs.includes(myCoord())).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
+  const cs = whole.filter(x => isLocal(x.id) && x.accs.includes(myCoord()) && !refused.has(x.id)).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
   const ns = [...new Set(cs.map(subTo))].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
   return [...ns, ...cs];
 }
