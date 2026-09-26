@@ -142,7 +142,7 @@ import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-d
 
 const Q = new URLSearchParams(location.search);
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.ditto.pub",
-  "wss://offchain.pub", "wss://nostr.mom"];
+  "wss://offchain.pub", "wss://nostr.mom", "wss://relay.nostr.net"];
 const RELAYS = (Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(Q.get("add") || "").split(",").filter(Boolean)]).map(u => /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? u : u.replace(/127\.0\.0\.1|localhost/, location.hostname));   // relay= replaces the network, add= joins it; a loopback relay follows the page's host, so one URL serves the Mac and the iPad
 const KIND = 30828, ACT_KIND = 8828, NOTARY_KIND = 30829, MARKER = "wikitimechain";
 

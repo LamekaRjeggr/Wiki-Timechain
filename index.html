@@ -981,7 +981,8 @@ const RELAYS = [
   "wss://relay.primal.net",
   "wss://relay.ditto.pub",
   "wss://offchain.pub",
-  "wss://nostr.mom"
+  "wss://nostr.mom",
+  "wss://relay.nostr.net"
 ];
 // Our own kind, read and written (NIPs #2426). Rode NIP-54's 30818 until 2026-07-29; the dual
 // read that carried the move is retired, so a leftover 30818 on a relay is not a card.
@@ -3596,7 +3597,7 @@ window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eve
 // appears when it has earned it rather than the whole spine arriving late.
 //
 // What is cached and what is NOT is the load-bearing part. The SIGNATURE verdict is
-// cached by id, so the same event arriving from six relays costs 20ms once. The id is
+// cached by id, so the same event arriving from every relay costs 20ms once. The id is
 // re-derived EVERY time, cache or no cache, because the id is the only thing binding
 // that cached verdict to these bytes — cache the pair and a relay could send the real
 // event, then the same id with a rewritten body, and ride the first one's verdict.

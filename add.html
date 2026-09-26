@@ -8,7 +8,7 @@
      and websockets. Note what this does NOT buy — 'unsafe-inline' is forced by the no-build
      design, so injected script would still RUN; what it can no longer do is leave. No
      fetch, no beacon-by-image, no form post, no second stage from another host.
-     connect-src cannot be pinned to our six relays the way the viewer's is: a bunker://
+     connect-src cannot be pinned to our relays the way the viewer's is: a bunker://
      URI names its own relays, so locking the list would break the remote-signer rung.
      wss: still bars every http(s) exfil channel. frame-ancestors is ignored in a meta tag
      (Pages cannot set headers) — the frame-buster at the foot of the script covers it. -->
@@ -528,7 +528,8 @@ const RELAYS = [
   "wss://relay.primal.net",
   "wss://relay.ditto.pub",
   "wss://offchain.pub",
-  "wss://nostr.mom"
+  "wss://nostr.mom",
+  "wss://relay.nostr.net"
 ];
 const KIND   = 30828;
 // The two kinds the act handoff touches. Read AND written, but never from the
