@@ -30,10 +30,12 @@
   --hz:#e69f00;    /* the horizon marks: where even spacing ends */
   --mono:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
   --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --ta:22deg;   /* the line's rise; a phone sets its own */
 }
 :root[data-theme="light"]{--bg:#f4f3ef;--panel:#ffffff;--line:#d5d2c8;--t0:#1a1c20;--t1:#4c5260;--t2:#6b707c;--sub:#2a63c9;--acc:#9a6a0c;--sep:#7a5a38;--hz:#a85f00}
 
 *{box-sizing:border-box}
+html,body{overscroll-behavior:none}   /* a pull on the line never drags the page */
 body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.5 var(--mono);min-height:100vh;
   display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);padding-inline:16px}
 a{color:var(--sub)}
@@ -54,7 +56,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #now i{position:absolute;bottom:100%;left:4px;font-size:11px;font-style:normal;color:var(--t1);white-space:nowrap}
 .tick{position:absolute;top:-30px;font-size:11px;color:var(--t2);transform:translateX(-50%);white-space:nowrap}
 .tick::before{content:"";position:absolute;bottom:-14px;left:50%;height:3px;width:1px;background:var(--t2)}
-.dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%) rotate(22deg);border:1.5px solid var(--sub);background:transparent;opacity:.6}   /* one card: a hollow, quiet mark; the size says how many cards sit under it; turned back flat so its count reads (a tilted 7 read as 1) */
+.dot{position:absolute;border-radius:50%;transform:translate(-50%,-50%) rotate(var(--ta));border:1.5px solid var(--sub);background:transparent;opacity:.6}   /* one card: a hollow, quiet mark; the size says how many cards sit under it; turned back flat so its count reads (a tilted 7 read as 1) */
 .dot::before{content:"";position:absolute;inset:-10px}   /* the finger gets 31px, the eye keeps the dot */
 .dot.acc{border-color:var(--acc)}
 .dot.many{opacity:1;background:var(--sub);color:#000;font:bold 10px var(--mono)} .dot.many.acc{background:var(--acc)}   /* the count sits inside once the dot is big enough */
@@ -62,23 +64,24 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 .dot.ref{opacity:.2}   /* a version you refused, unfolded: on the band, barely */
 .dot:hover,.dot.on,.dot:focus-visible{outline:2px solid var(--t0);outline-offset:2px}
 .nib{position:absolute;width:1px;background:var(--t2);transform:translate(-50%,-50%);pointer-events:none}   /* a moment: cards no zoom can part stand on a stem off their side of the line */
-#line .mo{position:absolute;font:bold 11px var(--mono);color:var(--t1);transform-origin:0 0;transform:rotate(22deg) translate(-50%,-100%);white-space:nowrap;pointer-events:none}   /* the moment's date, flat, centred over its column */
-.dot.tl{border:0;border-radius:0;background:none;opacity:1;isolation:isolate;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-end;padding:0 0 2px;color:#000;font:bold 10px var(--mono);transform:translate(-50%,-100%)} .dot.tl.sub{transform:translate(-50%,0);align-items:flex-start;padding:2px 0 0} .dot.tl b{transform:rotate(22deg)}   /* a head turns with the line, base on its point: accepted stands above, submitted hangs below; only its count turns back flat */
+#line .mo{position:absolute;font:bold 11px var(--mono);color:var(--t1);transform-origin:0 0;transform:rotate(var(--ta)) translate(-50%,-100%);white-space:nowrap;pointer-events:none}   /* the moment's date, flat, centred over its column */
+.dot.tl{border:0;border-radius:0;background:none;opacity:1;isolation:isolate;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-end;padding:0 0 2px;color:#000;font:bold 10px var(--mono);transform:translate(-50%,-100%)} .dot.tl.sub{transform:translate(-50%,0);align-items:flex-start;padding:2px 0 0} .dot.tl b{transform:rotate(var(--ta))}   /* a head turns with the line, base on its point: accepted stands above, submitted hangs below; only its count turns back flat */
 .dot.tl::after{content:"";position:absolute;inset:0;z-index:-1;background:var(--sub);clip-path:polygon(50% 0,100% 100%,0 100%)} .dot.tl.sub::after{clip-path:polygon(0 0,100% 0,50% 100%)} .dot.tl.acc::after{background:var(--acc)} .dot.tl.unfolded::before{content:"";position:absolute;inset:5px 4px 3px;z-index:0;background:var(--bg);clip-path:polygon(50% 0,100% 100%,0 100%)} .dot.tl.sub.unfolded::before{inset:3px 4px 5px;clip-path:polygon(0 0,100% 0,50% 100%)} .dot.tl.unfolded b{display:none}   /* timeline: a triangle, its base on the line; unfolded = hollow, its members are out on the line */
 .dot.tw,.dot.tw.sub{align-items:center;padding:0} .dot.tw::after,.dot.tw.sub::after{clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)} .dot.tw.unfolded::before,.dot.tw.sub.unfolded::before{inset:4px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}   /* timetree: a diamond, its tip on the point */
 .dot.tl.on,.dot.tl:hover,.dot.tl:focus-visible{outline:0;box-shadow:0 3px 0 -1px var(--t0)} .dot.tl.sub.on,.dot.tl.sub:hover,.dot.tl.sub:focus-visible{box-shadow:0 -3px 0 -1px var(--t0)}   /* the open head is underlined along its rule */
 .bar i{position:absolute;top:-3.75px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:currentColor} .bar i.t{top:-4.75px;width:8px;height:8px;margin-left:-4px;border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%)}   /* a timeline's rule carries a bead per thing it holds, at its date: a dot per card, a small triangle per timeline */
-.bar{position:absolute;height:0;border-top:1.5px solid;color:var(--sub);opacity:.6;transform-origin:0 0;transform:rotate(22deg);pointer-events:none} .bar.acc{color:var(--acc)} .bar.ref{opacity:.2} .bar.on{opacity:1}   /* a card's span: a flat rule from its dot to under its end date, above the title; every date has its own height on the line, so rules never share one */
+.bar{position:absolute;height:0;border-top:1.5px solid;color:var(--sub);opacity:.6;transform-origin:0 0;transform:rotate(var(--ta));pointer-events:none} .bar.acc{color:var(--acc)} .bar.ref{opacity:.2} .bar.on{opacity:1}   /* a card's span: a flat rule from its dot to under its end date, above the title; every date has its own height on the line, so rules never share one */
 .bar.end::after{content:"";position:absolute;right:0;top:-4px;height:8px;border-right:2px solid}   /* the end says where it stops — only a true end; a span cut by the line's top runs off it bare */
 #empty{position:absolute;left:0;right:0;top:48px;text-align:center;color:var(--t2)}
 /* the line IS the column — it rises 22° from the foot; the seat is its middle, the open card hangs under it, the whole record rides the line out to both ends */
-#line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(-22deg)}   /* years above the line, titles below: two planes, nothing crosses */
+#line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(calc(-1 * var(--ta)))}   /* years above the line, titles below: two planes, nothing crosses */
 #line .yrs{position:absolute;left:0;top:-3.5px;overflow:visible;pointer-events:none} #line .yrs path{stroke:var(--t2);fill:none;opacity:.45}   /* a faint mark per year: where they crowd, the line is squeezed */
+.phone .tick{top:14px;transform:translateX(-50%) rotate(var(--ta))} .phone .tick::before{display:none}   /* a steep line: years flat, on the lower-right side; the upper-left, where the record crowds, is the titles' room */
 .tick.hz{color:var(--hz)} .tick.hz::before{background:var(--hz)}
 #line .seat{position:absolute;top:0;width:18px;height:18px;border:2px solid var(--t1);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}   /* the seat: mid-line */
 #drop{position:absolute;bottom:0;width:0;border-left:1px dashed var(--t2);pointer-events:none}   /* from the seat down to the card that hangs under it */
 #leads{position:absolute;left:0;top:0;overflow:visible;pointer-events:none} #leads path{stroke:var(--t2);fill:none;opacity:.7}   /* a title set a row out keeps a faint leader to its dot */
-#line .ttl{position:absolute;font-size:13px;transform-origin:0 0;transform:rotate(22deg);white-space:nowrap;line-height:15px;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size, whole or not at all */
+#line .ttl{position:absolute;font-size:13px;transform-origin:0 0;transform:rotate(var(--ta));white-space:nowrap;line-height:15px;color:var(--t1);pointer-events:none} #line .ttl.alt{color:var(--sep)} #line .ttl i{color:var(--t2);font-style:normal}   /* every other title warm: the eye keeps its row */   /* a title rides its dot, turned back flat, one size, whole or not at all */
 
 
 #card{max-width:68ch;align-self:start;margin:14px 0 24px;display:grid;gap:14px;overflow-anchor:none}   /* every card, in date order; the one nearest the top is open; the seat keeps the scroll, not the browser */
@@ -162,7 +165,7 @@ const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timetrees walked through to get here, oldest first; tab: the Library tab picked by hand
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
-const TA = 22 * Math.PI / 180, NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
+let TA = 22 * Math.PI / 180; const NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
 let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
 const NOW = new Date().toISOString().slice(0, 10);
 
@@ -306,7 +309,8 @@ function members(d, projections, all, of){   // what a timeline holds: its cards
   return out;
 }
 function choose(c, path = []){   // c = a subject d → that timeline; null → the Library. path = the timetrees walked through on the way
-  coord = c; trail = c ? path : []; open = null; want = null; seatD = null; ppy = null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
+  coord = c; trail = c ? path : []; open = null; reading = false; bandH = null;   // a phone opens every timeline on the line
+  want = null; seatD = null; ppy = null; card.innerHTML = ""; colKey = null; scrollTo(0, 0);
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
@@ -488,13 +492,16 @@ function render(){
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
   const pushbtn = document.getElementById("pushbtn"); if (pushbtn) pushbtn.onclick = () => { if (pushT){ clearInterval(pushT); pushT = null; } else { pushT = setInterval(tick, 60000); tick(); } render(); };
   status(); empty.hidden = dots.length > 0; empty.textContent = loading() ? "loading…" : "no cards yet";
-  band.hidden = card.hidden = !coord; lib.hidden = !!coord; if (!coord) return library();
+  band.hidden = !coord; card.hidden = !coord || exploring(); lib.hidden = !!coord; if (!coord) return library();
   column(); draw();
 }
 
 function draw(){   // the band alone, from the dots render() left: a scroll, a drag or a zoom only moves the seat, so it redraws nothing else
   if (!coord) return;
-  band.querySelectorAll("#line,#leads").forEach(e => e.remove()); drop.hidden = !dots.length; if (!dots.length) return; band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px";   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
+  band.querySelectorAll("#line,#leads").forEach(e => e.remove()); drop.hidden = !dots.length || exploring(); if (!dots.length) return;
+  if (PHONE.matches){ const h = bandH ?? phoneH(); band.style.height = h + "px"; TA = Math.atan2(h - 28, band.clientWidth - 14); }   // a phone: the line runs corner to corner, steep on the whole screen, shallow in the strip
+  else { TA = 22 * Math.PI / 180; band.style.height = Math.max(300, Math.min(innerHeight * 0.6, (band.clientWidth - 14) * Math.tan(TA) + 28)) + "px"; }   // the band is as tall as the line needs to reach the window's right edge, up to 6/10 of the window: the top of the line breathes, the seat's card still shows
+  document.documentElement.style.setProperty("--ta", TA * 180 / Math.PI + "deg"); document.documentElement.classList.toggle("phone", PHONE.matches);
   const { L, M, E, s, aF, aP, tA, tB } = mapOf(), AY = 0, span = M / ppy * YR; space();   // span: the time half the line holds at the seat's pace
   const host = document.createElement("div"); host.id = "line"; host.style.top = band.clientHeight - 14 + "px"; host.style.width = L + "px"; band.appendChild(host);
   const mx0 = M * Math.cos(TA), cw = Math.min(band.clientWidth, cardW ??= parseFloat(getComputedStyle(card).maxWidth) || 560);   // the card hangs centred under the seat, as far as the window lets it
@@ -540,6 +547,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
   cand.map(([r, t, l]) => [r, s(t), l]).filter(([, p]) => p >= 24 && p <= Math.min(L - 24, (band.clientHeight - 54) / Math.sin(TA)) && !cols.some(c => Math.abs(p - c.px) < 28)).sort((a, b) => a[0] - b[0] || Math.abs(a[1] - M) - Math.abs(b[1] - M))   // a column and its date run through the tick row: those ticks step aside
     .forEach(([, p, t]) => { const w = t.length * 6.6; if (named.every(o => Math.abs(o.p - p) >= Math.max(44, (o.w + w) / 2 + 10))) named.push({ p, t, w }); });
   for (const { p, t, hz } of named){ const e = document.createElement("div"); e.className = "tick" + (hz ? " hz" : ""); e.style.left = p + "px"; e.textContent = t; host.appendChild(e); }
+  if (PHONE.matches){ const r0 = band.getBoundingClientRect(); host.querySelectorAll(".tick").forEach(e => { const r = e.getBoundingClientRect(); if (r.right > r0.right - 2 || r.left < r0.left + 2) e.remove(); }); }   // a flat year cut by the screen's edge: none, not part of one
   const yrs = []; for (const [r, t] of cand) if (r <= 3){ const p = s(t); if (p >= 0 && p <= L && !(p - yrs[yrs.length - 1] < 3)) yrs.push(p); }
   host.insertAdjacentHTML("beforeend", `<svg class="yrs" width="${L}" height="7"><path d="${yrs.map(p => `M${p.toFixed(1)} 0v7`).join("")}"/></svg><i class="seat" style="left:${M}px"></i>`);
   const nowT = T(NOW), nP = s(nowT); if (nP > 0 && nP < L){ const e = document.createElement("div"); e.id = "now"; e.style.left = nP + "px"; e.innerHTML = "<i>now</i>"; host.appendChild(e); }
@@ -583,7 +591,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + (x.tl ? (x.nTl ? " timetree " : " timeline ") : " ") + x.title : `${n} here, ${lo.date} to ${hi.date}`);
     e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span fills the even part past the seat; a head with members toggles instead
       if (x.tl && (x.n || x.nTl)) return tog(x.tl);
-      if (n > 1 && at(hi) > at(lo)) zoom(Math.min(MAXZ, lineL() / 2 * NEAR / ((at(hi) - at(lo)) / YR)) / ppy);   // through zoom(): it draws — go() alone only scrolls, and a first card already at the seat scrolls nowhere
+      if (n > 1 && at(hi) > at(lo)){ zoom(Math.min(MAXZ, lineL() / 2 * NEAR / ((at(hi) - at(lo)) / YR)) / ppy); if (exploring()) return; }   // exploring on a phone, a spread is all a cluster does: only a single dot seats   // through zoom(): it draws — go() alone only scrolls, and a first card already at the seat scrolls nowhere
       go(lo.i); };
     host.appendChild(e);
   });
@@ -595,10 +603,10 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
   const off = ([x0, y0, x1, y1]) => { const d = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([x, y]) => y - H0 + x * sn / c); return Math.max(...d) < 1 || Math.min(...d) > -1; };   // all four corners on one side of the line
   const clear = b => b[0] >= 4 && b[2] <= band.clientWidth - 4 && b[1] >= 4 && b[3] <= band.clientHeight - 2 && off(b) && !taken.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
   const put = [], leads = [];
-  const cap = Math.max(16, Math.min(44, Math.floor(band.clientWidth * 0.5 / 7.9)));   // a title too long for one row may also try rows of this many chars, broken at words, three at most — still whole
-  const rows = t => { const out = [""]; for (const wd of t.split(" ")){ const k = out.length - 1; if (!out[k] || out[k].length + 1 + wd.length <= cap) out[k] += (out[k] ? " " : "") + wd; else out.push(wd); } return out; };
+  const cap = PHONE.matches ? 16 : Math.max(16, Math.min(44, Math.floor(band.clientWidth * 0.5 / 7.9))), maxR = PHONE.matches ? 4 : 3;   // a phone: narrow rows, one more of them   // a title too long for one row may also try rows of this many chars, broken at words, three at most — still whole
+  const rows = (t, cp = cap) => { const out = [""]; for (const wd of t.split(" ")){ const k = out.length - 1; if (!out[k] || out[k].length + 1 + wd.length <= cp) out[k] += (out[k] ? " " : "") + wd; else out.push(wd); } return out; };
   lbls.sort((a, b) => !!b.col - !!a.col || b.n - a.n || b.acc - a.acc || Math.abs(a.p - M) - Math.abs(b.p - M)).forEach(l => {
-    const t = l.t + (l.n > 1 ? `\u00a0+${l.n - 1}` : ""), shapes = [[t], ...(t.length > cap ? [rows(t)] : [])].filter(ls => ls.length <= 3).map(ls => ({ ls, w:Math.max(...ls.map(x => x.length)) * 7.9, h:ls.length * 15 }));
+    const t = l.t + (l.n > 1 ? `\u00a0+${l.n - 1}` : ""), shapes = [[t], ...(PHONE.matches ? [16, 20, 24] : [cap]).filter(k => t.length > k).map(k => rows(t, k))].filter(ls => ls.length <= maxR).map(ls => ({ ls, w:Math.max(...ls.map(x => x.length)) * 7.9, h:ls.length * 15 }));
     const r = l.col ? null : box(l.el), cx = r ? (r[0] + r[2]) / 2 : 0, cy = r ? (r[1] + r[3]) / 2 : 0;
     const spots = l.col ? [(w, h) => { const X = l.col.px * c + l.col.y * sn, Y = H0 - l.col.px * sn + l.col.y * c; return [l.dir < 0 ? X - w : X, Y]; }]   // a column's member: level with it, where the line falls away
       : [0, 1, 2, 3].flatMap(k => [(w, h) => [r[2] + 3, r[3] + 1 + k * ROW], (w, h) => [r[0] - 3 - w, r[1] - h - 3 - k * ROW], (w, h) => [cx - w / 2, r[3] + 1 + k * ROW], (w, h) => [cx - w / 2, r[1] - h - 3 - k * ROW], (w, h) => [r[0] - 3 - w, r[3] + 1 + k * ROW], (w, h) => [r[2] + 3, r[1] - h - 3 - k * ROW]]);   // below-right, above-left, below, above, below-left, above-right; then a row further out, up to three
@@ -695,7 +703,7 @@ function show(i, scroll = true){   // open = card i: its dot and block light up;
   if (scroll && art) seat(at(x), art);
 }
 const tog = d => { unfolded.has(d) ? unfolded.delete(d) : unfolded.add(d); setUrl(); render(); };   // a head clicked: its members pour onto the line or go back in; the line does not move
-const go = i => { if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
+const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id) && !showRef){ showRef = true; render(); } show(i); };   // aiming at a refused card unfolds the closing line
 
 // ── controls ──
 const ntry = document.getElementById("ntry"),
@@ -718,12 +726,12 @@ const place = (t, a) => {   // where t falls in the column: the block at or befo
 const park = ({ a, b, f }) => { held = true; const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false; };   // no scroll = no spy pass to clear the flag
 function seat(t, a){   // a = the block to park, else the last one at or before t
   const p = place(t, a); if (!p) return; const { b, dj, dn } = p;
-  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); draw(); park(p);
+  seatD = new Date(Math.max(at(dj), b ? Math.min(t, at(dn)) : at(dj))).toISOString(); draw(); if (!exploring()) park(p);
 }
 // the column keeps the line's pace: after each block, room for the gap to the next as the line draws it, so a px of scroll moves the line about a px at any zoom; a screen at most, past that a gap crosses faster
 let spK = null;
 function space(){
-  const k = [ppy, colKey, innerWidth, innerHeight].join("|"); if (ppy == null || k === spK) return; spK = k;
+  const k = [ppy, colKey, innerWidth, innerHeight, reading].join("|"); if (ppy == null || card.hidden || k === spK) return; spK = k;
   const arts = [...card.querySelectorAll("article")], top = arts.map(e => e.getBoundingClientRect().top), mb = arts.map(e => parseFloat(e.style.marginBottom) || 0);   // read every block, then write: one layout
   arts.forEach((e, j) => { const n = arts[j + 1]; e.style.marginBottom = n ? Math.round(Math.max(0, Math.min(innerHeight, (at(dots[+n.dataset.i]) - at(dots[+e.dataset.i])) / YR * ppy - (top[j + 1] - top[j] - mb[j])))) + "px" : ""; });
   if (seatD){ const p = place(Date.parse(seatD)); p && park(p); }   // the room moved the blocks: put the seat's date back at the park line
@@ -742,7 +750,19 @@ band.onpointermove = ev => {
   seat(pull.seat - d / ppy * YR);
 };
 band.onpointerup = band.onpointercancel = ev => { fingers.delete(ev.pointerId); if (fingers.size < 2) pinch = null; if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
-let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } }, true);
+let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } else if (PHONE.matches && reading){ ev.stopPropagation(); setReading(false); } }, true);   // reading on a phone, a tap on the strip hands the screen back to the line
+// a phone has two modes, one at a time: explore = the line fills the screen, a tap on a dot seats it; read = the cards in order, the line a strip on top
+const PHONE = matchMedia("(max-width:640px)"), STRIP = 120; let reading = false, bandH = null, anim = 0;
+const exploring = () => PHONE.matches && !reading;
+const phoneH = () => reading ? STRIP : Math.max(300, innerHeight - mapEl.querySelector("header").offsetHeight - 8);
+function setReading(v){   // the band eases between the whole screen and the strip; the line re-angles every frame, the seat's card stays parked under it
+  reading = v; card.hidden = !coord || exploring(); if (!v) scrollTo(0, 0);
+  const h0 = band.clientHeight, h1 = phoneH(), t0 = performance.now(); cancelAnimationFrame(anim);
+  const step = now => { const k = Math.min(1, (now - t0) / 300); bandH = h0 + (h1 - h0) * (1 - (1 - k) ** 3); draw();
+    if (reading && seatD){ const p = place(Date.parse(seatD)); p && park(p); }
+    if (k < 1) anim = requestAnimationFrame(step); else { bandH = null; draw(); } };
+  anim = requestAnimationFrame(step);
+}
 // keys anywhere on the page: left/right = next card in date order (on the line or not), up/down = zoom, home/end = first/last card, escape = fit the record from the seat
 document.addEventListener("keydown", e => {
   if (e.target.matches("select,input,textarea") || !dots.length || !coord) return;
