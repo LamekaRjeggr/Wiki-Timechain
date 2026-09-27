@@ -106,7 +106,12 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #card .day{margin:0 0 4px;padding-top:14px;border-top:1px solid var(--t2);font-size:12px;color:var(--t2);border-bottom:1px solid var(--line)} #card .day:first-child{padding-top:0;border-top:0}   /* a new day: its line takes the card rule's place */
 .c.tl h2{margin:0;display:flex;gap:12px;align-items:baseline} .c.tl .go{color:var(--t0);text-align:left} .c.tl .n{margin-left:auto;font-size:12px;font-weight:400;color:var(--t2);white-space:nowrap} .c.tl .sum{margin:4px 0 0} .c.tl .drop{color:var(--t2);font-size:12px} .c.tl .fold{color:var(--t2);width:14px;text-align:left} .c.tl .drop[data-arm]{color:var(--acc)} .c.tl .row.on > h2 .go{color:var(--acc)}   /* a timeline row: title (the door), count, its summary — the menu, and a source inside a timeline */
 
-@media (max-width:640px){ header{gap:10px} header .st{margin-left:0} }
+@media (max-width:640px){ header{gap:10px} header .st{margin-left:0}
+  header:has(.prow){padding-block:4px 2px} header:has(.prow) .ntry{flex-basis:100%} header:has(.prow):not(.more) .st{display:none}   /* a phone's timeline header: one row; ⋯ brings the rest */
+  .prow{display:flex;align-items:center;gap:10px;min-height:44px} .ptitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t0)}
+  .prow #back{flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--line);border-radius:9px;padding:6px 10px;color:var(--t1)}
+  .prow #morebtn{flex:none;width:44px;height:44px;font-size:20px;color:var(--t1)} .prow #morebtn[aria-expanded="true"]{color:var(--t0)}
+  .pmore{padding-block:4px} }
 [hidden]{display:none!important}
 /* the Library: the first screen — big type, word buttons, one column; timetrees and timelines never share a list */
 header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:20px;font:16px var(--sans);color:var(--t2)} header .who button{font:600 17px var(--sans);color:var(--t0);border:2px solid var(--t1);border-radius:8px;padding:4px 14px}
@@ -476,10 +481,16 @@ function render(){
   if (coord){
     whole = dotsFor(coord, fold.projections, all);   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc" && !x.tl).length, mine = canSign() && notaries.has(myCoord());   // path · what · notaries · filters · actions
-    ntry.innerHTML = `<button id="back">Library</button> › ${trail.map((d, k) => `<button class="crumb" data-k="${k}">${esc(titleOf(d))}</button> › `).join("")}${mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord))} · ${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${tlPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
-    document.getElementById("back").onclick = () => choose(null);
+    const ttl = mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord));
+    const rest = `${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${tlPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
+    const up = trail[trail.length - 1];
+    ntry.innerHTML = PHONE.matches   // a phone: one row — back one level, the title, ⋯ for the rest
+      ? `<div class="prow"><button id="back">‹ ${up ? esc(titleOf(up)) : "Library"}</button><span class="ptitle">${ttl}</span><button id="morebtn" aria-expanded="${more}" aria-label="more">⋯</button></div>${more ? `<div class="pmore">${rest}</div>` : ""}`
+      : `<button id="back">Library</button> › ${trail.map((d, k) => `<button class="crumb" data-k="${k}">${esc(titleOf(d))}</button> › `).join("")}${ttl} · ${rest}`;
+    ntry.parentNode.classList.toggle("more", more); const mb = document.getElementById("morebtn"); if (mb) mb.onclick = () => { more = !more; render(); };
+    document.getElementById("back").onclick = () => PHONE.matches && up ? choose(up, trail.slice(0, -1)) : choose(null);
     ntry.querySelectorAll(".crumb").forEach(b => b.onclick = () => choose(trail[+b.dataset.k], trail.slice(0, +b.dataset.k)));
-    document.getElementById("nchip").onclick = () => { names = !names; render(); };
+    const nc = document.getElementById("nchip"); if (nc) nc.onclick = () => { names = !names; render(); };   // folded behind ⋯ on a phone
     const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
     const pick = document.getElementById("srcpick"); if (pick) pick.onchange = () => pick.value && setSources([...srcs, pick.value]);
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
@@ -752,7 +763,7 @@ band.onpointermove = ev => {
 band.onpointerup = band.onpointercancel = ev => { fingers.delete(ev.pointerId); if (fingers.size < 2) pinch = null; if (!pull) return; swallow = pull.moved; pull = null; band.classList.remove("drag"); };   // the seat stays where the drag left it
 let swallow = false; band.addEventListener("click", ev => { if (swallow){ swallow = false; ev.stopPropagation(); } else if (PHONE.matches && reading){ ev.stopPropagation(); setReading(false); } }, true);   // reading on a phone, a tap on the strip hands the screen back to the line
 // a phone has two modes, one at a time: explore = the line fills the screen, a tap on a dot seats it; read = the cards in order, the line a strip on top
-const PHONE = matchMedia("(max-width:640px)"), STRIP = 120; let reading = false, bandH = null, anim = 0;
+const PHONE = matchMedia("(max-width:640px)"), STRIP = 120; let more = false, reading = false, bandH = null, anim = 0;
 const exploring = () => PHONE.matches && !reading;
 const phoneH = () => reading ? STRIP : Math.max(300, innerHeight - mapEl.querySelector("header").offsetHeight - 8);
 function setReading(v){   // the band eases between the whole screen and the strip; the line re-angles every frame, the seat's card stays parked under it
