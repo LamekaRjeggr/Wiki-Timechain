@@ -598,7 +598,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
     e.dataset.i = x.i; e.dataset.g = gi; e.style.left = cx + "px"; e.style.top = AY + (x.tl ? 0 : side(x) * OFF) + "px"; e.style.width = sz + "px"; e.style.height = sz * (x.tl ? x.nTl ? 1.3 : .9 : 1) + "px";
     if (x.tl) e.innerHTML = `<b>${x.nTl || x.n}</b>`; else if (n > 1 && sz >= 15) e.textContent = n;
     const lo = ids.reduce((m, o) => at(o) < at(m) ? o : m, x), hi = ids.reduce((m, o) => at(o) > at(m) ? o : m, x), seated = ids.includes(dots[open]);
-    if (!seated) lbls.push({ el:e, key:x.tl || x.id, p:cx, n, acc:x.kind === "acc", t:x.title || x.summary || "" });   // the open card's title is the card below, so its group hangs none
+    if (!seated || exploring()) lbls.push({ el:e, key:x.tl || x.id, p:cx, n, acc:x.kind === "acc", t:x.title || x.summary || "" });   // the open card's title is the card below, so its group hangs none — exploring on a phone there is no card below
     e.setAttribute("aria-label", n === 1 ? showDate(x.date) + (x.tl ? (x.nTl ? " timetree " : " timeline ") : " ") + x.title : `${n} here, ${lo.date} to ${hi.date}`);
     e.onclick = () => {   // one card opens; a cluster zooms until its members stand apart — its span fills the even part past the seat; a head with members toggles instead
       if (x.tl && (x.n || x.nTl)) return tog(x.tl);
@@ -610,14 +610,14 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
   // where it sat last time, else below-right of its dot, above-left, then a row further out on a faint leader. Clear = inside the band, off the line, off every dot, tick, date and title placed before it
   const BR = band.getBoundingClientRect(), H0 = band.clientHeight - 14, c = Math.cos(TA), sn = Math.sin(TA);
   const box = e => { const r = e.getBoundingClientRect(); return [r.left - BR.left, r.top - BR.top, r.right - BR.left, r.bottom - BR.top]; };
-  const taken = [...host.querySelectorAll(".dot,.tick,.mo,.seat,#now")].map(box); taken.push([mx0 - 3, H0 - M * sn, mx0 + 3, band.clientHeight]);   // and the drop to the card
+  const taken = [...host.querySelectorAll(".dot,.tick,.mo,.seat,#now")].map(box); if (!drop.hidden) taken.push([mx0 - 3, H0 - M * sn, mx0 + 3, band.clientHeight]);   // and the drop to the card, when there is one
   const off = ([x0, y0, x1, y1]) => { const d = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([x, y]) => y - H0 + x * sn / c); return Math.max(...d) < 1 || Math.min(...d) > -1; };   // all four corners on one side of the line
   const clear = b => b[0] >= 4 && b[2] <= band.clientWidth - 4 && b[1] >= 4 && b[3] <= band.clientHeight - 2 && off(b) && !taken.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
   const put = [], leads = [];
-  const cap = PHONE.matches ? 16 : Math.max(16, Math.min(44, Math.floor(band.clientWidth * 0.5 / 7.9))), maxR = PHONE.matches ? 4 : 3;   // a phone: narrow rows, one more of them   // a title too long for one row may also try rows of this many chars, broken at words, three at most — still whole
+  const cap = PHONE.matches ? 16 : Math.max(16, Math.min(44, Math.floor(band.clientWidth * 0.5 / 7.9))), maxR = PHONE.matches ? 6 : 3;   // a phone: narrow rows, a tall stack of them — the steep line leaves height, not width   // a title too long for one row may also try rows of this many chars, broken at words, three at most — still whole
   const rows = (t, cp = cap) => { const out = [""]; for (const wd of t.split(" ")){ const k = out.length - 1; if (!out[k] || out[k].length + 1 + wd.length <= cp) out[k] += (out[k] ? " " : "") + wd; else out.push(wd); } return out; };
   lbls.sort((a, b) => !!b.col - !!a.col || b.n - a.n || b.acc - a.acc || Math.abs(a.p - M) - Math.abs(b.p - M)).forEach(l => {
-    const t = l.t + (l.n > 1 ? `\u00a0+${l.n - 1}` : ""), shapes = [[t], ...(PHONE.matches ? [16, 20, 24] : [cap]).filter(k => t.length > k).map(k => rows(t, k))].filter(ls => ls.length <= maxR).map(ls => ({ ls, w:Math.max(...ls.map(x => x.length)) * 7.9, h:ls.length * 15 }));
+    const t = l.t + (l.n > 1 ? `\u00a0+${l.n - 1}` : ""), shapes = [[t], ...(PHONE.matches ? [12, 16, 20, 24] : [cap]).filter(k => t.length > k).map(k => rows(t, k))].filter(ls => ls.length <= maxR).map(ls => ({ ls, w:Math.max(...ls.map(x => x.length)) * 7.9, h:ls.length * 15 }));
     const r = l.col ? null : box(l.el), cx = r ? (r[0] + r[2]) / 2 : 0, cy = r ? (r[1] + r[3]) / 2 : 0;
     const spots = l.col ? [(w, h) => { const X = l.col.px * c + l.col.y * sn, Y = H0 - l.col.px * sn + l.col.y * c; return [l.dir < 0 ? X - w : X, Y]; }]   // a column's member: level with it, where the line falls away
       : [0, 1, 2, 3].flatMap(k => [(w, h) => [r[2] + 3, r[3] + 1 + k * ROW], (w, h) => [r[0] - 3 - w, r[1] - h - 3 - k * ROW], (w, h) => [cx - w / 2, r[3] + 1 + k * ROW], (w, h) => [cx - w / 2, r[1] - h - 3 - k * ROW], (w, h) => [r[0] - 3 - w, r[3] + 1 + k * ROW], (w, h) => [r[2] + 3, r[1] - h - 3 - k * ROW]]);   // below-right, above-left, below, above, below-left, above-right; then a row further out, up to three
