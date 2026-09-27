@@ -458,15 +458,18 @@ const seatT = () => seatD ? Date.parse(seatD) : dots.length ? at(dots[0]) : utc(
 function record(){   // the record's first and last date, spans and timelines to their ends
   let lo = seatT(), hi = lo; for (const x of dots){ const a = at(x); lo = Math.min(lo, a); hi = Math.max(hi, a, x.tl ? T(x.last) : endOf(x.date) ? T(endOf(x.date)) : a); } return [lo, hi]; }
 const fitPpy = (s = seatT(), [lo, hi] = record()) => (lineL() / 2 - PAD) / Math.max(1 / 52, Math.max(hi - s, s - lo) / YR);   // the least zoom: the record fits each half of the line evenly, nothing waits on a horizon
-function mapOf(){   // date → px along the line: the seat mid-line, even spacing NEAR of each half, the rest of the record squeezed by log toward the ends at the same slope where they meet — every card on the line, always
-  const L = lineL(), M = L / 2, E = M * NEAR, R = M - E - PAD, s0 = seatT(), [lo, hi] = record();
+function mapOf(){   // date → px along the line: the seat mid-line, even spacing NEAR of each half, past each horizon every factor of ten of distance from the seat gets one share — every card on the line, always, at any span
+  const L = lineL(), M = L / 2, s0 = seatT(), [lo, hi] = record(), GAP = 6, MINW = 22; let E = M * NEAR;   // GAP: a share with no cards; MINW: the least a share with cards gets
   if (ppy == null || fitted){ ppy = fitPpy(lo, [lo, hi]); fitted = true; }   // until a zoom by hand, the fit from the first card holds: it follows cards still arriving and the line's length, never the scroll
-  const tf = s0 + E / ppy * YR, tp = s0 - E / ppy * YR, DF = (hi - tf) / YR, DP = (tp - lo) / YR;
-  const solve = D => { if (ppy * D <= R + 1) return null; let a0 = 1e-9, a1 = D * 1e6;   // the log's knee a: R·ln(1+u/a)/ln(1+D/a) leaves the seam at slope ppy
-    for (let i = 0; i < 90; i++){ const a = Math.sqrt(a0 * a1); if (R / (a * Math.log1p(D / a)) > ppy) a0 = a; else a1 = a; } return Math.sqrt(a0 * a1); };
-  const aF = solve(DF), aP = solve(DP), even = t => M + (t - s0) / YR * ppy;
-  const s = t => t > tf && aF ? M + E + R * Math.log1p((t - tf) / YR / aF) / Math.log1p(DF / aF) : t < tp && aP ? M - E - R * Math.log1p((tp - t) / YR / aP) / Math.log1p(DP / aP) : even(t);
-  return { L, M, E, s, aF, aP, tA: aP ? lo : s0 - M / ppy * YR, tB: aF ? hi : s0 + M / ppy * YR };   // tA, tB: the dates at the line's two ends
+  const ts = [lo, hi, ...dots.map(at)], tens = (sd, h) => { const ds = ts.map(t => (t - s0) * sd / YR).filter(d => d > h); if (!ds.length) return null;   // one side's shares: [from, to) in years from the seat, cards or not
+    const D = Math.max(...ds) * 1.0001, b = [h]; while (b[b.length - 1] * 10 < D) b.push(b[b.length - 1] * 10); b.push(D);
+    const full = b.slice(1).map((to, i) => ds.some(d => d >= b[i] && d < to)); return { b, full, need:full.reduce((a, f) => a + (f ? MINW : GAP), 0) }; };
+  let F, P; for (let k = 0; k < 3; k++){ F = tens(1, E / ppy); P = tens(-1, E / ppy); const need = Math.max(F?.need ?? 0, P?.need ?? 0);   // the even part gives room when the shares' floors overflow, down to a floor of its own
+    if (need <= M - E - PAD) break; E = Math.max(M * 0.2, M - PAD - need); }
+  const R = M - E - PAD; for (const x of [F, P]) if (x){ const nf = x.full.filter(Boolean).length, wf = Math.max(MINW, (R - (x.full.length - nf) * GAP) / Math.max(1, nf)), w = x.full.map(f => f ? wf : GAP), k = R / w.reduce((a, v) => a + v, 0); x.w = w.map(v => v * k); }
+  const far = (x, d) => { let p = 0; for (let i = 0; i < x.w.length; i++){ const a = x.b[i], z = x.b[i + 1]; if (d < z || i === x.w.length - 1) return p + x.w[i] * Math.log(Math.max(d, a) / a) / Math.log(z / a); p += x.w[i]; } };   // within a share, log
+  const s = t => { const d = (t - s0) / YR, x = d > 0 ? F : P; return Math.abs(d) * ppy <= E || !x ? M + d * ppy : M + Math.sign(d) * (E + far(x, Math.abs(d))); };
+  return { L, M, E, s, aF:F, aP:P, tA: P ? lo : s0 - M / ppy * YR, tB: F ? hi : s0 + M / ppy * YR };   // tA, tB: the dates at the line's two ends
 }
 
 function render(){
@@ -726,7 +729,7 @@ document.getElementById("q").oninput = () => library(); document.getElementById(
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead
-  const r = band.getBoundingClientRect(), M = lineL() / 2, px = Math.max(M * (1 - NEAR), Math.min(M * (1 + NEAR), (cx - r.left) * Math.cos(TA) - (cy - r.bottom + 14) * Math.sin(TA))), tp = seatT() + (px - M) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
+  const r = band.getBoundingClientRect(), M = lineL() / 2, E = mapOf().E, px = Math.max(M - E, Math.min(M + E, (cx - r.left) * Math.cos(TA) - (cy - r.bottom + 14) * Math.sin(TA))), tp = seatT() + (px - M) / ppy * YR;   // px along the line from its foot; the foot sits at the band's left edge, 14px up
   zoom(k); seat(tp - (px - M) / ppy * YR); };
 band.addEventListener("wheel", e => { e.preventDefault(); if (dots.length) zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); }, { passive:false });   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
