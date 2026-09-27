@@ -585,7 +585,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
       const { ms, shown, sd, r, px } = col, nb = document.createElement("div"); nb.className = "nib"; nb.style.left = px + "px"; nb.style.top = AY + sd * r / 2 + "px"; nb.style.height = r + "px"; host.appendChild(nb);
       shown.forEach(m => { const d = document.createElement("button"), rest = ms.length - 4, hd = m.tl && !m.cnt;
         d.className = "dot " + m.kind + (hd ? " tl" + (m.nTl ? " tw" : "") + (unfolded.has(m.tl) ? " unfolded" : "") : m.cnt ? " many" : "") + (refused.has(m.id) ? " ref" : "") + (m.date > NOW ? " future" : "") + (dots[open] === m ? " on" : "");
-        d.dataset.i = m.i; d.style.left = px + "px"; d.style.top = AY + m.off + "px"; d.style.width = m.w + "px"; d.style.height = m.h + "px";
+        d.dataset.i = m.i; if (m.cnt) d.dataset.rest = ms.slice(4).map(o => o.i); d.style.left = px + "px"; d.style.top = AY + m.off + "px"; d.style.width = m.w + "px"; d.style.height = m.h + "px";
         if (hd) d.innerHTML = `<b>${m.nTl || m.n}</b>`; else if (m.cnt) d.textContent = rest;
         d.setAttribute("aria-label", m.cnt ? `${rest} more here` : showDate(m.date) + (m.time ? " " + m.time : "") + (hd ? (m.nTl ? " timetree " : " timeline ") : " ") + m.title); d.onclick = () => hd && (m.n || m.nTl) ? tog(m.tl) : go(m.i); host.appendChild(d);
         lbls.push({ col:beside(px, m.cy, m.w / 2, sd), dir:sd, p:px, n:1, t:m.cnt ? `${rest} more` : m.title || m.summary || "" }); });
@@ -707,7 +707,7 @@ function column(){   // rebuilt only when the cards themselves change, so a zoom
 }
 function show(i, scroll = true){   // open = card i: its dot and block light up; scroll = bring the block under the map
   const x = dots[i]; open = i;   // seat() parks the block and sets the date exactly; the spy's pixel guess would miss it
-  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", e.dataset.g ? +e.dataset.g === x.g : +e.dataset.i === i));   // a column member lights alone
+  band.querySelectorAll(".dot").forEach(e => e.classList.toggle("on", e.dataset.g ? +e.dataset.g === x.g : +e.dataset.i === i || !!e.dataset.rest?.split(",").includes(String(i))));   // a column member lights alone; one folded into "N more" lights that
   band.querySelectorAll("#arcs path").forEach(e => e.classList.toggle("on", +e.dataset.i === i));
   const art = card.querySelector(`article[data-i="${i}"]`); card.querySelectorAll("article").forEach(e => e.classList.toggle("on", e === art));
   card.querySelectorAll(".row").forEach(e => e.classList.toggle("on", x.tl && e.dataset.d === x.tl));
@@ -731,8 +731,9 @@ const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the 
 band.addEventListener("wheel", e => { e.preventDefault(); if (dots.length) zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0022)); }, { passive:false });   // by the wheel's distance: a mouse notch (100) = ×1.25, a trackpad's stream of 4s adds up to the same — per event it ran away, ×8 for a flick
 // the seat is a date, exactly: set it, draw it, and scroll the column to its place — between the block before it and the next, by date; blocks, not dots — a refused card or a nested member has no block. The spy re-reads the seat from the scroll only after that lands, since blocks are too short for the round trip to be smooth
 let held = false;
-const place = (t, a) => {   // where t falls in the column: the block at or before it (a, if given), the next, and how far between
-  const arts = [...card.querySelectorAll("article")]; a ??= arts[Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t))]; const b = arts[arts.indexOf(a) + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
+const place = (t, a) => {   // where t falls in the column: the block at or before it (a, if given; among cards that share a date, the open one), the next, and how far between
+  const arts = [...card.querySelectorAll("article")], l = arts[Math.max(0, arts.findLastIndex(e => at(dots[+e.dataset.i]) <= t))], o = card.querySelector(`article[data-i="${open}"]`);
+  a ??= o && l && at(dots[open]) === at(dots[+l.dataset.i]) ? o : l; const b = arts[arts.indexOf(a) + 1], dj = a && dots[+a.dataset.i], dn = b && dots[+b.dataset.i];
   return a && { a, b, dj, dn, f: b && at(dn) > at(dj) ? Math.min(1, (t - at(dj)) / (at(dn) - at(dj))) : 0 }; };
 const park = ({ a, b, f }) => { held = true; const y0 = scrollY; scrollTo(0, scrollY + a.getBoundingClientRect().top + f * (b ? b.getBoundingClientRect().top - a.getBoundingClientRect().top : 0) - PARK()); if (scrollY === y0) held = false; };   // no scroll = no spy pass to clear the flag
 function seat(t, a){   // a = the block to park, else the last one at or before t
@@ -767,8 +768,8 @@ const PHONE = matchMedia("(max-width:640px)"), STRIP = 120; let more = false, re
 const exploring = () => PHONE.matches && !reading;
 const phoneH = () => reading ? STRIP : Math.max(300, innerHeight - mapEl.querySelector("header").offsetHeight - 8);
 function setReading(v){   // the band eases between the whole screen and the strip; the line re-angles every frame, the seat's card stays parked under it
-  reading = v; card.hidden = !coord || exploring(); if (!v) scrollTo(0, 0);
-  const h0 = band.clientHeight, h1 = phoneH(), t0 = performance.now(); cancelAnimationFrame(anim);
+  const h0 = bandH = band.clientHeight; reading = v; card.hidden = !coord || exploring(); if (!v) scrollTo(0, 0);   // bandH first: the seat's draw must not jump to the strip before the ease starts
+  const h1 = phoneH(), t0 = performance.now(); cancelAnimationFrame(anim);
   const step = now => { const k = Math.min(1, (now - t0) / 300); bandH = h0 + (h1 - h0) * (1 - (1 - k) ** 3); draw();
     if (reading && seatD){ const p = place(Date.parse(seatD)); p && park(p); }
     if (k < 1) anim = requestAnimationFrame(step); else { bandH = null; draw(); } };
@@ -784,10 +785,10 @@ document.addEventListener("keydown", e => {
 // scrolling the column: the card at the foot is the seat — its dot sits at the foot, and between two cards the seat's date runs with the scroll, so the line slides as you read and never jumps
 const PARK = () => mapEl.offsetHeight + 14;   // where a card's top lands under the stuck map
 let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = requestAnimationFrame(() => {
-  if (!card.children.length) return; const park = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // Safari lands a fraction off the park point, so the threshold sits a px past it
+  if (!card.children.length || card.hidden) return; const park = PARK() + 1, arts = [...card.querySelectorAll("article")]; let k = -1;   // hidden (exploring): every top reads 0 and the seat would jump to the last card. Safari lands a fraction off the park point, so the threshold sits a px past it
   for (const a of arts) if (a.getBoundingClientRect().top <= park) k++; else break;
   const a = arts[Math.max(0, k)], b = arts[k + 1], i = +a.dataset.i, n = b && +b.dataset.i, f = k < 0 || !b ? 0 : Math.max(0, Math.min(1, (PARK() - a.getBoundingClientRect().top) / (b.getBoundingClientRect().top - a.getBoundingClientRect().top)));
-  if (dots[i] && !held) seatD = new Date(at(dots[i]) + f * (dots[n] ? at(dots[n]) - at(dots[i]) : 0)).toISOString();
+  if (dots[i] && !held && bandH == null) seatD = new Date(at(dots[i]) + f * (dots[n] ? at(dots[n]) - at(dots[i]) : 0)).toISOString();
   held = false; if (i !== open) open = i; draw();
 }); }, { passive:true });
 
