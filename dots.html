@@ -165,6 +165,7 @@ const pool = Array.from({ length: Math.min(8, navigator.hardwareConcurrency || 2
 let rr = 0;
 const seenOn = new Map();   // id → Set(relay url): a card no MAIN relay has echoed is "local" — still on this machine
 const isLocal = id => ![...(seenOn.get(id) || [])].some(u => MAIN.includes(u));
+const onSide = id => local ? [...(seenOn.get(id) || [])].some(u => !MAIN.includes(u)) : !isLocal(id);   // local = everything your relay has, sent or not; nostr = what a MAIN relay echoed
 function admit(ev, fn, url){
   if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id)) || vBad.has(ev.id)) return;
   const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (ADD && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
@@ -259,7 +260,7 @@ const status = () => { st.textContent = `${sockets.filter(w => w.readyState === 
 
 // a timeline is its subject `d`, whole — every notary that carries that d pours its dots in, then ONE dot per card:
 // gold if any notary accepted it, blue otherwise; `accs` = the notaries that did (the ✓ N pill), so the band never repeats a card
-const notariesOf = d => [...notaries.entries()].filter(([c, n]) => c.split(":").slice(2).join(":") === d && (!ADD || local === isLocal(n.id)));   // heads keep to the side too: on local, only heads your relay has
+const notariesOf = d => [...notaries.entries()].filter(([c, n]) => c.split(":").slice(2).join(":") === d && (!ADD || onSide(n.id)));   // heads keep to the side too: on local, only heads your relay has
 function dotsFor(d, projections, all){
   const byId = new Map();
   for (const [c] of notariesOf(d)) for (const x of dotsOf(c, projections, all)){
@@ -309,7 +310,7 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
   const c = coord ? "?c=" + encodeURIComponent(coord) : "";   // the other two pages read c= the same way: land on this timeline there
   document.getElementById("towiki").href = "./" + c; document.getElementById("toadd").href = "add.html" + c;
 }
-const keep = (x, d) => (!ADD || local === isLocal(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
+const keep = (x, d) => (!ADD || onSide(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
 const localChip = () => ADD ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
 const tlPick = () => {   // point my head at another timeline; taking one off is the ✕ on its row
   if (!canSign()) return "";
