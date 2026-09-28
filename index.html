@@ -57,9 +57,6 @@
     --hairline:rgba(233,234,238,.4);
     --past-glow:rgba(201,143,63,.65);
     --future-glow:rgba(40,229,255,.6);
-    /* the picker's arrow, drawn in --dim. Restated in each theme — url() is a string,
-       so var() can't reach inside it; only the stroke hex differs between the three. */
-    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%239296a0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
     --font:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
     --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono","Menlo",monospace;
   }
@@ -88,7 +85,6 @@
     --band:rgba(248,243,234,.05); --hair:rgba(248,243,234,.10);
     --hairline:rgba(248,243,234,.45);
     --past-glow:rgba(238,188,132,.55); --future-glow:rgba(79,216,232,.55);
-    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23c9bca4' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
 
   /* ── LIGHT: ink on paper ──
@@ -115,7 +111,6 @@
     --band:rgba(25,27,31,.035); --hair:rgba(25,27,31,.09);
     --hairline:rgba(25,27,31,.45);
     --past-glow:rgba(138,84,16,.5); --future-glow:rgba(13,111,134,.45);
-    --chev:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%2361666f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--text);
@@ -178,17 +173,9 @@
   .rnote{flex-basis:100%;text-align:center;font-family:var(--mono);font-size:11px;
     color:var(--faint);margin-top:2px}
 
-  /* the timeline picker */
-  .tabs{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:9px}
-  .picker{background:var(--panel);border:1px solid var(--border);color:var(--text);
-    max-width:100%;                /* a long slug used to size the select past the phone's
-       width and give the whole page a horizontal scrollbar */
-    border-radius:8px;padding:9px 36px 9px 14px;font-size:13px;font-family:inherit;
-    font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;
-    background-repeat:no-repeat;background-position:right 13px center;
-    background-image:var(--chev)}   /* a data-URI can't read a token, so each theme ships
-       its own copy of the arrow with --dim baked in — see the three :root blocks */
-  .picker:hover,.picker:focus{border-color:var(--rail-dim);outline:none}
+  /* the Library (lib/library.mjs) reads the dots page's color names; here they point at ours */
+  .tabs{margin-top:16px;display:flex;justify-content:center}
+  #lib{--t0:var(--text);--t1:var(--dim);--t2:var(--dim);--line:var(--border);--sans:var(--font);padding:0 16px}
 
   /* copy-a-link-to-this-timeline button */
   .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
@@ -804,7 +791,7 @@
       <div class="collmeta" id="collmeta"></div>
       <div class="roster" id="roster" style="display:none"></div>
       <!-- band 3: choosing — read something else -->
-      <div class="tabs" id="tabs"></div>
+      <div class="tabs" id="tabs"></div>   <!-- ‹ Library, once a timeline is open -->
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
@@ -829,6 +816,7 @@
   </header>
 
   <main>
+    <section id="lib" aria-label="Library" hidden></section>
     <div id="timeline-area"></div>
 
     <section class="contribute">
@@ -1891,9 +1879,18 @@ function selectF(f){
   render();
 }
 
-// The picker's catalog: every notary the relays hold, flat and alphabetical, as
-// [filter, label] pairs — cards not needed, so an unopened timeline still lists.
-const vocab = () => [...slugs].sort().map(c => ["c:" + c, slugName(c)]);
+// The Library's rows: every notary name the relays hold, one row each — cards not needed, so an
+// unopened timeline still lists; its count shows once its cards were fetched.
+const libRows = () => [...slugs].map(c => { const N = notaryOf(c);
+  return { d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
+           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:!!myPk && notariesOf(c).some(n => n.pubkey === myPk) }; });
+let libUpdate = null;   // the module loads beside this classic script; render waits for it
+const libEl = document.getElementById("lib");
+import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, c => selectF("c:" + c)); scheduleRender(); });
+async function libSignIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
+  if (!signerReady()) return void (location.href = "add.html");
+  rememberPk((await getSigner()).pubkey); scheduleRender();
+}
 
 // the name's notaries, one chip each, when more than one key holds it. Switching chips
 // switches timelines: a notary IS the timeline, the name is only what it is called.
@@ -1910,8 +1907,7 @@ function renderNotaries(){
     `<div class="rnote">${L.length} notaries hold this name — each is its own timeline</div>`;
 }
 
-function renderTabs(V){
-  tabsEl.innerHTML = "";
+function renderTabs(){
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
   exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
   if (pick && pick.f !== activeF) pick = null;     // a range belongs to one timeline
@@ -1930,35 +1926,31 @@ function renderTabs(V){
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
   dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
   renderNotaries();
-  if (!slugs.size) return;                       // status line shows "connecting…"
-
-  const sel = document.createElement("select");
-  sel.className = "picker";
-  for (const [f, text] of V){
-    const o = document.createElement("option");
-    o.value = f;
-    o.textContent = text + (wanted.has(f.slice(2)) ? `  (${entriesOf(f).length})` : "");  // count once fetched
-    o.selected = f === activeF;
-    sel.appendChild(o);
-  }
-  sel.addEventListener("change", () => selectF(sel.value));
-  tabsEl.appendChild(sel);
+  sumTog.style.display = ordBtn.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
+  if (activeF && !tabsEl.firstChild){
+    tabsEl.innerHTML = `<button class="linkbtn" type="button" title="Every timeline — pick another">‹ Library</button>`;
+    tabsEl.firstChild.onclick = () => selectF(null);
+  } else if (!activeF) tabsEl.innerHTML = "";
 }
 
 // ═══════════════ render ═══════════════
 function render(){
-  const V = vocab();
   // deep link wins until the visitor picks. ?c= is the shareable form; ?l=/?t=
   // land on the first timeline carrying that tag — never a merged spine.
   // a ?c= names a notary and needs no card (reads are lazy — its cards arrive only once it is on screen)
   const want = !userPicked && wantedF
     ? (axisOf(wantedF) === "c" ? [valOf(wantedF)].filter(c => slugs.has(c))
                                : [...new Set(matching(wantedF).map(collectionSlug))].sort()) : [];
-  if (want.length) activeF = "c:" + want[0];
-  else if (activeF === null && V.length) activeF = V[0][0];
+  if (want.length) activeF = "c:" + want[0];   // no link, or not found yet → the Library
   if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
   renderStatus();
-  renderTabs(V);
+  renderTabs();
+  libEl.hidden = !!activeF; areaEl.hidden = !activeF;
+  if (!activeF){
+    const down = [...relayState.values()].every(v => v === "down");
+    if (libUpdate) libUpdate({ rows:libRows(), signedIn:!!myPk, loading:!down && !slugs.size, signIn:libSignIn });
+    drumMeasure(); return;
+  }
 
   const entries = activeF ? entriesOf(activeF) : [];
   // the draft is a spine entry like any other — but NOT while its date is being picked:

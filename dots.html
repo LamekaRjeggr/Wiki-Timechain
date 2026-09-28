@@ -113,17 +113,8 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
   .prow #morebtn{flex:none;width:44px;height:44px;font-size:20px;color:var(--t1)} .prow #morebtn[aria-expanded="true"]{color:var(--t0)}
   .pmore{padding-block:4px} }
 [hidden]{display:none!important}
-/* the Library: the first screen — big type, word buttons, one column; timetrees and timelines never share a list */
+/* the Library header; the list itself is lib/library.mjs */
 header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:20px;font:16px var(--sans);color:var(--t2)} header .who button{font:600 17px var(--sans);color:var(--t0);border:2px solid var(--t1);border-radius:8px;padding:4px 14px}
-#lib{width:100%;max-width:720px;margin:8px auto 60px;font:18px/1.45 var(--sans);color:var(--t1)}
-#lib .tabs{display:flex;margin-bottom:14px} #lib .tabs button{flex:1;padding:12px;font-size:19px;color:var(--t2);border-bottom:4px solid var(--line)}
-#lib .tabs button[aria-selected="true"]{color:var(--t0);font-weight:700;border-color:var(--t0)} #lib .tabs button:disabled{opacity:.4;cursor:default}
-#lib h3{margin:22px 0 0;font-size:20px;color:var(--t0)} #lib h3 i{font-style:normal;font-weight:400;color:var(--t2)} #lib .plain{margin:0 0 4px;font-size:16px;color:var(--t2)}
-#lib .lrow{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:6px 14px;margin-top:8px;border:2px solid var(--line);border-radius:10px;background:var(--panel);text-align:left}
-#lib .lrow:hover,#lib .lrow:focus-visible{border-color:var(--t1);outline:none} #lib .lrow b{display:block;font-size:19px;font-weight:600;color:var(--t0)} #lib .lrow small{display:block;font-size:15px;color:var(--t2)}
-#lib .go1,#lib .big{margin-left:auto;flex:none;font:600 17px var(--sans);color:var(--bg);background:var(--t1);border-radius:8px;padding:8px 18px} #lib .big{margin:22px 0 0}
-#lib form{display:flex;gap:10px} #lib input{flex:1;min-width:0;font:19px var(--sans);padding:12px 14px;border:2px solid var(--line);border-radius:10px;background:var(--panel);color:var(--t0)} #lib input:focus{outline:none;border-color:var(--t1)}
-#lib .note{margin:24px 0 0;font-size:18px} #lib .note i{font-style:normal;color:var(--t2)}
 </style>
 </head>
 <body>
@@ -137,19 +128,12 @@ header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:
     <div id="band" aria-label="timeline, one dot per card"><div id="empty" hidden>no cards yet</div><i id="drop"></i></div>
   </div>
   <section id="card" aria-label="the cards, in date order"></section>
-  <section id="lib" aria-label="Library" hidden>
-    <div class="tabs" role="tablist"><button id="tmine" role="tab">My collection</button><button id="tfind" role="tab">Search everyone</button></div>
-    <p class="note" id="nosign" hidden><i>Sign in to keep your own collection.</i></p>
-    <div id="pmine" role="tabpanel"></div>
-    <div id="pfind" role="tabpanel" hidden>
-      <form id="sform"><input id="q" type="search" placeholder="Filter by place, person or topic…" aria-label="Search everyone"><button class="big" style="margin:0">Search</button></form>
-      <div id="fres"></div>
-    </div>
-  </section>
+  <section id="lib" aria-label="Library" hidden></section>
 </main>
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
+import { mountLibrary } from "./lib/library.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
@@ -167,7 +151,7 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 const vOK = new Set(), vBad = new Set(), sockets = [];
-let trail = (Q.get("p") || "").split(",").filter(Boolean), tab = null;   // trail: the timetrees walked through to get here, oldest first; tab: the Library tab picked by hand
+let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 let TA = 22 * Math.PI / 180; const NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
@@ -638,27 +622,13 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
 }
 
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
-const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const lrow = x => `<button class="lrow" data-d="${esc(x.tl)}"><span><b>${esc(x.title)}</b><small>${esc([x.nTl ? plural(x.nTl, "timeline") : "", x.n ? plural(x.n, "event") : ""].filter(Boolean).join(" · ") || (loading() ? "…" : "empty"))}</small></span><span class="go1">Open</span></button>`;
-const libList = (xs, n) => { const w = xs.filter(isWeave), t = xs.filter(x => !isWeave(x)), c = k => n ? ` <i>(${k})</i>` : "";
-  return (w.length || !n ? `<h3>Timetrees${c(w.length)}</h3><p class="plain">Groups of timelines</p>${w.map(lrow).join("") || `<p class="note"><i>None yet.</i></p>`}` : "")
-    + (t.length || !n ? `<h3>Timelines${c(t.length)}</h3><p class="plain">Lists of events</p>${t.map(lrow).join("") || `<p class="note"><i>None yet.</i></p>`}` : ""); };
-let libKey = "";
-function library(){   // My collection = the timelines you keep as a notary; Search everyone lists them all, and typing filters it — timetrees always first
-  const cur = myPk ? tab || "mine" : "find", q = document.getElementById("q").value.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
-  const mine = dots.filter(x => myPk && x.tls.some(d => notaries.has(myCoordOf(d)))).sort((a, b) => a.title.localeCompare(b.title));
-  const hits = dots.filter(x => { const h = [x.title, x.summary, ...x.tls].join(" ").toLowerCase(); return words.every(w => h.includes(w)); }).sort((a, b) => a.title.localeCompare(b.title));
-  const key = cur + q + canSign() + loading() + [...mine, ...hits].map(x => x.tl + x.title + x.n + x.nTl).join("|"); if (key === libKey) return; libKey = key;
-  tmine.disabled = !myPk; tmine.setAttribute("aria-selected", cur === "mine"); tfind.setAttribute("aria-selected", cur === "find");
-  pmine.hidden = cur !== "mine"; pfind.hidden = cur !== "find"; nosign.hidden = !!myPk;
-  pmine.innerHTML = libList(mine) + (canSign() ? `<button class="big" id="newtl">New timeline</button>` : "");
-  fres.innerHTML = hits.length ? libList(hits, true) : `<p class="note">${loading() ? "Looking…" : q ? `Nothing found for “${esc(q)}”.` : "No timelines yet."}</p>`;
-  lib.querySelectorAll(".lrow").forEach(b => b.onclick = () => choose(b.dataset.d));
-  const nt = document.getElementById("newtl"); if (nt) nt.onclick = newTimeline;
+function library(){   // one row per subject; mine = a timeline you keep as a notary
+  libUpdate({ rows: dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:x.n, nTl:x.nTl, tree:isWeave(x), mine:!!myPk && x.tls.some(d => notaries.has(myCoordOf(d))) })),
+    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
-  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {} tab = null; render();
+  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {} render();
 }
 
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
@@ -722,10 +692,8 @@ const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id
 // ── controls ──
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
-  card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib"),
-  tmine = document.getElementById("tmine"), tfind = document.getElementById("tfind"), pmine = document.getElementById("pmine"), pfind = document.getElementById("pfind"), fres = document.getElementById("fres"), nosign = document.getElementById("nosign");
-tmine.onclick = () => { tab = "mine"; library(); }; tfind.onclick = () => { tab = "find"; library(); document.getElementById("q").focus(); };
-document.getElementById("q").oninput = () => library(); document.getElementById("sform").onsubmit = e => { e.preventDefault(); library(); };
+  card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib");
+const libUpdate = mountLibrary(lib, d => choose(d));
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead
