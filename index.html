@@ -794,8 +794,8 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <!-- Add leads: it is the one verb the convention wants, and it is always here.
-             Copy hides when no timeline is selected, so it can't hold the first slot. -->
+        <!-- Add leads: it is the one verb the convention wants. It shows with a timeline
+             open, like Copy; the Library has no Add (a timetree is built in dots). -->
         <a id="addlink" class="linkbtn go" href="add.html"
           title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <button id="copylink" class="linkbtn" type="button"
@@ -1929,6 +1929,7 @@ function renderNotaries(){
 }
 
 function renderTabs(){
+  addLink.style.display = activeF ? "" : "none";   // a card goes into a timeline; none open, no Add
   copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
   exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
   if (pick && pick.f !== activeF) pick = null;     // a range belongs to one timeline
