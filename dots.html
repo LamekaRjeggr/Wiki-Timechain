@@ -77,7 +77,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 #line{position:absolute;left:0;height:0;border-top:1px solid var(--t2);transform-origin:0 0;transform:rotate(calc(-1 * var(--ta)))}   /* years above the line, titles below: two planes, nothing crosses */
 #line .yrs{position:absolute;left:0;top:-3.5px;overflow:visible;pointer-events:none} #line .yrs path{stroke:var(--t2);fill:none;opacity:.45}   /* a faint mark per year: where they crowd, the line is squeezed */
 .phone .tick{top:14px;transform:translateX(-50%) rotate(var(--ta))} .phone .tick::before{display:none}   /* a steep line: years flat, on the lower-right side; the upper-left, where the record crowds, is the titles' room */
-.tick.hz{color:var(--hz)} .tick.hz::before{background:var(--hz)}
+.tick.hz::before{background:var(--hz);width:2px;height:7px;bottom:-16px} .phone .tick.hz{top:-4px;height:7px;font-size:0} .phone .tick.hz::before{display:block;bottom:0}   /* where even spacing ends: a mark on the line, no word */
 #line .seat{position:absolute;top:0;width:18px;height:18px;border:2px solid var(--t1);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}   /* the seat: mid-line */
 #drop{position:absolute;bottom:0;width:0;border-left:1px dashed var(--t2);pointer-events:none}   /* from the seat down to the card that hangs under it */
 #leads{position:absolute;left:0;top:0;overflow:visible;pointer-events:none} #leads path{stroke:var(--t2);fill:none;opacity:.7}   /* a title set a row out keeps a faint leader to its dot */
@@ -541,7 +541,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
     if (gap(ty, utc(y + 1)) >= 88) for (let m = 0; m < 12; m++){ const tm = utc(y, m), te = utc(y, m + 1); if (m) cand.push([4, tm, MON[m]]);
       if (gap(tm, te) >= 88) for (let t = tm; t < te; t += 864e5){ if (t > tm) cand.push([5, t, MON[m] + " " + new Date(t).getUTCDate()]);
         if (gap(t, t + 864e5) >= 88) for (let h = 1; h < 24; h++) cand.push([6, t + h * 36e5, String(h).padStart(2, "0") + ":00"]); } } }
-  const named = [[M - E, "◂ horizon", aP], [M + E, "horizon ▸", aF]].filter(h => h[2]).map(([p, t]) => ({ p, t, hz:true, w:t.length * 6.6 }));   // where even spacing ends, said first; w = the name's length along the line
+  const named = [[M - E, "\u00a0", aP], [M + E, "\u00a0", aF]].filter(h => h[2]).map(([p, t]) => ({ p, t, hz:true, w:t.length * 6.6 }));   // where even spacing ends, placed first — a mark, no word
   cand.map(([r, t, l]) => [r, s(t), l]).filter(([, p]) => p >= 24 && p <= Math.min(L - 24, (band.clientHeight - 54) / Math.sin(TA)) && !cols.some(c => Math.abs(p - c.px) < 28)).sort((a, b) => a[0] - b[0] || Math.abs(a[1] - M) - Math.abs(b[1] - M))   // a column and its date run through the tick row: those ticks step aside
     .forEach(([, p, t]) => { const w = t.length * 6.6; if (named.every(o => Math.abs(o.p - p) >= Math.max(44, (o.w + w) / 2 + 10))) named.push({ p, t, w }); });
   for (const { p, t, hz } of named){ const e = document.createElement("div"); e.className = "tick" + (hz ? " hz" : ""); e.style.left = p + "px"; e.textContent = t; host.appendChild(e); }
