@@ -114,7 +114,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
   .pmore{padding-block:4px} }
 [hidden]{display:none!important}
 /* the Library header; the list itself is lib/library.mjs */
-header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:20px;font:16px var(--sans);color:var(--t2)} header .who button{font:600 17px var(--sans);color:var(--t0);border:2px solid var(--t1);border-radius:8px;padding:4px 14px}
+header .libh{font:700 24px var(--sans);color:var(--t0)} header .who{margin-left:20px;font:16px var(--sans);color:var(--t2)}
 </style>
 </head>
 <body>
@@ -484,8 +484,7 @@ function render(){
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
     const del = document.getElementById("delbtn"); if (del) del.onclick = deleteHead;
   } else {
-    ntry.innerHTML = `<span class="libh">Library</span>${localChip()}<span class="who">${myPk ? `Signed in as ${esc(who(myPk))}` : `<button id="signin">Sign in</button>`}</span>`;
-    const si = document.getElementById("signin"); if (si) si.onclick = signIn;
+    ntry.innerHTML = `<span class="libh">Library</span>${localChip()}${myPk ? `<span class="who">Signed in as ${esc(who(myPk))}</span>` : ""}`;   // signed out, the Library's own note holds Sign in
   }
   const mebtn = document.getElementById("mebtn"); if (mebtn) mebtn.onclick = () => { me = !me; open = null; colKey = null; setUrl(); render(); };
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
@@ -622,10 +621,11 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
   if (dots.length) show(open !== null && dots[open] ? open : 0, false);   // something is always open: the first card until the reader moves
 }
 
+const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").replace(/^0+(?=\d)/, ""), span = x => yr(x.date) === yr(x.last) ? yr(x.date) : yr(x.date) + "–" + yr(x.last);   // the years a timeline covers
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
 function library(){   // one row per subject; mine = a timeline you keep as a notary
-  libUpdate({ rows: dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:x.n, nTl:x.nTl, tree:isWeave(x), mine:!!myPk && x.tls.some(d => notaries.has(myCoordOf(d))) })),
-    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null });
+  libUpdate({ rows: dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:x.n, nTl:x.nTl, tree:isWeave(x), span:span(x), mine:!!myPk && x.tls.some(d => notaries.has(myCoordOf(d))) })),
+    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null, signIn });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
