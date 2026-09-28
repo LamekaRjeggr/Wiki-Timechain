@@ -19,7 +19,7 @@
   img-src 'self' data:;
   base-uri 'none';
   form-action 'none'">
-<title>Cardex · Wiki · Timechain</title>
+<title>Cardex</title>
 <style>
   :root{
     color-scheme: dark;
@@ -133,7 +133,6 @@
   .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
     gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
-  h1 .dot{color:var(--rail);font-weight:400;margin:0 2px}
   .sub{margin:0;color:var(--dim);font-size:13px;line-height:1.55;max-width:60ch;text-align:left}
   /* the one word in the subtitle a stranger won't know: brightest thing in a dim
      paragraph, underlined so it reads as a link without leaning on hue */
@@ -770,7 +769,7 @@
       <!-- band 1: masthead — the site's chrome. Theme is a device preference (localStorage,
            never in the URL) so it lives up here with the mark, not among the view controls. -->
       <div class="mast">
-        <h1>Wiki <span class="dot">·</span> Timechain</h1>
+        <h1>Cardex</h1>
         <div class="mastr"><span class="mnav"><a id="dotsnav" href="dots.html">dots</a> · <a id="addnav" href="add.html">add</a></span>
         <div class="dtog" id="thmtog" title="How light this page reads">
           <button class="ds" type="button" data-thm="dark">dark</button>
@@ -1935,9 +1934,8 @@ function renderTabs(){
   if (pick && pick.f !== activeF) pick = null;     // a range belongs to one timeline
   if (pick) pick.f = activeF;
   // every option in every axis is a collection, so activeF is always "c:<slug>"
-  const name = activeF ? slugName(activeF.slice(2)) : "";
+  const name = activeF ? slugName(activeF.slice(2)) : "Library";   // no timeline open = the Library, named like one
   nowEl.textContent = name;
-  nowEl.style.display = activeF ? "" : "none";
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
