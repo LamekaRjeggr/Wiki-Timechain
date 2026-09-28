@@ -979,7 +979,7 @@ const events   = new Map();     // pubkey:d → newest card (replaceable per aut
 const profiles = new Map();     // pubkey → {name, fetched}
 const relayState = new Map();   // url → 'up' | 'down' | 'connecting'
 const sockets  = [];
-const slugs    = new Set();     // discovered collection slugs — grows, never shrinks
+const slugs    = new Set();     // discovered collection slugs — shrinks only when a kind 5 takes the last notary back
 const notaries = new Map();     // 30829:pubkey:d → newest notary; a slug is a notary's d
 const actA     = new Set();     // notary contexts whose acts we've asked for (#a) — grow-only
 const acts     = new Map();     // act id → kind-8828 event; derived at render, nothing replaces
@@ -987,6 +987,8 @@ const validActs = new Map();    // act id → strict normalized act; snapshots p
 const rejectedActs = new Map(); // act id → { code, event } for visible degradation
 const actE     = new Set();     // act ids whose revokes we've asked for (#e) — grow-only
 const actErr   = new Map();     // card coord → accept-failure note, cleared on retry
+const gone     = new Map();     // what a kind 5 took back: id → its author, or kind:pk:d → as of when; a later copy stays out
+const isGone = ev => gone.get(ev.id) === ev.pubkey || (gone.get(ev.kind + ":" + ev.pubkey + ":" + tag(ev,"d")) ?? -1) >= ev.created_at;
 RELAYS.forEach(r => relayState.set(r, "connecting"));
 
 // The spine always shows ONE timeline (a collection) — never a merge. The chips don't
@@ -1571,19 +1573,19 @@ function wantSlug(c){ if (c && !wanted.has(c)){ wanted.add(c); scheduleMemberFet
 
 function ingestNotary(ev){
   if (!ev || ev.kind !== NOTARY_KIND) return;
-  const d = tag(ev,"d"); if (!d) return;
+  const d = tag(ev,"d"); if (!d || isGone(ev)) return;
   const coord = NOTARY_KIND + ":" + ev.pubkey + ":" + d;
   const cur = notaries.get(coord);
   if (cur && cur.created_at >= ev.created_at) return;
   notaries.set(coord, ev);
   slugs.add(d);               // a notary is a timeline even before its first card lands
-  scheduleMemberFetch();
+  scheduleMemberFetch(); scheduleDelFetch();
   scheduleRender();
 }
 
 function ingest(ev){
   if (!ev || ev.kind !== KIND) return;
-  const d = tag(ev,"d"); if (!d || !dateOk(dateOf(ev))) return;   // the spec's gate: a parseable event_date
+  const d = tag(ev,"d"); if (!d || isGone(ev) || !dateOk(dateOf(ev))) return;   // the spec's gate: a parseable event_date
   // and a card is visible only through a notary we hold — relays are not trusted to filter
   const sub = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
   if (!sub || !notaries.has(sub[1])) return;
@@ -1596,7 +1598,27 @@ function ingest(ev){
     profiles.set(ev.pubkey, { name:null, fetched:false });
     scheduleProfileFetch();
   }
+  scheduleDelFetch(); scheduleRender();
+}
+// NIP-09: only the author can take a record back; a coord takes every version up to the delete's own time
+function ingestDelete(ev){
+  for (const [n, v] of ev.tags){
+    if (n === "e" && v) gone.set(v, ev.pubkey);
+    if (n === "a" && v && v.split(":")[1] === ev.pubkey) gone.set(v, Math.max(gone.get(v) ?? -1, ev.created_at)); }
+  for (const m of [notaries, events, acts]) for (const [k, e] of m) if (isGone(e)){ m.delete(k); validActs.delete(k); }
+  for (const c of slugs) if (!notariesOf(c).length) slugs.delete(c);
   scheduleRender();
+}
+// deletes by everyone whose records are held; the sub stays open, so a take-back lands live
+let delTimer = null, askedDel = "";
+const delFilter = () => [...new Set([...notaries.values(), ...events.values(), ...acts.values()].map(e => e.pubkey))].sort();
+function scheduleDelFetch(){
+  if (delTimer) return;
+  delTimer = setTimeout(() => {
+    delTimer = null;
+    const pks = delFilter(); if (!pks.length || pks.join() === askedDel) return; askedDel = pks.join();
+    sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks }])));
+  }, 400);
 }
 
 function ingestProfile(ev){
@@ -1646,7 +1668,7 @@ function actFilters(){
 // ═══ Timeline Acts (kind 8828, draft NIP) ═══
 // Regular events: every act is kept, nothing replaces; tallies are reader-derived views.
 function ingestAct(ev){
-  if (!ev || ev.kind !== ACT_KIND || acts.has(ev.id)) return;
+  if (!ev || ev.kind !== ACT_KIND || acts.has(ev.id) || isGone(ev)) return;
   const parsed = parseAct(ev);
   if (!parsed.ok){
     rejectedActs.set(ev.id, { code: parsed.code, event: structuredClone(ev) });
@@ -1656,7 +1678,7 @@ function ingestAct(ev){
   const keep = () => {
     acts.set(ev.id, ev); validActs.set(ev.id, parsed.act);
     if (!actE.has(ev.id)){ actE.add(ev.id); scheduleActFetch(); }
-    scheduleRender();
+    scheduleDelFetch(); scheduleRender();
   };
   // The outer act's signature cannot vouch for the embedded author's signature.
   // Admit the exact snapshot through the same async hash + Schnorr queue first.
@@ -3616,6 +3638,9 @@ function connect(url){
     const af = actFilters();
     if (af.length)
       ws.send(JSON.stringify(["REQ","act", ...af]));
+    const pks = delFilter();
+    if (pks.length)
+      ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks }]));
   };
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
@@ -3625,6 +3650,7 @@ function connect(url){
       if (data[1] === "ntry")   admit(data[2], ingestNotary);
       if (data[1] === "prof")   admit(data[2], ingestProfile);
       if (data[1] === "act")    admit(data[2], ingestAct);
+      if (data[1] === "del" && data[2]?.kind === 5) admit(data[2], ingestDelete);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
       const t = tallies.get(data[1]);
