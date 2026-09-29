@@ -213,9 +213,11 @@
     button and the anchor beside it — an underline there would read as body-copy link */
   .linkbtn:hover{color:var(--text);border-color:var(--rail-dim)}
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
+  .hmenu{position:relative} #hbtn{font-size:18px;line-height:1;padding:6px 11px}   /* share lives behind three lines, top right */
+  .hpop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;gap:6px;min-width:170px;padding:6px;background:var(--panel);border:1px solid var(--border);border-radius:9px}
+  .hpop[hidden]{display:none} .hpop .linkbtn{text-align:left}
   .pgrp{display:inline-flex;align-items:center;gap:7px} .plab{font-size:12px;color:var(--dim)}   /* a word naming each view control */
-  .linkbtn.ord{font-family:var(--mono);font-size:11.5px;line-height:1.15;padding:3px 10px;
-    text-align:center}   /* two stacked words, mono like the byline: a state, not a verb */
+  .linkbtn.ord{font-family:var(--mono);font-size:11.5px;padding:2px 9px;margin-left:10px}   /* the word IS the state */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
 
@@ -767,7 +769,14 @@
           <button class="ds" type="button" data-thm="dark">dark</button>
           <button class="ds" type="button" data-thm="medium">medium</button>
           <button class="ds" type="button" data-thm="light">light</button>
-        </div></div>
+        </div>
+        <span class="hmenu" id="hmenu"><button class="linkbtn" id="hbtn" type="button" aria-label="Share" aria-expanded="false">☰</button>
+          <span class="hpop" hidden>
+            <button id="copylink" class="linkbtn" type="button"
+              title="Copy a shareable link to the selected view">⧉ Copy link</button>
+            <button id="exportbtn" class="linkbtn" type="button"
+              title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
+          </span></span></div>
       </div>
       <div class="mastsub">
         <div class="sub">Events on Timelines.</div>
@@ -777,23 +786,18 @@
       </div>
       <!-- band 2: the subject — what you're reading, with its own facts under it -->
       <h2 class="collnow" id="collnow"></h2>
-      <div class="collmeta" id="collmeta"></div>
+      <div class="collmeta"><span id="collmeta"></span><button id="ordbtn" class="linkbtn ord" type="button"
+        title="Reading direction — tap to flip"></button></div>
       <div class="roster" id="roster" style="display:none"></div>
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <button id="copylink" class="linkbtn" type="button"
-          title="Copy a shareable link to the selected view">⧉ Copy link</button>
-        <button id="exportbtn" class="linkbtn" type="button"
-          title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
         <span class="pgrp"><span class="plab">Show</span><div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
           <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
         </div></span>
         <!-- reading direction: the word IS the state — no "on" style, no second button -->
-        <span class="pgrp"><span class="plab">Order</span><button id="ordbtn" class="linkbtn ord" type="button"
-          title="Reading direction — tap to flip"></button></span>
         <!-- Add comes last: a newcomer reads first. It shows with a timeline open, like Copy;
              the Library has no Add (a timetree is built in dots). -->
         <a id="addlink" class="linkbtn" href="add.html"
@@ -1075,6 +1079,11 @@ copyBtn.addEventListener("click", async () => {
 // on one line, then each lit paragraph — a reading copy, not a machine interchange.
 const EXPORT_LABEL = "⤓ Export";
 const exportBtn = document.getElementById("exportbtn");
+// the menu stays open while Export is picking a range — the taps land on the spine, outside it
+const hMenu = document.getElementById("hmenu"), hBtn = document.getElementById("hbtn"), hPop = hMenu.querySelector(".hpop");
+const setMenu = open => { hPop.hidden = !open; hBtn.setAttribute("aria-expanded", open); };
+hBtn.addEventListener("click", () => setMenu(hPop.hidden));
+document.addEventListener("click", e => { if (!hMenu.contains(e.target) && !pick) setMenu(false); });
 // the range picker: Export arms it, two taps on the spine bound it, Export again downloads.
 // pick = null (off) | {a, b}: endpoint d's in tap order, either may be null. Nothing picked
 // on the second press = the whole timeline, as before.
@@ -1173,8 +1182,7 @@ paintSum();
 let readDesc = true;                                   // newest first unless the device says otherwise
 try { readDesc = localStorage.getItem("wtc:read") !== "old→new"; } catch {}
 const ordBtn = document.getElementById("ordbtn");
-// the button is the spine in miniature: the top word is what sits at the top of the page
-const paintOrd = () => { ordBtn.innerHTML = readDesc ? "new<br>old" : "old<br>new"; };
+const paintOrd = () => { ordBtn.textContent = readDesc ? "new first" : "old first"; };
 ordBtn.addEventListener("click", () => {
   readDesc = !readDesc;
   try { localStorage.setItem("wtc:read", readDesc ? "new→old" : "old→new"); } catch {}
@@ -1926,8 +1934,7 @@ function renderNotaries(){
 
 function renderTabs(){
   addLink.style.display = activeF ? "" : "none";   // a card goes into a timeline; none open, no Add
-  copyBtn.style.display = activeF ? "" : "none";   // nothing to link until one is active
-  exportBtn.style.display = activeF ? "" : "none"; // same rule: no timeline, nothing to export
+  hMenu.style.display = activeF ? "" : "none";     // nothing to link or export until one is active
   if (pick && pick.f !== activeF) pick = null;     // a range belongs to one timeline
   if (pick) pick.f = activeF;
   // every option in every axis is a collection, so activeF is always "c:<slug>"
@@ -1937,13 +1944,13 @@ function renderTabs(){
   const n = activeF ? entriesOf(activeF).length : 0;
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
   metaEl.innerHTML = activeF ? `${n} event${n === 1 ? "" : "s"}` : "";
-  metaEl.style.display = activeF ? "" : "none";
+  metaEl.parentElement.style.display = activeF ? "" : "none";   // count + order ride together
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
   dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
   renderNotaries();
-  sumTog.parentElement.style.display = ordBtn.parentElement.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
+  sumTog.parentElement.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
   if (activeF && !tabsEl.firstChild){
     tabsEl.innerHTML = `<button class="linkbtn" type="button" title="Every timeline — pick another">‹ Library</button>`;
     tabsEl.firstChild.onclick = () => selectF(null);
