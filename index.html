@@ -133,12 +133,7 @@
   .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
     gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
-  .sub{margin:0;color:var(--dim);font-size:13px;line-height:1.55;max-width:60ch;text-align:left}
-  /* the one word in the subtitle a stranger won't know: brightest thing in a dim
-     paragraph, underlined so it reads as a link without leaning on hue */
-  .sub a{color:var(--text);font-weight:600;text-decoration:underline;
-    text-decoration-color:var(--rail-dim);text-underline-offset:3px}
-  .sub a:hover{text-decoration-color:var(--rail)}
+  .sub{margin:0;color:var(--text);font-size:15px;line-height:1.55;max-width:60ch;text-align:left}
   .status{font-size:12px;color:var(--dim);white-space:nowrap;margin-left:auto}
   .status b{color:var(--text);font-weight:600}
   .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
@@ -156,7 +151,7 @@
   .collnow.long{font-size:clamp(19px,3.6vw,22px);max-width:32ch;letter-spacing:-.01em}
   .collnow::after{content:"";display:block;width:36px;height:2px;border-radius:2px;
     background:var(--rail);margin:10px auto 0}
-  /* the subject's own facts, right under its name — where "N entries" lives now */
+  /* the subject's own facts, right under its name — "N events" */
   .collmeta{margin-top:7px;text-align:center;font-family:var(--mono);font-size:11.5px;
     color:var(--faint)}
 
@@ -174,6 +169,11 @@
 
   /* the Library (lib/library.mjs) reads the dots page's color names; here they point at ours */
   .tabs{margin-top:16px;display:flex;justify-content:center}
+  #intro{max-width:720px;margin:14px auto 0;padding:0 16px;font-size:16px;line-height:1.5;color:var(--dim)} #intro p{margin:4px 0} #intro b{color:var(--text)} #intro a{color:var(--accent)}
+  #kids{max-width:720px;margin:18px auto 0;font-size:15px;color:var(--dim)} #kids p{margin:0 0 6px}
+  #kids>button,#kids>span{display:flex;justify-content:space-between;gap:12px;width:100%;margin-top:6px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:inherit;color:var(--text);text-align:left}
+  #kids>button{cursor:pointer} #kids>button:hover{border-color:var(--rail-dim)} #kids small{color:var(--dim);white-space:nowrap}
+  #lib:not([hidden]){display:flex;flex-direction:column} #lib #nosign{order:1}   /* sign-in waits under the list: read first */
   #lib{--t0:var(--text);--t1:var(--dim);--t2:var(--dim);--line:var(--border);--sans:var(--font);padding:0 16px}
 
   /* copy-a-link-to-this-timeline button */
@@ -212,11 +212,7 @@
     button and the anchor beside it — an underline there would read as body-copy link */
   .linkbtn:hover{color:var(--text);border-color:var(--rail-dim)}
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
-  /* the one thing the convention actually wants from a reader. Filled, so it outranks the
-     quiet outline beside it; the lit floor bars are amber too, but a stacked pyramid of
-     11px labels never reads as a button. */
-  .linkbtn.go{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
-  .linkbtn.go:hover{color:var(--ink);filter:brightness(1.08)}
+  .pgrp{display:inline-flex;align-items:center;gap:7px} .plab{font-size:12px;color:var(--dim)}   /* a word naming each view control */
   .linkbtn.ord{font-family:var(--mono);font-size:11.5px;line-height:1.15;padding:3px 10px;
     text-align:center}   /* two stacked words, mono like the byline: a state, not a verb */
 
@@ -507,12 +503,6 @@
   .mtl .ptag{margin-left:8px;padding:1px 6px;vertical-align:2px;font-family:var(--mono);
     font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
     border:1px dashed var(--gutline);border-radius:5px}
-  /* the fold — cards the notary has not passed. Nothing is deleted, only resisted, and
-     the count IS the information. */
-  .mtl .foldrow{display:grid;grid-template-columns:var(--gut) minmax(0,1fr);column-gap:var(--cgap)}
-  .mtl .foldrow .lab{grid-column:2;padding:2px 0 13px;color:var(--dim);
-    font-family:var(--mono);font-size:11.5px;cursor:pointer}
-  .mtl .foldrow .go{color:var(--accent);margin-left:7px}
 
   /* the footer is gone: its date duplicated the date column, `kind` was the constant 30818 on
      every card, and `d` is now carried on .node[data-d] — off the face, still in the document. */
@@ -778,9 +768,7 @@
         </div></div>
       </div>
       <div class="mastsub">
-        <div class="sub">Events from the public record, arranged in order, each with its
-          source — on <a href="#nostr">nostr</a>, so anyone can add an entry or dispute
-          one. <b>Don't trust, verify.</b></div>
+        <div class="sub">Events on Timelines.</div>
         <div class="status" id="status">
           <span><span class="spinner"></span>connecting…</span>
         </div>
@@ -794,32 +782,38 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <!-- Add leads: it is the one verb the convention wants. It shows with a timeline
-             open, like Copy; the Library has no Add (a timetree is built in dots). -->
-        <a id="addlink" class="linkbtn go" href="add.html"
-          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
         <button id="copylink" class="linkbtn" type="button"
           title="Copy a shareable link to the selected view">⧉ Copy link</button>
         <button id="exportbtn" class="linkbtn" type="button"
           title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
-        <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
+        <span class="pgrp"><span class="plab">Show</span><div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t" title="titles — always shown">titles</span>
           <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
           <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
-        </div>
+        </div></span>
         <!-- reading direction: the word IS the state — no "on" style, no second button -->
-        <button id="ordbtn" class="linkbtn ord" type="button"
-          title="Reading direction — tap to flip"></button>
+        <span class="pgrp"><span class="plab">Order</span><button id="ordbtn" class="linkbtn ord" type="button"
+          title="Reading direction — tap to flip"></button></span>
+        <!-- Add comes last: a newcomer reads first. It shows with a timeline open, like Copy;
+             the Library has no Add (a timetree is built in dots). -->
+        <a id="addlink" class="linkbtn" href="add.html"
+          title="Write a card — into this timeline, or a new one of your own">＋ Add a card</a>
       </div>
     </div>
   </header>
 
   <main>
+    <section id="intro" hidden>
+      <p>A <b>timeline</b> is a list of events in date order. Each event is a card with a date and a source.</p>
+      <p>A <b>timetree</b> is a group of timelines.</p>
+      <p>Anyone can publish a card, so check the source before you believe it. <a href="#trust">Read more</a></p>
+    </section>
     <section id="lib" aria-label="Library" hidden></section>
+    <section id="kids" hidden></section>
     <div id="timeline-area"></div>
 
     <section class="contribute">
-      <h2>Don't trust, verify.</h2>
+      <h2 id="trust">Don't trust, verify.</h2>
       <p>Nothing here is vouched for — not by this page, and not by the marker on a card.
         Anyone can publish with the marker. Judge a card by what it carries: a real date,
         the collection it claims, a source you can check, and a key you can look up —
@@ -1031,7 +1025,6 @@ const openRivals   = new Set();          // card coords: a rival submission open
 const expanded     = new Set();          // card coords bent sideways: everything that points at that d, laid across the row
 const citedA       = new Set();          // card coords whose citing cards we've asked for (#a) — grow-only
 const showLive     = new Set();          // card coords: a lapsed gold card showing the live revision
-const hideFold     = new Set();          // slugs whose fold the visitor shut (open by default)
 // A timeline is ONE notary. Several keys may hold the same name; the chips switch between
 // them, and `?k=<pubkey prefix>` carries the choice in the link when it isn't the default.
 let activeN = null;                       // chosen notary coord, or null = the default for the name
@@ -1843,17 +1836,6 @@ function notaryTier(N, ev){
   return !a ? 2 : actMoves(a, ev) ? 0 : 1;
 }
 const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
-// what the fold is holding back — the count IS the information
-function foldOf(c){
-  const N = notaryOf(c);
-  const byD = new Map();
-  if (N) for (const ev of candidatesOf(N)){
-    const d = tag(ev,"d"); (byD.get(d) || byD.set(d,[]).get(d)).push(ev);
-  }
-  // a rival — unpassed under a d the notary passed — stands beside the accepted card, not in the fold
-  const hid = [...byD.values()].filter(g => g.every(ev => tierOf(ev, N) === 2)).flat();
-  return { n: hid.length, keys: new Set(hid.map(ev => ev.pubkey)).size };
-}
 
 // group a timeline's cards by d-tag: one entry per d, versions within — split by where they
 // stand, so an entry can carry passed versions, waiting ones, or (a pure addition) only waiting ones.
@@ -1868,7 +1850,6 @@ function entriesOf(f){
   // Ask for acts on the entire discovery pool before candidacy is known. Otherwise a
   // cold downstream load would need an upstream act in order to decide to fetch it.
   if (N) reachableNotaryCoords([coordOf(N)]).forEach(wantContextActs);
-  const cut = c && hideFold.has(c) ? 1 : 2;                // a shut fold drops the unpassed
   const ord = (a,b) => (startOf(a) < startOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
   const byD = new Map();
   for (const ev of pool){
@@ -1883,8 +1864,7 @@ function entriesOf(f){
     const all   = all0.filter(ev => !taken.includes(ev));
     const evs    = all.filter(ev => tierOf(ev, N) === 0).sort(ord);
     const lapsed = all.filter(ev => tierOf(ev, N) === 1).sort(ord);   // accepted, then revised: gold from the act's copy
-    // unpassed: beside a passed sibling always (a rival, boxed); on their own only once the fold is open
-    const prop   = all.filter(ev => tierOf(ev, N) === 2 && (evs.length + lapsed.length || cut === 2)).sort(ord);
+    const prop   = all.filter(ev => tierOf(ev, N) === 2).sort(ord);   // unpassed: a rival beside a passed sibling, or on its own
     if (!evs.length && !lapsed.length && !prop.length) continue;
     const head = evs[0] || lapsed[0] || prop[0];
     out.push({ d, evs, lapsed, prop, taken, date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
@@ -1922,7 +1902,7 @@ const libRows = () => [...slugs].map(c => { const N = notaryOf(c);
   return { d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
            nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:!!myPk && notariesOf(c).some(n => n.pubkey === myPk) }; });
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
-const libEl = document.getElementById("lib");
+const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
 import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, c => selectF("c:" + c)); scheduleRender(); });
 async function libSignIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (!signerReady()) return void (location.href = "add.html");
@@ -1956,19 +1936,29 @@ function renderTabs(){
   nowEl.classList.toggle("long", name.length > 30);
   const n = activeF ? entriesOf(activeF).length : 0;
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
-  metaEl.innerHTML = activeF ? `${n} entr${n === 1 ? "y" : "ies"} · signed decisions` : "";
+  metaEl.innerHTML = activeF ? `${n} event${n === 1 ? "" : "s"}` : "";
   metaEl.style.display = activeF ? "" : "none";
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
   dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
   renderNotaries();
-  sumTog.style.display = ordBtn.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
+  sumTog.parentElement.style.display = ordBtn.parentElement.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
   if (activeF && !tabsEl.firstChild){
     tabsEl.innerHTML = `<button class="linkbtn" type="button" title="Every timeline — pick another">‹ Library</button>`;
     tabsEl.firstChild.onclick = () => selectF(null);
   } else if (!activeF) tabsEl.innerHTML = "";
 }
+
+// a timetree lists the timelines it groups; one the relays don't have is named, not waited on
+function renderKids(){
+  const src = notarySources(activeF ? notaryOf(activeF.slice(2)) : null), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  kidsEl.hidden = !src.length; if (!src.length) return;
+  kidsEl.innerHTML = `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` + src.map(a => { const d = a.split(":").slice(2).join(":");
+    return notaries.has(a) ? `<button type="button" data-d="${esc(d)}"><b>${esc(slugName(d))}</b><small>${pl(entriesOf("c:" + d).length, "event")}</small></button>`
+      : `<span><b>${esc(d.replaceAll("-", " "))}</b><small>${fetching() ? "…" : "not found on the relays"}</small></span>`; }).join("");
+}
+kidsEl.onclick = e => { const b = e.target.closest("button[data-d]"); if (b) selectF("c:" + b.dataset.d); };
 
 // ═══════════════ render ═══════════════
 function render(){
@@ -1983,11 +1973,11 @@ function render(){
   if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
   renderStatus();
   renderTabs();
-  libEl.hidden = !!activeF; areaEl.hidden = !activeF;
+  libEl.hidden = introEl.hidden = !!activeF; areaEl.hidden = !activeF; renderKids();
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!myPk, loading:wait || !down && !slugs.size, signIn:libSignIn });
+    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!myPk, loading:wait || !down && !slugs.size, signIn:libSignIn, treesLast:true });
     drumMeasure(); return;
   }
 
@@ -1996,14 +1986,12 @@ function render(){
   // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
   if (draft && !pickStage){ entries.push(draftEntry()); entries.sort(byWhen); }
 
-  // a manual notary with nothing accepted yet is a timeline of folded cards, not silence —
-  // the fold must paint (and renderTimeline is where acts get subscribed), so only a truly
-  // empty pool shows the spinner
-  if (!entries.length && !(activeF && foldOf(activeF.slice(2)).n)){
+  if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
     const anyUp   = [...relayState.values()].some(v => v === "up");
     areaEl.innerHTML = allDown
       ? `<div class="msg err">⚠ could not reach any relay — check your connection and reload.</div>`
+      : anyUp && !fetching() ? `<div class="msg">No events yet.</div>`
       : `<div class="msg"><span class="spinner"></span>${anyUp?"listening for timelines…":"connecting to relays…"}</div>`;
     drumMeasure();                                         // no spine on screen → no gauge
     return;
@@ -2095,13 +2083,6 @@ function bindTaps(){                                      // gap expanders + acc
     if (dv){                                              // diff view switch, per card, in the URL
       dv.dataset.v === "p" ? plainCards.add(dv.dataset.d) : plainCards.delete(dv.dataset.d);
       history.replaceState(null, "", timelineUrl());
-      render();
-      return;
-    }
-    const fr = e.target.closest(".foldrow");
-    if (fr && fr.dataset.c){
-      const c = fr.dataset.c;
-      hideFold.has(c) ? hideFold.delete(c) : hideFold.add(c);
       render();
       return;
     }
@@ -2281,14 +2262,6 @@ function renderTimeline(entries){
            ` style="height:${Math.round(Math.max(x ? CROSS : FLOOR, h))}px"></div>`;
   };
   let html = `<div class="mtl"><div class="track">`;
-  // the fold heads the spine, outside the future zone: it isn't a moment in the record,
-  // it's what the record hasn't taken in — shown by default, the blue border says which.
-  const fc = activeF ? activeF.slice(2) : "";
-  const fold = fc ? foldOf(fc) : { n: 0, keys: 0 };
-  if (fold.n)
-    html += `<div class="foldrow" data-c="${esc(fc)}"><div class="lab">` +
-      `${fold.n} submitted · ${fold.keys} key${fold.keys === 1 ? "" : "s"}` +
-      `<span class="go">${hideFold.has(fc) ? "show" : "hide"}</span></div></div>`;
   // reading new→old, the walk STARTS in the future — the zone opens before any card,
   // and the seam falls where the walk leaves it (see the crossing below)
   if (readDesc && entries.length && entries[0].frac > nowFrac){
