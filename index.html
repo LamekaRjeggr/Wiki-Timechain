@@ -182,30 +182,12 @@
   /* depth + theme: the same segmented control the diff bar uses (.dtog/.ds) */
   .pickrow .dtog,.mast .dtog{border-radius:7px}
   .pickrow .ds,.mast .ds{padding:5px 10px;font-size:11px}
-  /* the floor glyph: the same three-line pyramid every card wears, as page-wide toggles —
-     here the lines are wide enough to say their own names. Fixed widths, a mnemonic for
-     how much text each field is, not a measurement. The title line is not a control: it
-     is always shown, which is the rule made visible. Filled means you switched it on;
-     the title line is outlined instead — a fixture, not a switch you could flip off.
-     Same amber either way: the page has one hue, and on-state is fill, never colour.
-     The transparent border on every line keeps all three the same height. */
-  .fglyph{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
-  .fglyph .fs{display:block;border:1px solid transparent;cursor:pointer;font-family:inherit;
-    font-size:13px;
-    font-weight:500;line-height:1;padding:7px 0;text-align:center;border-radius:4px;
-    background:var(--border);color:var(--dim);transition:background .12s,color .12s}
-  /* Taller courses and a tighter top, so the stack rises instead of sprawling — the card
-     mark's edge is about 24° off vertical and these widths land within a degree or two.
-     They can't taper as hard as the bare bars do: the words set the floor, and "records"
-     needs its 130px. */
-  .fglyph .fs.t{cursor:default;width:76px;background:#fff;color:#000;border-color:#fff}   /* a card: white, black type */
-  .fglyph .fs.s{width:104px}
-  .fglyph .fs.c{width:130px}
-  /* lit courses wear the card ladder's own rung colors — the glyph is the ladder's key */
-  .fglyph .fs.s.on{background:var(--rung-s);color:var(--ink)}
-  .fglyph .fs.c.on{background:var(--rung-c);color:var(--ink)}
-  .fglyph button.fs:hover{color:var(--text)}
-  .fglyph button.fs.on:hover{color:var(--ink)}
+  /* the floor: three words, each in its card color, stacked above the card's own glyph. Grey = that field is off. */
+  .mtl .showrow{display:grid;grid-template-columns:minmax(0,1fr) var(--gut);column-gap:var(--cgap)}
+  .fglyph{grid-column:1;justify-self:end;margin-right:12px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .fglyph .fs{border:0;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:16px;font-weight:700;line-height:1.35;color:var(--dim)}
+  .fglyph .fs.t{cursor:default;color:var(--text)} .fglyph .fs.s.on{color:var(--rung-s)} .fglyph .fs.c.on{color:var(--rung-c)}
+  .fglyph button.fs:hover{text-decoration:underline}
   .linkbtn{background:transparent;border:1px solid var(--border);color:var(--dim);
     border-radius:7px;padding:6px 13px;font-size:12px;font-family:inherit;font-weight:500;
     cursor:pointer;transition:color .12s,border-color .12s;
@@ -216,7 +198,6 @@
   .hmenu{position:relative} #hbtn{font-size:18px;line-height:1;padding:6px 11px}   /* share lives behind three lines, top right */
   .hpop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;gap:6px;min-width:170px;padding:6px;background:var(--panel);border:1px solid var(--border);border-radius:9px}
   .hpop[hidden]{display:none} .hpop .linkbtn{text-align:left}
-  .pgrp{display:inline-flex;align-items:center;gap:7px} .plab{font-size:12px;color:var(--dim)}   /* a word naming each view control */
   .linkbtn.ord{font-family:var(--mono);font-size:11.5px;padding:2px 9px;margin-left:10px}   /* the word IS the state */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
@@ -792,11 +773,6 @@
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
-        <span class="pgrp"><span class="plab">Show</span><div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
-          <span class="fs t" title="titles — always shown">titles</span>
-          <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
-          <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
-        </div></span>
         <!-- reading direction: the word IS the state — no "on" style, no second button -->
         <!-- Add comes last: a newcomer reads first. It shows with a timeline open, like Copy;
              the Library has no Add (a timetree is built in dots). -->
@@ -814,6 +790,11 @@
     </section>
     <section id="lib" aria-label="Library" hidden></section>
     <section id="kids" hidden></section>
+    <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
+          <span class="fs t" title="titles — always shown">titles</span>
+          <button class="fs s" type="button" data-r="s" title="summaries — the publisher's reading">summaries</button>
+          <button class="fs c" type="button" data-r="c" title="records — what happened, cited">records</button>
+        </div>   <!-- moved into the spine on every draw -->
     <div id="timeline-area"></div>
 
     <section class="contribute">
@@ -1950,7 +1931,6 @@ function renderTabs(){
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
   dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
   renderNotaries();
-  sumTog.parentElement.style.display = activeF ? "" : "none";   // reading controls belong to a timeline
   if (activeF && !tabsEl.firstChild){
     tabsEl.innerHTML = `<button class="linkbtn" type="button" title="Every timeline — pick another">‹ Library</button>`;
     tabsEl.firstChild.onclick = () => selectF(null);
@@ -2268,7 +2248,7 @@ function renderTimeline(entries){
     return `<div class="gap${x ? ` x ${prevSide}${side}` : side === "l" ? " l" : ""}"` +
            ` style="height:${Math.round(Math.max(x ? CROSS : FLOOR, h))}px"></div>`;
   };
-  let html = `<div class="mtl"><div class="track">`;
+  let html = `<div class="mtl"><div class="track"><div class="showrow"></div>`;
   // reading new→old, the walk STARTS in the future — the zone opens before any card,
   // and the seam falls where the walk leaves it (see the crossing below)
   if (readDesc && entries.length && entries[0].frac > nowFrac){
@@ -2375,6 +2355,7 @@ function renderTimeline(entries){
   if (nowShown) html += readDesc ? `</div>` + nowDiv() : `</div>`;
   html += `</div></div>`;
   areaEl.innerHTML = html;
+  areaEl.querySelector(".showrow").append(sumTog);   // the floor words sit over the first card's glyph
   // a bent row opens centred on its card — the arms are reached by scrolling the row, not the page
   areaEl.querySelectorAll(".node.bent>.xrow").forEach(x => { const c = x.querySelector(".card"); x.scrollLeft = c.offsetLeft - (x.clientWidth - c.offsetWidth) / 2; });
   bindTaps();
