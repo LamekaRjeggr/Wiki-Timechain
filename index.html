@@ -1536,8 +1536,9 @@ function scheduleMemberFetch(){
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","wtc"]));
-      ws.send(JSON.stringify(["REQ","wtc", ...memberFilters()]));
+      ws.send(JSON.stringify(["REQ","wtc", ...live(memberFilters())]));
     });
+    pullHistory();
   }, 400);
 }
 function reachableNotaryCoords(roots){
@@ -1568,6 +1569,19 @@ function wantPointers(ev, d){
   if (!citedA.has(coord)){ citedA.add(coord); scheduleMemberFetch(); }
   if (!actE.has(ev.id)){ actE.add(ev.id); scheduleActFetch(); }
 }
+// Each sub above stays open for what is new since the page loaded (live); what the relays already hold is
+// pulled whole, paged, by lib/pull.mjs — one REQ is cut off at the relay's cap without a word.
+const T0 = Math.floor(Date.now() / 1000), live = fs => fs.map(f => ({ ...f, since:T0 }));
+function pullHistory(){
+  const pks = delFilter(), by = (name, fs) => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && fs.forEach(f => {
+    const k = Object.keys(f).find(k => k !== "kinds"); P.pull(ws, name, { kinds:f.kinds }, k, f[k], scheduleRender); }));
+  by("ntry", [{ kinds:[NOTARY_KIND], "#t":[MARKER] }]); by("wtc", memberFilters()); by("act", actFilters());
+  if (pks.length) by("del", [{ kinds:[5], authors:pks }]);
+  scheduleRender();   // a pull that found nothing new still ends a wait
+}
+// still fetching somewhere: a count now would be a guess
+const fetching = () => !P || P.busy(sockets) || vQ.length > 0 || vBusy || !!(memberTimer || actTimer || delTimer)
+  || [...relayState.values()].includes("connecting") && performance.now() < 5000;
 function wantSlug(c){ if (c && !wanted.has(c)){ wanted.add(c); scheduleMemberFetch(); } }
 
 function ingestNotary(ev){
@@ -1616,7 +1630,8 @@ function scheduleDelFetch(){
   delTimer = setTimeout(() => {
     delTimer = null;
     const pks = delFilter(); if (!pks.length || pks.join() === askedDel) return; askedDel = pks.join();
-    sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks }])));
+    sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks, since:T0 }])));
+    pullHistory();
   }, 400);
 }
 
@@ -1785,8 +1800,9 @@ function scheduleActFetch(){
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify(["CLOSE","act"]));
-      ws.send(JSON.stringify(["REQ","act", ...f]));
+      ws.send(JSON.stringify(["REQ","act", ...live(f)]));
     });
+    pullHistory();
   }, 250);
 }
 
@@ -1901,7 +1917,7 @@ function selectF(f){
 }
 
 // The Library's rows: every notary name the relays hold, one row each — cards not needed, so an
-// unopened timeline still lists; its count shows once its cards were fetched.
+// unopened timeline still lists; its count shows once every relay has sent all its cards.
 const libRows = () => [...slugs].map(c => { const N = notaryOf(c);
   return { d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
            nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:!!myPk && notariesOf(c).some(n => n.pubkey === myPk) }; });
@@ -1964,12 +1980,14 @@ function render(){
                                : [...new Set(matching(wantedF).map(collectionSlug))].sort()) : [];
   if (want.length) activeF = "c:" + want[0];   // no link, or not found yet → the Library
   if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
+  if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
   renderStatus();
   renderTabs();
   libEl.hidden = !!activeF; areaEl.hidden = !activeF;
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
-    if (libUpdate) libUpdate({ rows:libRows(), signedIn:!!myPk, loading:!down && !slugs.size, signIn:libSignIn });
+    const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
+    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!myPk, loading:wait || !down && !slugs.size, signIn:libSignIn });
     drumMeasure(); return;
   }
 
@@ -3616,7 +3634,7 @@ async function drainGate(){
     }
     if (spent) await new Promise(r => setTimeout(r, 0));   // breathe between real checks
   }
-  vBusy = false;
+  vBusy = false; scheduleRender();   // the Library waits on the gate too
 }
 
 // ═══════════════ relay connections ═══════════════
@@ -3630,26 +3648,29 @@ function connect(url){
     relayState.set(url,"up");
     renderStatus();
     // discovery = the corpus's notaries, kept open so a brand-new timeline appears live
-    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER] }]));
+    ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }]));
     const mf = memberFilters();
     if (mf.length)
-      ws.send(JSON.stringify(["REQ","wtc", ...mf]));
+      ws.send(JSON.stringify(["REQ","wtc", ...live(mf)]));
     const af = actFilters();
     if (af.length)
-      ws.send(JSON.stringify(["REQ","act", ...af]));
+      ws.send(JSON.stringify(["REQ","act", ...live(af)]));
     const pks = delFilter();
     if (pks.length)
-      ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks }]));
+      ws.send(JSON.stringify(["REQ","del",{ kinds:[5], authors:pks, since:T0 }]));
+    pullHistory();
   };
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
+    P.route(ws, data);
     if (data[0] === "EVENT"){
       // every path goes through admit() — there is no unchecked way in
-      if (data[1] === "wtc")    admit(data[2], ingest);
-      if (data[1] === "ntry")   admit(data[2], ingestNotary);
-      if (data[1] === "prof")   admit(data[2], ingestProfile);
-      if (data[1] === "act")    admit(data[2], ingestAct);
-      if (data[1] === "del" && data[2]?.kind === 5) admit(data[2], ingestDelete);
+      const sub = String(data[1]).split("~")[0];   // a page of history is name~n
+      if (sub === "wtc")    admit(data[2], ingest);
+      if (sub === "ntry")   admit(data[2], ingestNotary);
+      if (sub === "prof")   admit(data[2], ingestProfile);
+      if (sub === "act")    admit(data[2], ingestAct);
+      if (sub === "del" && data[2]?.kind === 5) admit(data[2], ingestDelete);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
       const t = tallies.get(data[1]);
@@ -3665,8 +3686,10 @@ function connect(url){
 }
 
 // ═══════════════ go ═══════════════
+let P = null;   // lib/pull.mjs: the relays are opened once it is here
 render();
-RELAYS.forEach(connect);
+import("./lib/pull.mjs").then(m => { P = m; RELAYS.forEach(connect); });
+setTimeout(scheduleRender, 5100);   // fetching() stops waiting on relays that never opened
 setTimeout(() => {
   RELAYS.forEach(r => { if (relayState.get(r) === "connecting") relayState.set(r,"down"); });
   renderStatus(); render();
