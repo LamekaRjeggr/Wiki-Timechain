@@ -40,6 +40,7 @@
     --future:#28e5ff;        /* neon cyan — scheduled, not yet happened */
     --future-dim:#134a55;
     --text:#e9eaee;
+    --head:#fff;             /* Cardex + tagline */
     --text-2:#d7d9df;        /* inline code */
     --text-3:#c6c8ce;        /* long-form prose, card bodies */
     --rung-s:#c8f5c5;        /* summary rung — terminal mint */
@@ -75,7 +76,7 @@
     --accent:#8cc6ff;        /* the one cool note in the chrome — links stay unmistakable */
     --past:#eebc84; --past-dim:#8a6c42;
     --future:#4fd8e8; --future-dim:#2f6f79;
-    --text:#f8f3ea; --text-2:#eae2d5; --text-3:#dbd2c3;
+    --head:#fff; --text:#f8f3ea; --text-2:#eae2d5; --text-3:#dbd2c3;
     --rung-s:#d3eec6; --rung-c:#f79c62;
     --dim:#c9bca4; --faint:#91836e; --gutline:#a2947e;
     --ink:#2a1c06; --warn:#ffc492;
@@ -101,7 +102,7 @@
     --accent:#0b57c4;
     --past:#8a5410; --past-dim:#d8bb92;
     --future:#0d6f86; --future-dim:#9dc6d2;
-    --text:#191b1f; --text-2:#2b2f36; --text-3:#3a3f47;
+    --head:#191b1f; --text:#191b1f; --text-2:#2b2f36; --text-3:#3a3f47;
     --rung-s:#25502f; --rung-c:#8a4a12;
     --dim:#61666f; --faint:#a8adb5; --gutline:#9aa0a9;
     --ink:#fffaf2; --warn:#9a4a00;
@@ -128,12 +129,13 @@
   }
   .wrap{max-width:1000px;margin:0 auto}
   /* masthead frame is left/right chrome; the subject below it stays centre stage */
-  .mast{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap}
-  .mastr{display:flex;align-items:center;gap:14px;margin-left:auto} .mnav{font-size:12px;color:var(--dim)} .mnav a{color:inherit}   /* the other pages, as dots names them: top right */
+  .mast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+  .mast .tabs{grid-column:1} .brand{grid-column:2;text-align:center;color:var(--head)}   /* name + tagline: centre top */
+  .mastr{grid-column:3;justify-self:end;display:flex;align-items:center;gap:14px} .mnav{font-size:12px;color:var(--dim)} .mnav a{color:inherit}   /* the other pages, as dots names them: top right */
   .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
     gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
-  .sub{margin:0;color:var(--text);font-size:15px;line-height:1.55;max-width:60ch;text-align:left}
+  .sub{margin:0;font-size:15px;line-height:1.55}
   .status{font-size:12px;color:var(--dim);white-space:nowrap;margin-left:auto}
   .status b{color:var(--text);font-weight:600}
   .relaydot{display:inline-block;width:7px;height:7px;border-radius:999px;
@@ -144,7 +146,7 @@
   /* which timeline you're reading. The picker below is the control; this is the answer,
      and it's the page's largest type — the site mark is chrome, the collection is the subject. */
   .collnow{margin:24px auto 0;max-width:24ch;font-size:clamp(21px,5.2vw,30px);
-    font-weight:650;letter-spacing:-.02em;line-height:1.18;color:var(--text);
+    font-weight:650;letter-spacing:-.02em;line-height:1.18;color:var(--rung-s);
     text-align:center;text-wrap:balance}
   /* slugs are machine fields and some are very long — at full size the rezoning slug took
      four lines of a phone's header and pushed the spine off screen. Still the biggest type. */
@@ -229,6 +231,7 @@
 
   @media (max-width:640px){
     h1{font-size:17px}
+    .mast{display:flex;flex-wrap:wrap} .mastr{margin-left:auto} .brand{order:1;width:100%}   /* phone: buttons row, name under it */
   }
 
   /* ── vertical spine-column timeline (the only view, all widths) ──
@@ -744,7 +747,7 @@
            never in the URL) so it lives up here with the mark, not among the view controls. -->
       <div class="mast">
         <div class="tabs" id="tabs"></div>   <!-- ‹ Library, once a timeline is open: first thing top-left -->
-        <h1>Cardex</h1>
+        <div class="brand"><h1>Cardex</h1><div class="sub">Events on Timelines.</div></div>
         <div class="mastr"><span class="mnav"><a id="dotsnav" href="dots.html">dots</a> · <a id="addnav" href="add.html">add</a></span>
         <div class="dtog" id="thmtog" title="How light this page reads">
           <button class="ds" type="button" data-thm="dark">dark</button>
@@ -760,7 +763,6 @@
           </span></span></div>
       </div>
       <div class="mastsub">
-        <div class="sub">Events on Timelines.</div>
         <div class="status" id="status">
           <span><span class="spinner"></span>connecting…</span>
         </div>
