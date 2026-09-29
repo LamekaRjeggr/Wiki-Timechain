@@ -495,7 +495,7 @@ function render(){
   const localbtn = document.getElementById("localbtn"); if (localbtn) localbtn.onclick = () => { local = !local; open = null; colKey = null; setUrl(); render(); };
   const pushbtn = document.getElementById("pushbtn"); if (pushbtn) pushbtn.onclick = () => { if (pushT){ clearInterval(pushT); pushT = null; } else { pushT = setInterval(tick, 60000); tick(); } render(); };
   status(); empty.hidden = dots.length > 0; empty.textContent = loading() ? "loading…" : "no cards yet";
-  band.hidden = !coord; card.hidden = !coord || exploring(); lib.hidden = !!coord; if (!coord) return library();
+  band.hidden = !coord; card.hidden = !coord || exploring(); lib.hidden = !!coord; if (!coord) return library(fold.projections, all);
   column(); draw();
 }
 
@@ -628,10 +628,17 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
 
 const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").replace(/^0+(?=\d)/, ""), span = x => yr(x.date) === yr(x.last) ? yr(x.date) : yr(x.date) + "–" + yr(x.last);   // the years a timeline covers
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
-function library(){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
-  const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));
+let libL = new Set(), libN = new Set();   // the subjects each side holds, so a Library row opens where it has cards
+function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
+  const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d)));
+  // with your relay in the room the Library reads both sides, whichever way the switch sits: what your relay has, how much of it a main relay has too, and what only the network has
+  const [L, N] = ADD ? [true, false].map(v => { const was = local; local = v; const r = members(null, projections, all); local = was; return r; }) : [dots, []];
+  libL = new Set(L.flatMap(x => x.tls)); libN = new Set(N.flatMap(x => x.tls));
+  const both = x => [...x.all.keys()].filter(id => !isLocal(id)).length, rowsOf = ADD
+    ? [...L.map(x => ({ x, where:x.n ? `${x.n} local` + (both(x) ? ` · ${both(x)} on both` : "") : undefined })), ...N.filter(x => !x.tls.some(d => libL.has(d))).map(x => ({ x, where:x.n ? `${x.n} on nostr` : undefined }))]
+    : L.map(x => ({ x })), has = new Set([...libL, ...libN]);
   const bare = wait ? [...new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
-  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), mine:mine(x.tls) })),
+  libUpdate({ rows: [...rowsOf.map(({ x, where }) => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), mine:mine(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", mine:mine([d]) }))],
     signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null, signIn });
 }
@@ -702,7 +709,7 @@ const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib");
-const libUpdate = mountLibrary(lib, d => choose(d));
+const libUpdate = mountLibrary(lib, d => { if (ADD && !(local ? libL : libN).has(d)) local = !local; choose(d); });   // a row opens on a side that has it
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead
