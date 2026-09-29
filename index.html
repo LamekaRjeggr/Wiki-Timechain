@@ -128,7 +128,7 @@
   }
   .wrap{max-width:1000px;margin:0 auto}
   /* masthead frame is left/right chrome; the subject below it stays centre stage */
-  .mast{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .mast{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap}
   .mastr{display:flex;align-items:center;gap:14px;margin-left:auto} .mnav{font-size:12px;color:var(--dim)} .mnav a{color:inherit}   /* the other pages, as dots names them: top right */
   .mastsub{margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;
     gap:18px;flex-wrap:wrap}
@@ -168,7 +168,8 @@
     color:var(--faint);margin-top:2px}
 
   /* the Library (lib/library.mjs) reads the dots page's color names; here they point at ours */
-  .tabs{margin-top:16px;display:flex;justify-content:center}
+  .tabs{display:flex} .tabs:empty{display:none}
+  .tabs .linkbtn{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:700;font-size:16px;padding:10px 18px;border-radius:8px}
   #intro{max-width:720px;margin:14px auto 0;padding:0 16px;font-size:16px;line-height:1.5;color:var(--dim)} #intro p{margin:4px 0} #intro b{color:var(--text)} #intro a{color:var(--accent)}
   #kids{max-width:720px;margin:18px auto 0;font-size:15px;color:var(--dim)} #kids p{margin:0 0 6px}
   #kids>button,#kids>span{display:flex;justify-content:space-between;gap:12px;width:100%;margin-top:6px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:inherit;color:var(--text);text-align:left}
@@ -759,6 +760,7 @@
       <!-- band 1: masthead — the site's chrome. Theme is a device preference (localStorage,
            never in the URL) so it lives up here with the mark, not among the view controls. -->
       <div class="mast">
+        <div class="tabs" id="tabs"></div>   <!-- ‹ Library, once a timeline is open: first thing top-left -->
         <h1>Cardex</h1>
         <div class="mastr"><span class="mnav"><a id="dotsnav" href="dots.html">dots</a> · <a id="addnav" href="add.html">add</a></span>
         <div class="dtog" id="thmtog" title="How light this page reads">
@@ -777,8 +779,6 @@
       <h2 class="collnow" id="collnow"></h2>
       <div class="collmeta" id="collmeta"></div>
       <div class="roster" id="roster" style="display:none"></div>
-      <!-- band 3: choosing — read something else -->
-      <div class="tabs" id="tabs"></div>   <!-- ‹ Library, once a timeline is open -->
       <!-- band 4: verbs on the current view. Depth rides the URL, so it sits beside
            the button that copies that URL; Add carries ?c= of this timeline. -->
       <div class="pickrow">
