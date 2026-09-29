@@ -136,7 +136,7 @@
     gap:18px;flex-wrap:wrap}
   h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
   .sub{margin:0;font-size:15px;line-height:1.55}
-  .status{font-size:14px;color:var(--dim);white-space:nowrap;margin-left:auto}
+  .status{font-size:14px;color:var(--dim);margin-left:auto;text-align:right} .status span{white-space:nowrap}
   .status b{color:var(--text);font-weight:600}
 
   /* which timeline you're reading. The picker below is the control; this is the answer,
@@ -173,7 +173,7 @@
   #kids>button,#kids>span{display:flex;justify-content:space-between;gap:12px;width:100%;margin-top:6px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:inherit;color:var(--text);text-align:left}
   #kids>button{cursor:pointer} #kids>button:hover{border-color:var(--rail-dim)} #kids small{color:var(--dim);white-space:nowrap}
   #lib:not([hidden]){display:flex;flex-direction:column} #lib #nosign{order:1}   /* sign-in waits under the list: read first */
-  #lib{--t0:var(--text);--t1:var(--dim);--t2:var(--dim);--line:var(--border);--sans:var(--font);padding:0 16px}
+  #lib{--pick:var(--rail);--t0:var(--text);--t1:var(--dim);--t2:var(--dim);--line:var(--border);--sans:var(--font);padding:0 16px}
 
   /* copy-a-link-to-this-timeline button */
   .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
@@ -182,6 +182,7 @@
   .pickrow .ds,.mast .ds{padding:5px 10px;font-size:14px}
   /* the floor: three words, each in its card color, stacked above the card's own glyph. Grey = that field is off. */
   .mtl .showrow{display:grid;grid-template-columns:minmax(0,1fr) var(--gut);column-gap:var(--cgap)}
+  .fglyph[hidden]{display:none}
   .fglyph{grid-column:1;justify-self:end;margin-right:12px;display:flex;flex-direction:column;align-items:center;gap:2px}
   .fglyph .fs{border:0;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:16px;font-weight:700;line-height:1.35;color:var(--dim)}
   .fglyph .fs.t{cursor:default;color:var(--text)} .fglyph .fs.s.on{color:var(--rung-s)} .fglyph .fs.c.on{color:var(--rung-c)}
@@ -1873,7 +1874,7 @@ function slugName(c){ const n = notaryOf(c); return n ? tag(n,"title") || c : c.
 // count under the collection's own name (collmeta) — each fact beside its subject.
 function renderStatus(){
   const v = [...relayState.values()], up = v.filter(x => x === "up").length;
-  statusEl.textContent = up ? "Connected" : v.includes("connecting") ? "Connecting…" : "Offline";
+  statusEl.innerHTML = `<span>${up ? "Connected" : v.includes("connecting") ? "Connecting…" : "Offline"}</span>` + (myPk ? ` · <span>Signed in as ${authorLabel(myPk)}</span>` : "");   // who you are, on every screen; a phone breaks between the two
   statusEl.title = `${up} of ${RELAYS.length} relays answering`;
 }
 
@@ -1961,7 +1962,7 @@ function render(){
   if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
   renderStatus();
   renderTabs();
-  libEl.hidden = introEl.hidden = !!activeF; areaEl.hidden = !activeF; renderKids();
+  libEl.hidden = introEl.hidden = !!activeF; areaEl.hidden = sumTog.hidden = !activeF; renderKids();   // the floor words belong to a timeline, not the Library
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
