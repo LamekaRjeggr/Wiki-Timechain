@@ -248,7 +248,9 @@ function connect(url, wait = 2000){   // a relay that drops or never answers is 
   ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullFrom(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER], schedule); asked = askedDel = ""; ask(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
-    route(ws, d); if (d[0] !== "EVENT") return;
+    route(ws, d);
+    if (d[0] === "OK" && d[2] === true && MAIN.includes(url)){ const s = seenOn.get(d[1]); if (s && !s.has(url)){ s.add(url); schedule(); } return; }   // a main relay stored it: a pushed card keeps its old created_at, so the live subs (since load) never echo it back
+    if (d[0] !== "EVENT") return;
     const sub = String(d[1]).split("~")[0];   // a page of history is name~n
     if (sub === "ntry") admit(d[2], ingestNotary, url);
     if (sub === "wtc")  admit(d[2], ingestCard, url);
