@@ -648,6 +648,25 @@
   .draftcard .cnt{font-family:var(--mono);font-size:14px;color:var(--dim)}
   .draftcard .cnt.hid{display:none}
   .draftcard .cnt.at{color:var(--warn)}   /* over the cap — orange, never red, meaning also in the count */
+  /* the plain-words card: every box says in words, above it, what it wants */
+  .draftcard .dlab{display:block;font-size:15px;font-weight:600;color:var(--text);margin:14px 0 5px}
+  .draftcard .dlab i{font-style:normal;font-weight:400;color:var(--dim)}
+  .draftcard .ded-t,.draftcard .ded-s,.draftcard .ded-b{border:1px solid var(--faint);border-radius:6px;padding:6px 9px}
+  .draftcard .ded-b{min-height:7em}
+  .draftcard .dwhen{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .draftcard .dwhen label{display:flex;flex-direction:column;gap:3px;font-size:14px;color:var(--dim)}
+  .draftcard input,.draftcard select{font:inherit;font-size:16px;color:var(--text);background:var(--panel);
+    border:1px solid var(--faint);border-radius:6px;padding:6px 8px}
+  .draftcard input:focus,.draftcard select:focus{outline:2px solid var(--rail);outline-offset:1px}
+  .draftcard select:disabled,.draftcard input:disabled{opacity:.45}
+  .draftcard .dy{width:5.5em}
+  .draftcard .dd{width:3.5em}
+  .draftcard .dsrc{display:flex;flex-wrap:wrap;gap:8px}
+  .draftcard .dsrc input{flex:1 1 14em}
+  .draftcard .dwheel,.draftcard .dkeep{font:inherit;font-size:14px;cursor:pointer;background:none;
+    border:1px solid var(--faint);border-radius:6px;color:var(--text);padding:5px 12px}
+  .draftcard .dwheel{border:0;color:var(--dim);text-decoration:underline dotted;padding:6px 2px}
+  .draftcard .dx.arm{color:var(--warn);font-size:14px}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
@@ -1973,7 +1992,11 @@ function render(){
   const entries = activeF ? entriesOf(activeF) : [];
   // the draft is a spine entry like any other — but NOT while its date is being picked:
   // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
-  if (draft && !pickStage){ entries.push(draftEntry()); entries.sort(byWhen); }
+  // with no date yet it waits at the top of the page; a date sorts it into place
+  if (draft && !pickStage){
+    if (draftDate()){ entries.push(draftEntry()); entries.sort(byWhen); }
+    else entries.unshift(draftEntry(entries[0]));
+  }
 
   if (!entries.length){
     const allDown = [...relayState.values()].every(v => v === "down");
@@ -3216,48 +3239,69 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", time:"", y:null, m:null, day:null, date2:null, dsuf: mintSuffix(),
-            stage:"year", seedYr: (face && face.yr) || String(new Date().getFullYear()) };
-  pickEnter("year");            // before render, so the spine renders the ghost, not a card
-  render();
-  pickGhost(); pickTraverse();  // land on the seeded year among the cards already there
+  draft = { title:"", summary:"", content:"", srcName:"", srcUrl:"", time:"", y:null, m:null, day:null, date2:null,
+            dsuf: mintSuffix(), stage:"idle", seedYr: (face && face.yr) || String(new Date().getFullYear()),
+            ...keptDraft() };
+  // the card opens at the top, asking for the year first; the wheel stays one click away
+  draftPlaced(draftDate() ? null : ".dy");
 }
-function discardDraft(){
+// a draft is kept per timeline until it is published or thrown away — closing never loses it
+const keepKey = () => "wtc:keep:" + activeF.slice(2);
+function keptDraft(){
+  try { return JSON.parse(localStorage.getItem(keepKey())) || {}; } catch { return {}; }
+}
+function keepDraftNow(){
+  if (!draft) return;
+  const { title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf } = draft;
+  try { localStorage.setItem(keepKey(), JSON.stringify({ title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf,
+                                                          stage: y ? "set" : "idle" })); } catch {}
+}
+function closeDraft(){
   if (!draft) return;
   draft = null;
   pickToEl.classList.remove("show");
   if (pickStage) pickExit();
   render();
 }
+function keepDraft(){ keepDraftNow(); closeDraft(); }
+function discardDraft(){
+  try { localStorage.removeItem(keepKey()); } catch {}
+  closeDraft();
+}
 // after a date commit: the draft re-sorts into place and the page follows it there.
 // Mid-pick the jump is instant and marked as ours, so the page→wheel sync doesn't
 // read it back as the reader scrolling.
 // only ever called for a card: mid-pick there is no card to place, and the traverse has
 // already put the page where the ghost is
-function draftPlaced(){
+function draftPlaced(focus){
   if (pickStage) return;
   pickToEl.classList.toggle("show", !!draft && draft.stage === "set" && draft.date2 == null);
+  keepDraftNow();
   render();
   const n = areaEl.querySelector(".node.draft");
   if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
+  const f = focus && areaEl.querySelector(".draftcard " + focus);
+  if (f) f.focus({ preventScroll: true });
 }
 
-// the synthetic spine entry — while the wheel spins it rides the tentative date,
-// before any commit it sits at the seeded year
-function draftEntry(){
-  const date = draftDate() || draft.seedYr;
+// the synthetic spine entry — while the wheel spins it rides the tentative date; with no
+// date yet it sits at the top, borrowing the first card's place so no seam opens above it
+function draftEntry(top){
+  const date = draftDate() || (top ? top.date : draft.seedYr);
   return { d: "__draft__", draft: true, evs: [], prop: [],
            date, time: TIME_RE.test(draft.time) ? draft.time : "",
-           frac: yearFrac(date), title: draft.title, several: false };
+           frac: top && !draftDate() ? top.frac : yearFrac(date), title: draft.title, several: false };
 }
 
 // the date tab shows the claim committed so far. It never has to speak mid-spin: the card
 // isn't on the spine while the wheel is out — the ghost is.
 const draftTabText = () => {
   const date = draftDate();
-  if (!date) return "pick a date";
+  if (!date) return "no date yet";
   return showDate(spanOf(date, draft.date2));
 };
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August",
+                     "September","October","November","December"];
 
 function draftNodeHtml(e, future){
   const yr = String(e.date).slice(0, 4);
@@ -3265,8 +3309,24 @@ function draftNodeHtml(e, future){
     `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
   const btn = hasSigner
-    ? `<button class="dpub" type="button" disabled>sign &amp; publish</button>`
-    : `<button class="dpub dhand" type="button" disabled title="no NIP-07 extension here — add.html signs with a bunker or nsec">finish in the writer →</button>`;
+    ? `<button class="dpub" type="button" disabled title="needs a date and what happened">Sign your name &amp; add</button>`
+    : `<button class="dpub dhand" type="button" disabled title="no signer in this browser — the next page signs with your phone or a key">Sign your name &amp; add →</button>`;
+  const lab = (text, note) => `<span class="dlab">${text}${note ? ` <i>${note}</i>` : ""}</span>`;
+  const months = `<option value="">—</option>` + MONTH_NAMES.map((n, i) => {
+    const v = String(i + 1).padStart(2, "0");
+    return `<option value="${v}"${draft.m === v ? " selected" : ""}>${n}</option>`;
+  }).join("");
+  const when = lab("When?", "Year alone is fine.") +
+    `<div class="dwhen">` +
+    `<label>Year<input class="dy" inputmode="numeric" maxlength="4" autocomplete="off" value="${draft.y ? +draft.y : ""}"></label>` +
+    `<label>Month<select class="dm"${draft.y ? "" : " disabled"}>${months}</select></label>` +
+    `<label>Day<input class="dd" inputmode="numeric" maxlength="2" autocomplete="off"${draft.m ? "" : " disabled"}` +
+    ` value="${draft.day ? +draft.day : ""}"></label>` +
+    `<button class="dwheel" type="button" title="spin the date wheel on the left — it also does a span, from one date to another">or use the date wheel</button>` +
+    `</div>`;
+  const src = lab("Where did you read this?", "optional") +
+    `<div class="dsrc"><input class="dsn" placeholder="book, newspaper, record…" value="${esc(draft.srcName || "")}">` +
+    `<input class="dsu" placeholder="link, if there is one — https://…" value="${esc(draft.srcUrl || "")}"></div>`;
   return `<div class="node draft" data-yr="${esc(yr)}">` +
     `<span class="dot${future ? " future" : ""}"></span>` +
     `<div class="card draftcard">` +
@@ -3275,13 +3335,19 @@ function draftNodeHtml(e, future){
     (draft.day && draft.date2 == null ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
       ` spellcheck="false" title="time, if known — HH:MM UTC, or HH:MM±HH:MM local">${esc(draft.time)}</span>` +
       `<span class="tz">UTC</span>` : "") +
-    `<span class="sl">/</span><span class="by">draft — yours, unpublished</span>` +
-    `<button class="dx" type="button" title="discard this draft (Esc)">✕</button></div>` +
-    ed("ded-t", "h4", "Title — the event, one line", draft.title) +
+    `<span class="sl">/</span><span class="by">your new card — saved as you type</span>` +
+    `<button class="dx" type="button" title="throw this draft away">✕</button></div>` +
+    when +
+    lab("What happened?", "One thing. More to tell? Add another card after.") +
+    ed("ded-t", "h4", "the event, one line", draft.title) +
     `<div class="dline dcol hid"></div>` +
-    ed("ded-s", "div", "Summary — a paragraph, if the title needs one", draft.summary) +
-    ed("ded-b", "div", "The record — what happened, with Sources: [label](https://…)", draft.content) +
+    lab("In plain words", "optional") +
+    ed("ded-s", "div", "a sentence or two a newcomer would understand", draft.summary) +
+    src +
+    lab("The full story", "optional — as long as you need") +
+    ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
     `<div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
+    `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>` +
     `<span class="dline derr hid"></span></div>` +
     `</div></div>`;
 }
@@ -3315,14 +3381,40 @@ function draftRefresh(){
 }
 
 areaEl.addEventListener("input", e => {
+  if (!draft) return;
+  if (e.target.matches(".draftcard .dsn, .draftcard .dsu")){
+    draft[e.target.classList.contains("dsn") ? "srcName" : "srcUrl"] = e.target.value;
+    return keepDraftNow();
+  }
   const ed = e.target.closest(".ded");
-  if (!ed || !draft) return;
+  if (!ed) return;
   const v = ed.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
   if      (ed.classList.contains("ded-t")) draft.title   = v.replace(/\n/g, " ");
   else if (ed.classList.contains("ded-w")) draft.time    = v.replace(/\s/g, "");
   else if (ed.classList.contains("ded-s")) draft.summary = v;
   else                                     draft.content = v;
   draftRefresh();
+  keepDraftNow();
+});
+// the date boxes: each one, once left, moves the card to its place and hands the caret on.
+// A bad value is set back, never scolded — the box shows what the card holds.
+areaEl.addEventListener("change", e => {
+  if (!draft || !e.target.closest(".draftcard .dwhen")) return;
+  const t = e.target, v = t.value.trim();
+  draft.date2 = null;
+  if (t.classList.contains("dy")){
+    const y = /^\d{1,4}$/.test(v) && +v > 0 ? String(+v).padStart(4, "0") : null;
+    if (y !== draft.y){ draft.y = y; draft.m = draft.day = null; }
+    draft.stage = draft.y ? "set" : "idle";
+    return draftPlaced(draft.y ? ".dm" : ".dy");
+  }
+  if (t.classList.contains("dm")){
+    draft.m = v || null; draft.day = null;
+    return draftPlaced(draft.m ? ".dd" : ".ded-t");
+  }
+  const last = draft.y && draft.m ? new Date(Date.UTC(+draft.y, +draft.m, 0)).getUTCDate() : 0;
+  draft.day = /^\d{1,2}$/.test(v) && +v >= 1 && +v <= last ? String(+v).padStart(2, "0") : null;
+  draftPlaced(".ded-t");
 });
 areaEl.addEventListener("keydown", e => {
   // the title is one line — Enter moves on to the summary instead of breaking it
@@ -3331,8 +3423,8 @@ areaEl.addEventListener("keydown", e => {
     const s = areaEl.querySelector(".ded-s");
     if (s) s.focus();
   }
-  // the time slot is one token — Enter just leaves it
-  if (e.key === "Enter" && e.target.closest && e.target.closest(".ded-w")){
+  // the time slot and the year/day boxes are one token — Enter just leaves them
+  if (e.key === "Enter" && e.target.closest && e.target.closest(".ded-w, .dy, .dd")){
     e.preventDefault();
     e.target.blur();
   }
@@ -3348,8 +3440,14 @@ areaEl.addEventListener("focusout", e => {
 });
 areaEl.addEventListener("click", e => {
   if (!draft) return;
-  if (e.target.closest(".dx"))   return discardDraft();
-  if (e.target.closest(".dtab")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
+  // throwing away takes two clicks: the first only asks, in words, on the button itself
+  const x = e.target.closest(".dx");
+  if (x){
+    if (x.classList.contains("arm")) return discardDraft();
+    x.classList.add("arm"); x.textContent = "throw this draft away? click again ✕"; return;
+  }
+  if (e.target.closest(".dkeep")) return keepDraft();
+  if (e.target.closest(".dtab, .dwheel")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
   const b = e.target.closest(".dpub");
   if (b) b.classList.contains("dhand") ? handoffDraft() : publishDraft(b);
 });
@@ -3357,8 +3455,8 @@ addEventListener("keydown", e => {
   if (e.key === "Escape" && pick && !draft) return endPick();
   if (e.key !== "Escape" || !draft) return;
   const ed = e.target.closest && e.target.closest(".ded");
-  if (ed) return ed.blur();     // first Esc only leaves the text — the next one discards
-  discardDraft();
+  if (ed) return ed.blur();     // first Esc only leaves the text — the next one closes, kept
+  keepDraft();
 });
 
 // entry: the "add a card" link composes here when a timeline is active. Modified clicks
@@ -3366,7 +3464,7 @@ addEventListener("keydown", e => {
 addLink.addEventListener("click", e => {
   if (!activeF || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
   e.preventDefault();
-  draft ? discardDraft() : startDraft();   // a second click closes it
+  draft ? keepDraft() : startDraft();   // a second click closes it, kept for next time
 });
 
 async function publishDraft(btn){
@@ -3375,7 +3473,7 @@ async function publishDraft(btn){
   err.classList.add("hid");
   try {
     const s = await getSigner(), c = activeF.slice(2);
-    const tmpl = buildDraftTemplate({ ...draft, date: draftDate(), coll: c, pubkey: s.pubkey });
+    const tmpl = buildDraftTemplate({ ...draft, content: contentWithSource(draft), date: draftDate(), coll: c, pubkey: s.pubkey });
     // wtc:pk can be stale — the collision that matters is against the key that will sign
     const col = draftCollision(tmpl.tags[0][1], s.pubkey);
     if (col && col.block) throw new Error(col.text);
@@ -3391,6 +3489,7 @@ async function publishDraft(btn){
     rememberPk(ev.pubkey);
     justPub = { d: tmpl.tags[0][1], id: ev.id };
     setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
+    try { localStorage.removeItem(keepKey()); } catch {}
     draft = null;
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
@@ -3405,11 +3504,19 @@ async function publishDraft(btn){
   }
 }
 
+// "Where did you read this?" rides at the foot of the story as its Source: line (CONVENTION)
+function contentWithSource(d){
+  const name = (d.srcName || "").trim(), url = (d.srcUrl || "").trim(), body = (d.content || "").trim();
+  if (!name && !url) return d.content || "";
+  const line = "Source: " + (url ? `[${name || url}](${url})` : name);
+  return body ? body + "\n\n" + line : line;
+}
+
 // no extension: the draft crosses to add.html, whose bunker/nsec ladder takes over.
 // RAW precision string — add.html's builder owns the widening to a range.
 function handoffDraft(){
   const rec = { v: 1, at: Date.now(), coll: activeF.slice(2), date: draftDate(),
-                time: draft.time, title: draft.title, summary: draft.summary, content: draft.content };
+                time: draft.time, title: draft.title, summary: draft.summary, content: contentWithSource(draft) };
   try { localStorage.setItem("wtc:draft", JSON.stringify(rec)); } catch {}
   location.href = "add.html?c=" + encodeURIComponent(rec.coll) + "&draft=1";
 }
