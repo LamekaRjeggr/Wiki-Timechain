@@ -648,24 +648,36 @@
   .draftcard .cnt{font-family:var(--mono);font-size:14px;color:var(--dim)}
   .draftcard .cnt.hid{display:none}
   .draftcard .cnt.at{color:var(--warn)}   /* over the cap — orange, never red, meaning also in the count */
-  /* the plain-words card: every box says in words, above it, what it wants */
-  .draftcard .dlab{display:block;font-size:15px;font-weight:600;color:var(--text);margin:14px 0 5px}
+  /* the plain-words card: every box says in words, above it, what it wants. One box look,
+     one height, one type size, one gap — the card reads as a column of equals */
+  .draftcard{--fh:42px}
+  .draftcard .dlab{display:flex;align-items:baseline;gap:6px;font-size:15px;font-weight:600;
+    color:var(--text);margin:18px 0 6px}
   .draftcard .dlab i{font-style:normal;font-weight:400;color:var(--dim)}
-  .draftcard .ded-t,.draftcard .ded-s,.draftcard .ded-b{border:1px solid var(--faint);border-radius:6px;padding:6px 9px}
-  .draftcard .ded-b{min-height:7em}
-  .draftcard .dwhen{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
-  .draftcard .dwhen label{display:flex;flex-direction:column;gap:3px;font-size:14px;color:var(--dim)}
-  .draftcard input,.draftcard select{font:inherit;font-size:16px;color:var(--text);background:var(--panel);
-    border:1px solid var(--faint);border-radius:6px;padding:6px 8px}
-  .draftcard input:focus,.draftcard select:focus{outline:2px solid var(--rail);outline-offset:1px}
+  .draftcard .ded-t,.draftcard .ded-s,.draftcard .ded-b,.draftcard input,.draftcard select{
+    box-sizing:border-box;width:100%;margin:0;font:inherit;font-size:16px;line-height:1.45;
+    color:var(--text);background:var(--panel);border:1px solid var(--faint);border-radius:6px;padding:8px 10px}
+  .draftcard .ded-t{font-weight:600;min-height:var(--fh)}
+  .draftcard .ded-s{min-height:var(--fh)}
+  .draftcard .ded-b{min-height:8em}
+  .draftcard input,.draftcard select{height:var(--fh)}
+  .draftcard .ded:focus,.draftcard input:focus,.draftcard select:focus{outline:2px solid var(--rail);
+    outline-offset:1px;background:var(--panel)}
   .draftcard select:disabled,.draftcard input:disabled{opacity:.45}
-  .draftcard .dy{width:5.5em}
-  .draftcard .dd{width:3.5em}
-  .draftcard .dsrc{display:flex;flex-wrap:wrap;gap:8px}
-  .draftcard .dsrc input{flex:1 1 14em}
-  .draftcard .dwheel,.draftcard .dkeep{font:inherit;font-size:14px;cursor:pointer;background:none;
-    border:1px solid var(--faint);border-radius:6px;color:var(--text);padding:5px 12px}
-  .draftcard .dwheel{border:0;color:var(--dim);text-decoration:underline dotted;padding:6px 2px}
+  .draftcard .dwhen{display:grid;grid-template-columns:6em 10em 4.5em;gap:12px}
+  .draftcard .dwhen label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--dim)}
+  .draftcard .dsrc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  @media (max-width:560px){ .draftcard .dsrc{grid-template-columns:1fr} }
+  .draftcard .dwheel{margin-left:auto;font:inherit;font-size:14px;font-weight:400;cursor:pointer;
+    background:none;border:0;padding:0;color:var(--dim);text-decoration:underline dotted;text-underline-offset:3px}
+  .draftcard .dwheel:hover{color:var(--text)}
+  .draftcard .dfoot{gap:12px;margin-top:22px}
+  .draftcard .dpub,.draftcard .dkeep{height:var(--fh);padding:0 18px;border-radius:6px;cursor:pointer;
+    font:inherit;font-size:15px;font-weight:600}
+  .draftcard .dpub{background:var(--rail);border:1px solid var(--rail);color:var(--ink)}
+  .draftcard .dpub:disabled{background:var(--panel);color:var(--dim);border-color:var(--faint);opacity:1}
+  .draftcard .dkeep{background:none;border:1px solid var(--faint);color:var(--text);font-weight:400}
+  .draftcard .dkeep:hover{border-color:var(--dim)}
   .draftcard .dx.arm{color:var(--warn);font-size:14px}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
@@ -3316,17 +3328,17 @@ function draftNodeHtml(e, future){
     const v = String(i + 1).padStart(2, "0");
     return `<option value="${v}"${draft.m === v ? " selected" : ""}>${n}</option>`;
   }).join("");
-  const when = lab("When?", "Year alone is fine.") +
+  const when = `<span class="dlab">When? <i>Year alone is fine.</i>` +
+    `<button class="dwheel" type="button" title="spin the date wheel on the left — it also does a span, from one date to another">or use the date wheel</button></span>` +
     `<div class="dwhen">` +
     `<label>Year<input class="dy" inputmode="numeric" maxlength="4" autocomplete="off" value="${draft.y ? +draft.y : ""}"></label>` +
     `<label>Month<select class="dm"${draft.y ? "" : " disabled"}>${months}</select></label>` +
     `<label>Day<input class="dd" inputmode="numeric" maxlength="2" autocomplete="off"${draft.m ? "" : " disabled"}` +
     ` value="${draft.day ? +draft.day : ""}"></label>` +
-    `<button class="dwheel" type="button" title="spin the date wheel on the left — it also does a span, from one date to another">or use the date wheel</button>` +
     `</div>`;
   const src = lab("Where did you read this?", "optional") +
     `<div class="dsrc"><input class="dsn" placeholder="book, newspaper, record…" value="${esc(draft.srcName || "")}">` +
-    `<input class="dsu" placeholder="link, if there is one — https://…" value="${esc(draft.srcUrl || "")}"></div>`;
+    `<input class="dsu" placeholder="link, if there is one" value="${esc(draft.srcUrl || "")}"></div>`;
   return `<div class="node draft" data-yr="${esc(yr)}">` +
     `<span class="dot${future ? " future" : ""}"></span>` +
     `<div class="card draftcard">` +
