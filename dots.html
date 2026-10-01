@@ -702,7 +702,7 @@ const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib");
-const libUpdate = mountLibrary(lib, choose);
+const libUpdate = mountLibrary(lib, c => choose(c));   // the Library also passes which tab — not a path
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead
