@@ -500,6 +500,8 @@
   .mtl .rsigned{color:var(--faint)}
   /* card-tab acceptance badge: amber + ✓ shape (two channels, colorblind-safe) */
   .mtl .abadge{color:var(--rail);margin-left:8px;white-space:nowrap}
+  .mtl .folb{background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline dotted}
+  .mtl .folwho{margin-left:6px;color:var(--dim)}
   /* the accept button */
   .mtl .abtn{font-family:var(--mono);font-size:14px;line-height:1;cursor:pointer;height:20px;
     border-radius:6px;background:var(--panel-2);border:1px solid var(--border);
@@ -1076,6 +1078,7 @@ const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
 const addLink  = document.getElementById("addlink"), dotsNav = document.getElementById("dotsnav"), addNav = document.getElementById("addnav");   // → add.html, the write side
+let viewFol = _q.get("v") === "follows";      // Follows: every copy someone you follow keeps, read as one
 let onlyAcc = _q.get("only") === "accepted";   // the All · Accepted switch, carried in the link
 metaEl.addEventListener("click", e => {
   const b = e.target.closest("[data-only]"); if (!b || (b.dataset.only === "accepted") === onlyAcc) return;
@@ -1089,7 +1092,8 @@ const shown = es => onlyAcc ? es.filter(e => e.evs.length || e.lapsed.length).ma
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","k","l","t","plain","sum","depth","show","open","only"].forEach(a => u.searchParams.delete(a));
+  ["c","k","l","t","plain","sum","depth","show","open","only","v"].forEach(a => u.searchParams.delete(a));
+  if (viewFol) u.searchParams.set("v", "follows");
   if (onlyAcc) u.searchParams.set("only", "accepted");
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
   const N = activeF && notaryOf(activeF.slice(2));
@@ -1819,13 +1823,13 @@ function contextForView(){ const N = activeF && notaryOf(activeF.slice(2)); retu
 // a slot is the d, and a fork keeps its parent's d — so a register counts for THIS card only
 // when the snapshot it was read from is this key's. Slot alone would hand a fork under
 // another key its parent's acceptance, and call it lapsed.
-function acceptances(coord, heldId, context = contextForView()){
+function acceptances(coord, heldId, context = ctxFor(coord)){
   const [, pk, ...dp] = coord.split(":"), slot = dp.join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
   if (!p) return [];
   const ids = new Set(AFIELDS.map(f => p.registers[f]).filter(r => r.snapshot && r.snapshot.pubkey === pk).map(r => r.sourceActId));
   return [...ids].map(id => acts.get(id)).filter(Boolean).sort((a,b) => a.created_at-b.created_at || a.id.localeCompare(b.id));
 }
-function contentAcceptance(coord, context = contextForView()){
+function contentAcceptance(coord, context = ctxFor(coord)){
   const [, pk, ...dp] = coord.split(":"), slot = dp.join(":"), p = foldProjection().find(x => x.context === context && x.slot === slot);
   const r = p && p.registers.content;
   return r && r.snapshot && r.snapshot.pubkey === pk ? acts.get(r.sourceActId) : null;
@@ -1895,7 +1899,8 @@ const tierOf = (ev, N) => N ? notaryTier(N, ev) : 2;
 // Candidates (notary NIP) = cards submitted to THIS notary; a same-name notary's cards are not.
 function entriesOf(f){
   const c = f && f.startsWith("c:") ? f.slice(2) : null;   // legacy ?l=/?t= filters have no one collection
-  const N = c ? notaryOf(c) : null;
+  const N = c ? notaryOf(c) : null, Ns = viewFol && c ? folNotaries(c) : [];
+  if (Ns.length) return folEntries(Ns);
   // Stacked notaries need the upstream acts before candidate() can admit any card. Pull
   // them from the whole submitted pool, not only from entries that already rendered;
   // otherwise a cold load of a downstream lens deadlocks at an empty timeline.
@@ -1926,6 +1931,34 @@ function entriesOf(f){
   return out.sort(byWhen);
 }
 
+// Follows: the copies people you follow keep, as one timeline. A card stands at its best
+// tier under any of them; the copy that gave it that tier is its context (folCtx), so the
+// gold face and the revised box read that holder's act. folBy = who you follow accepted it.
+const folCtx = new Map(), folBy = new Map(), folOpen = new Set();   // folOpen = cards whose names were asked for
+function folEntries(Ns){
+  folCtx.clear(); folBy.clear();
+  const pool = new Map();
+  for (const N of Ns){
+    reachableNotaryCoords([coordOf(N)]).forEach(wantContextActs);
+    for (const ev of candidatesOf(N)) pool.set(ev.id, ev);
+  }
+  const byD = new Map(), ord = (a,b) => (startOf(a) < startOf(b) ? -1 : 1) || (a.pubkey < b.pubkey ? -1 : 1);
+  for (const ev of pool.values()){
+    const d = tag(ev,"d"), coord = KIND + ":" + ev.pubkey + ":" + d, ts = Ns.map(N => notaryTier(N, ev)), t = Math.min(...ts);
+    if (t < 2){ folCtx.set(coord, coordOf(Ns[ts.indexOf(t)])); folBy.set(coord, Ns.filter((N, i) => ts[i] < 2).map(N => N.pubkey)); }
+    (byD.get(d) || byD.set(d, []).get(d)).push([ev, t]);
+  }
+  const out = [];
+  for (const [d, all] of byD){
+    const at = k => all.filter(x => x[1] === k).map(x => x[0]).sort(ord), evs = at(0), lapsed = at(1), prop = at(2);
+    const head = evs[0] || lapsed[0] || prop[0];
+    out.push({ d, evs, lapsed, prop, taken: [], date: dateOf(head), time: timeOf(head), frac: yearFrac(dateOf(head)),
+               title: tag(head,"title") || d, several: evs.length > 1 });
+  }
+  return out.sort(byWhen);
+}
+const ctxFor = coord => (viewFol && folCtx.get(coord)) || contextForView();
+
 // ═══════════════ render: status + tabs ═══════════════
 // a notary names its timeline; a slug whose notary hasn't arrived reads kebab→words
 function slugName(c){ const n = notaryOf(c); return n ? tag(n,"title") || c : c.replaceAll("-"," "); }
@@ -1942,7 +1975,7 @@ function renderStatus(){
 // NOT derived from the selection — it is its own state, "how you're browsing".
 function selectF(f){
   if (activeF === f) return;
-  activeF = f; activeN = null; userPicked = true; seekD = null;
+  activeF = f; activeN = null; userPicked = true; seekD = null; viewFol = false;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
@@ -1958,11 +1991,13 @@ function myCardsByName(){
   return by;
 }
 const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c);
-  return { wrote:(wrote.get(c) || []).length, d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
+  return { wrote:(wrote.get(c) || []).length, fol:folNotaries(c).length, d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
            nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; }); };
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
 const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
-import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, mine) => { selectF("c:" + c); if (mine && !openMyCopy(c)) seekMine(c); }); scheduleRender(); });
+import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, tab) => { selectF("c:" + c);
+  if (tab === "fol"){ viewFol = true; history.replaceState(null, "", timelineUrl()); render(); }
+  if (tab === "mine" && !openMyCopy(c)) seekMine(c); }); scheduleRender(); });
 // a My collection row opens YOUR copy of the name, not the default
 function openMyCopy(c){
   const N = notariesOf(c).find(n => n.pubkey === meNow());
@@ -1997,8 +2032,8 @@ function renderTabs(){
   nowEl.classList.toggle("long", name.length > 30);
   const all = activeF ? entriesOf(activeF) : [], acc = all.filter(e => e.evs.length || e.lapsed.length).length;
   const ntry = activeF ? notaryOf(activeF.slice(2)) : null;
-  metaEl.innerHTML = activeF ? `<span class="seg"><button type="button" data-only=""${onlyAcc ? "" : ' class="on"'}>All ${all.length}</button>` +
-    `<button type="button" data-only="accepted"${onlyAcc ? ' class="on"' : ""} title="accepted by whoever holds this timeline">Accepted ${acc}</button></span>` : "";
+  metaEl.innerHTML = activeF ? (viewFol ? `<span title="every copy someone you follow keeps, read as one">people you follow · </span>` : "") + `<span class="seg"><button type="button" data-only=""${onlyAcc ? "" : ' class="on"'}>All ${all.length}</button>` +
+    `<button type="button" data-only="accepted"${onlyAcc ? ' class="on"' : ""} title="${viewFol ? "accepted by someone you follow" : "accepted by whoever holds this timeline"}">Accepted ${acc}</button></span>` : "";
   metaEl.parentElement.style.display = activeF ? "" : "none";   // count + order ride together
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
@@ -2039,7 +2074,7 @@ function render(){
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), loading:wait || !down && !slugs.size, signIn:libSignIn, treesLast:true });
+    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn, treesLast:true });
     drumMeasure(); return;
   }
 
@@ -2225,6 +2260,11 @@ function renderTimeline(entries){
   // the acts row carries the per-field split
   const actBadge = (ev, d) => {
     const coord = KIND + ":" + ev.pubkey + ":" + d;
+    if (viewFol){   // Follows: how many you follow accepted it; names only once asked for
+      const by = folBy.get(coord) || [];
+      return by.length ? `<button type="button" class="abadge folb" data-c="${esc(coord)}" title="who?">✓ ${by.length} you follow</button>` +
+        (folOpen.has(coord) ? `<span class="folwho">${by.map(authorLink).join(", ")}</span>` : "") : "";
+    }
     const n = acceptances(coord, ev.id).filter(a => {
       const sc = scopeOf(a);
       return Object.keys(sc).some(f => sc[f] === fieldOf(ev, f));
@@ -2298,9 +2338,10 @@ function renderTimeline(entries){
   // gold card. The box inside names the fact — "revised", never a number: nobody holds
   // v1..vN — and swaps the body to the live version, where "accept this version" waits.
   const goldOf = (ev, d) => {
-    if (!N || notaryTier(N, ev) !== 1) return { show: ev, box: "" };
-    const coord = coordOfC(ev, d), live = showLive.has(coord);
-    const a = contentAcceptance(coord, coordOf(N)), sc = scopeOf(a);
+    const coord = coordOfC(ev, d), Nc = viewFol && folCtx.has(coord) ? notaries.get(folCtx.get(coord)) : N;   // Follows: the copy that accepted it
+    if (!Nc || notaryTier(Nc, ev) !== 1) return { show: ev, box: "" };
+    const live = showLive.has(coord);
+    const a = contentAcceptance(coord, coordOf(Nc)), sc = scopeOf(a);
     const pin = sourcePin(a);                              // the exact version the notary read
     const snap = cardSnapshot(a);
     const copy = snap || { ...ev, id: pin || ev.id, content: sc.content || "",
@@ -2985,6 +3026,16 @@ addEventListener("keydown", e => {
 // Kept apart from the render code above on purpose.
 
 const tallies  = new Map();     // published event id → {ok,no,sent,done} — the honest OK tally
+// who you follow: your newest kind 3. Only a nostr key has one — a page key follows nobody
+let follows = null, folAt = 0;
+function ingestFollows(ev){
+  if (ev.kind !== 3 || ev.pubkey !== myPk || ev.created_at <= folAt) return;
+  folAt = ev.created_at;
+  follows = new Set(ev.tags.filter(t => t[0] === "p" && /^[0-9a-f]{64}$/.test(t[1])).map(t => t[1]));
+  scheduleRender();
+}
+const askFollows = ws => myPk && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(["REQ","fol",{ kinds:[3], authors:[myPk], limit:1 }]));
+const folNotaries = c => follows ? notariesOf(c).filter(n => follows.has(n.pubkey)) : [];
 let myPk = null;                // my pubkey once a signer produced one — lights .mine
 
 // A REAL KEY OR NOTHING. The reader used to mint a throwaway key when no extension was present;
@@ -3229,7 +3280,9 @@ function publish(ev){
 // the extension keeps the key; we only keep its public half, so the page knows whose
 // glyphs are lit before the first sign of the session
 function rememberPk(pk){
+  if (pk !== myPk){ follows = null; folAt = 0; }
   myPk = pk;
+  sockets.forEach(askFollows);
   try { localStorage.setItem(PK_KEY, pk); } catch {}
 }
 function mintPageKey(){
@@ -3240,6 +3293,15 @@ function mintPageKey(){
   storePageKey();
   hasSigner = true;
 }
+// "✓ N you follow": the names load only when asked for
+areaEl.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest(".folb"); if (!b) return;
+  const c = b.dataset.c;
+  if (folOpen.delete(c)) return render();
+  folOpen.add(c);
+  for (const pk of folBy.get(c) || []) if (!profiles.has(pk)) profiles.set(pk, { name:null, fetched:false });
+  scheduleProfileFetch(); render();
+});
 // the newcomer's key, shown once on the card they just added — never a gate, closes either way
 let keyShow = null;       // {d, copied}
 function keyBoxHtml(){
@@ -3959,6 +4021,7 @@ function connect(url){
     renderStatus();
     // discovery = the corpus's notaries, kept open so a brand-new timeline appears live
     ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }]));
+    askFollows(ws);
     const mf = memberFilters();
     if (mf.length)
       ws.send(JSON.stringify(["REQ","wtc", ...live(mf)]));
@@ -3980,6 +4043,7 @@ function connect(url){
       if (sub === "ntry")   admit(data[2], ingestNotary);
       if (sub === "prof")   admit(data[2], ingestProfile);
       if (sub === "act")    admit(data[2], ingestAct);
+      if (sub === "fol")    admit(data[2], ingestFollows);
       if (sub === "del" && data[2]?.kind === 5) admit(data[2], ingestDelete);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
