@@ -679,6 +679,8 @@
   .draftcard .dpub:disabled{background:var(--panel);color:var(--dim);border-color:var(--faint);opacity:1}
   .draftcard .dkeep{background:none;border:1px solid var(--faint);color:var(--text);font-weight:400}
   .draftcard .dkeep:hover{border-color:var(--dim)}
+  .draftcard .ddel{margin-left:auto;height:var(--fh);padding:0 18px;border-radius:6px;cursor:pointer;
+    font:inherit;font-size:15px;font-weight:600;background:#c62828;border:1px solid #c62828;color:#fff}
   .draftcard .dx.arm{color:var(--warn);font-size:14px}
   /* no signer: the ways to sign open inside the card, under its button — never a pop-up */
   .draftcard .dnote{display:block;margin-top:18px;padding:10px 12px;border-radius:6px;font-size:15px;
@@ -2032,7 +2034,8 @@ function render(){
     drumMeasure(); return;
   }
 
-  const entries = activeF ? entriesOf(activeF) : [];
+  let entries = activeF ? entriesOf(activeF) : [];
+  if (draft && draft.edit) entries = entries.filter(e => e.d !== draft.edit.d);   // the edit sits in its place
   // the draft is a spine entry like any other — but NOT while its date is being picked:
   // there it's the ghost node instead (see pickGhost), so the page can't relayout mid-spin
   // with no date yet it waits at the top of the page; a date sorts it into place
@@ -3356,13 +3359,27 @@ function startDraft(){
   // the card opens at the top, asking for the year first; the wheel stays one click away
   draftPlaced(draftDate() ? null : ".dy");
 }
+// your own card, opened in place to change or delete — same card as a new one, holding its d
+function startEdit(ev){
+  if (draft) keepDraft();
+  const [a, b = a] = dateOf(ev).split("/"), y = a.slice(0, 4), m = a.slice(5, 7);
+  const when = spanOf(y) === dateOf(ev) ? { m: null, day: null, date2: null }   // a whole year or month folds back
+    : spanOf(y + "-" + m) === dateOf(ev) ? { m, day: null, date2: null }
+    : { m, day: a.slice(8, 10), date2: b === a ? null : b };
+  // the Source line at the foot of the story goes back into its own two boxes
+  const src = ev.content.match(/\n*Source: (?:\[([^\]]*)\]\(([^)]*)\)|(.+))\s*$/);
+  draft = { title: tag(ev,"title") || "", summary: tag(ev,"summary") || "", time: tag(ev,"event_time") || "",
+            content: src ? ev.content.slice(0, src.index) : ev.content, srcName: src ? (src[2] === src[1] ? "" : src[1] || src[3]) : "",
+            srcUrl: src && src[2] || "", name: "", about: "", y, ...when, stage: "set", seedYr: y, edit: { ev, d: tag(ev,"d") } };
+  draftPlaced(".ded-t");
+}
 // a draft is kept per timeline until it is published or thrown away — closing never loses it
 const keepKey = () => "wtc:keep:" + activeF.slice(2);
 function keptDraft(){
   try { return JSON.parse(localStorage.getItem(keepKey())) || {}; } catch { return {}; }
 }
 function keepDraftNow(){
-  if (!draft) return;
+  if (!draft || draft.edit) return;   // an edit is never kept — the card itself is the copy
   const { title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf, name, about } = draft;
   try { localStorage.setItem(keepKey(), JSON.stringify({ title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf, name, about,
                                                           stage: y ? "set" : "idle" })); } catch {}
@@ -3376,7 +3393,7 @@ function closeDraft(){
 }
 function keepDraft(){ keepDraftNow(); closeDraft(); }
 function discardDraft(){
-  try { localStorage.removeItem(keepKey()); } catch {}
+  if (!draft.edit) try { localStorage.removeItem(keepKey()); } catch {}
   closeDraft();
 }
 // after a date commit: the draft re-sorts into place and the page follows it there.
@@ -3420,7 +3437,7 @@ function draftNodeHtml(e, future){
     `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
   const btn = `<button class="dpub" type="button" disabled title="needs a date, what happened and plain words${hasSigner ? "" : ", and your name"}">` +
-    `${hasSigner ? "Sign your name &amp; add" : "Add my card"}</button>`;
+    `${draft.edit ? "Save changes" : hasSigner ? "Sign your name &amp; add" : "Add my card"}</button>`;
   const msg = hasSigner && nstartMsg === "none" ? "in" : nstartMsg;   // a late answer still signs them in
   const note = { wait: `<span class="dnote">Signing you in with your new signature…</span>`,
                  in:   `<span class="dnote">Welcome — you're signed in. Your card is right where you left it.</span>`,
@@ -3457,7 +3474,7 @@ function draftNodeHtml(e, future){
     (draft.day && draft.date2 == null ? `<span class="ded ded-w dtim" contenteditable="plaintext-only" data-ph="··:··"` +
       ` spellcheck="false" title="time, if known — HH:MM UTC, or HH:MM±HH:MM local">${esc(draft.time)}</span>` +
       `<span class="tz">UTC</span>` : "") +
-    `<span class="sl">/</span><span class="by">your new card — saved as you type</span>` +
+    `<span class="sl">/</span><span class="by">${draft.edit ? "editing your card" : "your new card — saved as you type"}</span>` +
     `<button class="dx" type="button" title="throw this draft away">✕</button></div>` +
     when +
     lab("What happened?", "One thing. More to tell? Add another card after.") +
@@ -3470,7 +3487,9 @@ function draftNodeHtml(e, future){
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
     you + note +
     `<span class="dneed"></span><div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
-    `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>` +
+    (draft.edit ? `<button class="dkeep" type="button" title="close without changing the card (Esc)">Cancel</button>` +
+      `<button class="ddel" type="button" title="asks every relay to remove this card">Delete card</button>`
+    : `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>`) +
     `<span class="dline derr hid"></span></div>` +
     `</div></div>`;
 }
@@ -3488,8 +3507,8 @@ function draftRefresh(){
     n.classList.toggle("hid", left > near);
     n.classList.toggle("at", left < 0);
   }
-  const d = `${wikiSlug(activeF.slice(2))}-${draft.dsuf}`;
-  const col = d && myPk ? draftCollision(d, myPk) : null;
+  const d = draft.edit ? draft.edit.d : `${wikiSlug(activeF.slice(2))}-${draft.dsuf}`;
+  const col = d && myPk && !draft.edit ? draftCollision(d, myPk) : null;
   const line = card.querySelector(".dcol");
   line.textContent = col ? col.text : "";
   line.classList.toggle("hid", !col);
@@ -3583,6 +3602,11 @@ areaEl.addEventListener("click", e => {
     x.classList.add("arm"); x.textContent = "throw this draft away? click again ✕"; return;
   }
   if (e.target.closest(".dkeep")) return keepDraft();
+  const del = e.target.closest(".ddel");
+  if (del){   // two clicks, like ✕: the first only asks
+    if (del.classList.contains("arm")) return deleteMine(del);
+    del.classList.add("arm"); del.textContent = "Delete for good? Click again"; return;
+  }
   if (e.target.closest(".dother")) return handoffDraft();
   if (e.target.closest(".dgo")){       // the link itself navigates; first note where to bring them back
     keepDraftNow();
@@ -3606,6 +3630,17 @@ addEventListener("keydown", e => {
   const ed = e.target.closest && e.target.closest(".ded");
   if (ed) return ed.blur();     // first Esc only leaves the text — the next one closes, kept
   keepDraft();
+});
+
+// "revise" on your own card opens it here; anyone else's still goes to add.html to be forked
+areaEl.addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("a.rvz");
+  if (!a || !activeF || !hasSigner || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  const q = new URL(a.href).searchParams, me = myPk || (pageKey && xonlyPub(pageKey.sk));
+  const ev = q.get("p") === me && events.get(me + ":" + q.get("d"));
+  if (!ev) return;
+  e.preventDefault();
+  startEdit(ev);
 });
 
 // entry: the "add a card" link composes here when a timeline is active. Modified clicks
@@ -3633,8 +3668,17 @@ async function publishDraft(btn){
       if (K) publish(await s.sign({ kind: 3, created_at: now, tags: [["p", K.pubkey]], content: "" }));
     }
     const tmpl = buildDraftTemplate({ ...draft, content: contentWithSource(draft), date: draftDate(), coll: c, pubkey: s.pubkey });
+    const E = draft.edit && draft.edit.ev;
+    if (E){   // same d, same first-published date; every tag this card doesn't edit rides along untouched
+      if (s.pubkey !== E.pubkey) throw new Error("this card was signed by a different key than the one signing now — nothing was changed");
+      const own = new Set(["d","title","summary","published_at","event_date","event_time"]);
+      tmpl.tags = tmpl.tags.filter(t => own.has(t[0]))
+        .map(t => t[0] === "d" ? ["d", draft.edit.d] : t[0] === "published_at" && tag(E,"published_at") ? ["published_at", tag(E,"published_at")] : t)
+        .concat(E.tags.filter(t => !own.has(t[0])));
+      tmpl.created_at = Math.max(tmpl.created_at, E.created_at + 1);   // a tie would keep the old one
+    }
     // wtc:pk can be stale — the collision that matters is against the key that will sign
-    const col = draftCollision(tmpl.tags[0][1], s.pubkey);
+    const col = E ? null : draftCollision(tmpl.tags[0][1], s.pubkey);
     if (col && col.block) throw new Error(col.text);
     // a NEW name has no notary yet, and a card needs one to be seen — so the first card mints
     // it, open to all. The only automatic notary; a deliberate one is minted elsewhere.
@@ -3649,7 +3693,7 @@ async function publishDraft(btn){
     justPub = { d: tmpl.tags[0][1], id: ev.id };
     setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
     if (pageKey && !pageKey.saved && s.pubkey === xonlyPub(pageKey.sk)) keyShow = { d: tmpl.tags[0][1] };
-    try { localStorage.removeItem(keepKey()); } catch {}
+    if (!E) try { localStorage.removeItem(keepKey()); } catch {}
     draft = null; nstartMsg = null;
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
@@ -3657,6 +3701,25 @@ async function publishDraft(btn){
     // your own manual notary: the act rides with the card, same click — no owner special
     // case in the rule, just no chore. Under `auto` nothing is needed.
     if (N.pubkey === ev.pubkey) acceptCard(ev.pubkey, tmpl.tags[0][1]);
+  } catch (ex){
+    err.textContent = (ex && ex.message) || "signer declined — try again";
+    err.classList.remove("hid");
+    btn.disabled = false;
+  }
+}
+
+// your own card, taken back: one NIP-09 delete for every version under its address, sent to
+// every relay this page reads. A relay may still keep a copy — it is a request, not a wipe.
+async function deleteMine(btn){
+  btn.disabled = true;
+  const err = areaEl.querySelector(".derr"), E = draft.edit.ev;
+  try {
+    const s = await getSigner();
+    if (s.pubkey !== E.pubkey) throw new Error("this card was signed by a different key than the one signing now — nothing was deleted");
+    const del = await s.sign({ kind: 5, created_at: Math.max(Math.floor(Date.now() / 1000), E.created_at), content: "",
+      tags: [["a", KIND + ":" + E.pubkey + ":" + draft.edit.d], ["e", E.id], ["k", String(KIND)]] });
+    publish(del); ingestDelete(del);
+    closeDraft();
   } catch (ex){
     err.textContent = (ex && ex.message) || "signer declined — try again";
     err.classList.remove("hid");
