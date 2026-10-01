@@ -1953,10 +1953,18 @@ function selectF(f){
 // unopened timeline still lists; its count shows once every relay has sent all its cards.
 const libRows = () => [...slugs].map(c => { const N = notaryOf(c);
   return { d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
-           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:!!myPk && notariesOf(c).some(n => n.pubkey === myPk) }; });
+           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; });
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
 const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
-import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, c => selectF("c:" + c)); scheduleRender(); });
+import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, mine) => { selectF("c:" + c); if (mine) openMyCopy(c); }); scheduleRender(); });
+// a My collection row opens YOUR copy of the name, not the default
+function openMyCopy(c){
+  const N = notariesOf(c).find(n => n.pubkey === meNow());
+  if (!N || coordOf(N) === activeN) return;
+  activeN = coordOf(N);
+  history.replaceState(null, "", timelineUrl());
+  render();
+}
 async function libSignIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (!signerReady()) return void (location.href = "add.html");
   rememberPk((await getSigner()).pubkey); scheduleRender();
@@ -2030,7 +2038,7 @@ function render(){
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!myPk, loading:wait || !down && !slugs.size, signIn:libSignIn, treesLast:true });
+    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), loading:wait || !down && !slugs.size, signIn:libSignIn, treesLast:true });
     drumMeasure(); return;
   }
 
@@ -2997,6 +3005,12 @@ let pageKey = null;               // {sk, saved}
 try { pageKey = JSON.parse(localStorage.getItem(PAGE_KEY) || "null"); } catch {}
 const storePageKey = () => { try { localStorage.setItem(PAGE_KEY, JSON.stringify(pageKey)); } catch {} };
 let hasSigner = signerReady() || !!pageKey;
+let _pkPub = [];   // [sk, pub] — the page key's public half, computed once
+function meNow(){   // who "you" are: the signed-in key, else the page key
+  if (myPk || !pageKey) return myPk || null;
+  if (_pkPub[0] !== pageKey.sk) _pkPub = [pageKey.sk, xonlyPub(pageKey.sk)];
+  return _pkPub[1];
+}
 // extensions can inject after first paint — look twice more, then stop asking
 if (!hasSigner) [400, 1500].forEach(ms => setTimeout(() => {
   if (!hasSigner && signerReady()){ hasSigner = true; scheduleRender(); }
@@ -3636,7 +3650,7 @@ addEventListener("keydown", e => {
 areaEl.addEventListener("click", e => {
   const a = e.target.closest && e.target.closest("a.rvz");
   if (!a || !activeF || !hasSigner || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
-  const q = new URL(a.href).searchParams, me = myPk || (pageKey && xonlyPub(pageKey.sk));
+  const q = new URL(a.href).searchParams, me = meNow();
   const ev = q.get("p") === me && events.get(me + ":" + q.get("d"));
   if (!ev) return;
   e.preventDefault();
