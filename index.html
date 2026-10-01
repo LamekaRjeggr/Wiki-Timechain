@@ -684,19 +684,30 @@
   .draftcard .dnote{display:block;margin-top:18px;padding:10px 12px;border-radius:6px;font-size:15px;
     border:1px solid var(--accent)}
   .draftcard .dnote.warn{border-color:var(--warn)}
-  .draftcard .dyou{margin-top:22px;padding-top:4px;border-top:1px solid var(--faint)}
-  .draftcard .dways{display:block;margin-top:12px;font-size:14px;color:var(--dim)}
-  .draftcard .dgo,.draftcard .dother{font:inherit;font-size:14px;color:var(--dim);background:none;border:0;
+  /* EVERYTHING ABOUT THE KEY is paper: light on the dark page, a double border, a ⚿ heading.
+     Gold = accepted and blue = submitted, so the key gets lightness + border instead of a hue */
+  .paper{--pp:#f3ecdc;--pi:#1d1a14;--pe:#5c4a2a;--pd:#6b604c;--pb:#fffaf0;--pl:#c9b998;
+    background:var(--pp);color:var(--pi);border:4px double var(--pe);border-radius:10px;padding:14px 16px}
+  .paper .ph{display:block;font-size:16px;font-weight:700;margin-bottom:8px}
+  .draftcard .dyou{margin-top:22px}
+  .draftcard .paper .dlab{color:var(--pi)}
+  .draftcard .paper .dlab i{color:var(--pd)}
+  .draftcard .paper input{background:var(--pb);border-color:var(--pl);color:var(--pi)}
+  .draftcard .paper input.req{border:2px solid var(--rail)}
+  .draftcard .paper input::placeholder{color:var(--pd)}
+  .draftcard .dways{display:block;margin-top:12px;font-size:14px;color:var(--pd)}
+  .draftcard .dgo,.draftcard .dother{font:inherit;font-size:14px;color:var(--pd);background:none;border:0;
     padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
-  .draftcard .dgo:hover,.draftcard .dother:hover{color:var(--text)}
-  /* the newcomer's key, on the card they just added */
-  .keybox{margin-top:14px;padding:12px 14px;border:2px solid var(--accent);border-radius:8px;font-size:15px;line-height:1.45}
-  .keybox code{display:block;margin:10px 0;padding:8px 10px;background:var(--panel);border-radius:6px;
-    font-family:var(--mono);font-size:13px;word-break:break-all;user-select:all}
+  .draftcard .dgo:hover,.draftcard .dother:hover{color:var(--pi)}
+  .draftcard .dneed{display:block;margin-top:18px;font-size:15px;color:var(--warn)}
+  .draftcard .dneed:empty{display:none}
+  .keybox{margin-top:14px;font-size:15px;line-height:1.45}
+  .keybox code{display:block;margin:10px 0;padding:8px 10px;background:var(--pb);border:1px solid var(--pl);
+    border-radius:6px;font-family:var(--mono);font-size:18px;line-height:1.6;word-spacing:.35em;user-select:all}
   .keybox .kbtns{display:flex;gap:10px;flex-wrap:wrap}
-  .keybox button,.keybox a{font:inherit;font-size:15px;padding:6px 16px;border-radius:6px;cursor:pointer;
-    background:none;border:1px solid var(--faint);color:var(--text);text-decoration:none}
-  .keybox .ksaved{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
+  .keybox button,.keybox a{font:inherit;font-size:15px;font-weight:600;padding:6px 16px;border-radius:6px;cursor:pointer;
+    background:none;border:1px solid var(--pe);color:var(--pi);text-decoration:none}
+  .keybox .ksaved{background:var(--pi);border-color:var(--pi);color:var(--pp)}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
@@ -3213,9 +3224,11 @@ function mintPageKey(){
 let keyShow = null;       // {d, copied}
 function keyBoxHtml(){
   const nsec = bech32("nsec", pageKey.sk);
-  return `<div class="keybox"><b>Your card is in.</b> This is your key. It puts your name on every card you add. ` +
+  return `<div class="keybox paper"><span class="ph">⚿ Your key</span>` +
+    `<b>Your card is in.</b> This key puts your name on every card you add. ` +
     `Nobody can reset it, not us, not anyone, so keep a copy somewhere safe.` +
-    `<code>${nsec}</code><div class="kbtns">` +
+    // shown in fours so it can be copied by hand; Copy and Download give it whole
+    `<code>nsec1 ${nsec.slice(5).match(/.{1,4}/g).join(" ")}</code><div class="kbtns">` +
     `<button class="kcopy" type="button">${keyShow.copied ? "Copied ✓" : "Copy"}</button>` +
     `<a class="kdl" download="wiki-timechain-key.txt" href="data:text/plain;charset=utf-8,${encodeURIComponent(
       "Your Wiki-Timechain key. Keep it private.\n\n" + nsec + "\n")}">Download</a>` +
@@ -3413,8 +3426,8 @@ function draftNodeHtml(e, future){
                  in:   `<span class="dnote">Welcome — you're signed in. Your card is right where you left it.</span>`,
                  none: `<span class="dnote warn">You're not signed in yet. Your card is still saved here.</span>` }[msg] || "";
   // no signer yet: who you are, under the card — the click on "Add my card" makes the key
-  const you = hasSigner ? "" : `<div class="dyou">` +
-    `<span class="dlab">Your name <i>only this first time — after this, the page remembers you</i></span>` +
+  const you = hasSigner ? "" : `<div class="dyou paper"><span class="ph">⚿ You</span>` +
+    `<span class="dlab">Your name <i>required · asked only this first time</i></span>` +
     `<input class="dnm req" autocomplete="nickname" value="${esc(draft.name || "")}">` +
     `<span class="dlab">About you <i>optional</i></span>` +
     `<input class="dab" placeholder="a line about you" value="${esc(draft.about || "")}">` +
@@ -3456,7 +3469,7 @@ function draftNodeHtml(e, future){
     lab("The full story", "optional — as long as you need") +
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
     you + note +
-    `<div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
+    `<span class="dneed"></span><div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
     `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>` +
     `<span class="dline derr hid"></span></div>` +
     `</div></div>`;
@@ -3487,8 +3500,11 @@ function draftRefresh(){
   const b = card.querySelector(".dpub");
   // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
   // checked outright or an untitled card would sail through.
-  b.disabled = !(draftDate() && draft.title.trim() && draft.summary.trim() && (hasSigner || draft.name.trim())
-                 && d && !(col && col.block));
+  // say in words what the button still waits for — the gold borders alone don't say "before you can add"
+  const need = [!draftDate() && "a year", !draft.title.trim() && "what happened", !draft.summary.trim() && "plain words",
+                !hasSigner && !draft.name.trim() && "your name"].filter(Boolean);
+  card.querySelector(".dneed").textContent = need.length ? "Still needed: " + need.join(", ") : "";
+  b.disabled = !!need.length || !d || !!(col && col.block);
 }
 
 areaEl.addEventListener("input", e => {
