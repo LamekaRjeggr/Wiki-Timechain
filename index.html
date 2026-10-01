@@ -1608,6 +1608,7 @@ function memberFilters(){
   const f = coords.length ? [{ kinds:[KIND], "#a": coords }] : [];
   if (wantedF && axisOf(wantedF) !== "c") f.push({ kinds:[KIND], ["#" + axisOf(wantedF)]: [valOf(wantedF)] });
   if (citedA.size) f.push({ kinds:[KIND], "#a":[...citedA] });
+  if (meNow()) f.push({ kinds:[KIND], authors:[meNow()] });   // your own cards, for the Library's "Cards you added"
   return f;
 }
 // expanding a row asks, once, for what points at the card: its citing cards (#a over the card's
@@ -1944,26 +1945,41 @@ function renderStatus(){
 // NOT derived from the selection — it is its own state, "how you're browsing".
 function selectF(f){
   if (activeF === f) return;
-  activeF = f; activeN = null; userPicked = true;
+  activeF = f; activeN = null; userPicked = true; seekD = null;
   history.replaceState(null, "", timelineUrl());  // address bar = the shareable link
   render();
 }
 
 // The Library's rows: every notary name the relays hold, one row each — cards not needed, so an
 // unopened timeline still lists; its count shows once every relay has sent all its cards.
-const libRows = () => [...slugs].map(c => { const N = notaryOf(c);
-  return { d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
-           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; });
+// your cards by the timeline name they were submitted to
+function myCardsByName(){
+  const me = meNow(), by = new Map();
+  if (me) for (const ev of events.values()) if (ev.pubkey === me && !isGone(ev))
+    for (const t of ev.tags) if (t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")){
+      const c = t[1].split(":").slice(2).join(":"); by.set(c, (by.get(c) || []).concat(ev)); }
+  return by;
+}
+const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c);
+  return { wrote:(wrote.get(c) || []).length, d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
+           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; }); };
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
 const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
-import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, mine) => { selectF("c:" + c); if (mine) openMyCopy(c); }); scheduleRender(); });
+import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, mine) => { selectF("c:" + c); if (mine && !openMyCopy(c)) seekMine(c); }); scheduleRender(); });
 // a My collection row opens YOUR copy of the name, not the default
 function openMyCopy(c){
   const N = notariesOf(c).find(n => n.pubkey === meNow());
-  if (!N || coordOf(N) === activeN) return;
+  if (!N) return false;
   activeN = coordOf(N);
   history.replaceState(null, "", timelineUrl());
   render();
+  return true;
+}
+// no copy of yours: the default opens, scrolled to your earliest card once it renders
+let seekD = null;
+function seekMine(c){
+  const mine = (myCardsByName().get(c) || []).sort((a, b) => yearFrac(dateOf(a)) - yearFrac(dateOf(b)));
+  if (mine.length){ seekD = tag(mine[0], "d"); render(); }
 }
 async function libSignIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (!signerReady()) return void (location.href = "add.html");
@@ -2064,6 +2080,8 @@ function render(){
   }
 
   renderTimeline(entries);
+  const sn = seekD && areaEl.querySelector(`.node[data-d="${CSS.escape(seekD)}"]`);
+  if (sn){ seekD = null; sn.scrollIntoView({ block:"center" }); }
 }
 
 function shortTitle(t){
