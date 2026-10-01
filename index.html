@@ -679,6 +679,21 @@
   .draftcard .dkeep{background:none;border:1px solid var(--faint);color:var(--text);font-weight:400}
   .draftcard .dkeep:hover{border-color:var(--dim)}
   .draftcard .dx.arm{color:var(--warn);font-size:14px}
+  /* no signer: the ways to sign open inside the card, under its button — never a pop-up */
+  .draftcard .dnote{display:block;margin-top:18px;padding:10px 12px;border-radius:6px;font-size:15px;
+    border:1px solid var(--accent)}
+  .draftcard .dnote.warn{border-color:var(--warn)}
+  .draftcard .dsign{margin-top:18px;padding-top:4px;border-top:1px solid var(--faint)}
+  .draftcard .dopt{border:1px solid var(--faint);border-radius:8px;padding:12px 14px;margin-top:10px}
+  .draftcard .dopt.first{border:2px solid var(--accent)}
+  .draftcard .dopt b{display:block;font-size:16px}
+  .draftcard .dopt i{font-style:normal;font-size:14px;color:var(--dim)}
+  .draftcard .dopt p{margin:8px 0 0;font-size:15px;line-height:1.45}
+  .draftcard .dgo,.draftcard .dother{display:inline-flex;align-items:center;box-sizing:border-box;
+    height:var(--fh);margin-top:12px;padding:0 18px;border-radius:6px;font:inherit;font-size:15px;
+    font-weight:600;text-decoration:none;cursor:pointer}
+  .draftcard .dgo{background:var(--rail);border:1px solid var(--rail);color:var(--ink)}
+  .draftcard .dother{background:none;border:1px solid var(--faint);color:var(--text)}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
@@ -1989,6 +2004,8 @@ function render(){
     ? (axisOf(wantedF) === "c" ? [valOf(wantedF)].filter(c => slugs.has(c))
                                : [...new Set(matching(wantedF).map(collectionSlug))].sort()) : [];
   if (want.length) activeF = "c:" + want[0];   // no link, or not found yet → the Library
+  // back from nstart.me: the card they were writing opens again, where they left it
+  if (nstartBack && activeF === "c:" + nstartBack && !draft){ nstartBack = null; setTimeout(startDraft); }
   if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
   if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
   renderStatus();
@@ -3097,25 +3114,59 @@ function getSigner(){
 //    localStorage). No UI — sign in on add.html once; this page rides the session.
 //    The stored ck is the CLIENT key (ours, not you); reusing it keeps the resume silent. ──
 let bunkerSigner = null;
+// resolves true once signed in. A pairing secret works once; a later connect may be refused
+// while the client key is still approved, so getPublicKey is what decides.
+function bunkerUse(s){
+  return new Promise(done => {
+    setTimeout(() => done(false), 30000);      // a signer that never answers is a no, not a wait
+    const go = async () => {
+      try {
+        const pointer = await window._nip46.parseBunkerInput(s.uri);
+        if (!pointer) return done(false);
+        const b = window._nip46.BunkerSigner.fromBunker(hexToBytes(s.ck), pointer);
+        await b.connect().catch(() => {});
+        const pk = await b.getPublicKey();
+        bunkerSigner = { pubkey: pk, sign: t => b.signEvent(t) };
+        rememberPk(pk);
+        hasSigner = true;
+        scheduleRender();
+        done(true);
+      } catch { done(false); }                   // phone off / revoked = signed out, not an error
+    };
+    window._nip46 ? go() : addEventListener("nip46ready", go, { once: true });
+  });
+}
 (function bunkerResume(){
   let s = null;
   try { s = JSON.parse(localStorage.getItem("wtc:signin") || "null"); } catch {}
-  if (!s || s.via !== "bunker" || !s.uri || !s.ck) return;
-  const go = async () => {
-    try {
-      const pointer = await window._nip46.parseBunkerInput(s.uri);
-      if (!pointer) return;
-      const b = window._nip46.BunkerSigner.fromBunker(hexToBytes(s.ck), pointer);
-      await b.connect();
-      const pk = await b.getPublicKey();
-      bunkerSigner = { pubkey: pk, sign: t => b.signEvent(t) };
-      rememberPk(pk);
-      if (!hasSigner){ hasSigner = true; }
-      scheduleRender();
-    } catch {}                                   // phone off / revoked = signed out, not an error
-  };
-  window._nip46 ? go() : addEventListener("nip46ready", go, { once: true });
+  if (s && s.via === "bunker" && s.uri && s.ck && !location.hash.startsWith("#nostr-login")) bunkerUse(s);
 })();
+
+// ── newcomers: nstart.me makes the signature, then sends them back here with a signer
+//    link in the address (#nostr-login=bunker://…). We ask it never to send a secret key
+//    (aan/aac), so only a bunker link is taken; anything else counts as not signed in.
+//    The link is wiped from the address before anything else, so it never sits in history. ──
+const NSTART = "wtc:nstart";        // the timeline they left from — set as they go
+let nstartBack = null;              // that timeline, until its draft is reopened
+let nstartMsg = null;               // "wait" | "in" | "none" — the line the draft card shows
+(function nstartReturn(){
+  try { nstartBack = localStorage.getItem(NSTART); localStorage.removeItem(NSTART); } catch {}
+  const h = location.hash;
+  if (!h.startsWith("#nostr-login")){ if (nstartBack) nstartMsg = "none"; return; }
+  history.replaceState(null, "", location.href.split("#")[0]);
+  const v = decodeURIComponent(h.slice("#nostr-login".length + 1));
+  if (!v.startsWith("bunker://")){ nstartMsg = "none"; return; }
+  const s = { via: "bunker", uri: v, ck: bytesToHex(crypto.getRandomValues(new Uint8Array(32))) };
+  nstartMsg = "wait";
+  bunkerUse(s).then(ok => {
+    nstartMsg = ok ? "in" : "none";
+    if (ok) try { localStorage.setItem("wtc:signin", JSON.stringify({ ...s, pk: bunkerSigner.pubkey })); } catch {}
+    scheduleRender();
+  });
+})();
+const nstartUrl = () => "https://nstart.me/en?" + new URLSearchParams({ an: "Wiki-Timechain", at: "web",
+  ac: location.origin + location.pathname + "?c=" + encodeURIComponent(activeF.slice(2)),
+  afb: "yes", aan: "yes", aac: "yes" });
 
 // ── publish over the already-open sockets; count OK frames and tell the truth ──
 function publish(ev){
@@ -3234,6 +3285,7 @@ function draftCollision(d, pk){
 // the three text tiers teach by SIZE — the title edits at title size while you type.
 // NIP-07 publishes right here; with no extension the draft hands off to add.html.
 let draft = null;         // {title,summary,content, y,m,day, stage:'year'|'month'|'day'|'set'|'idle', seedYr}
+let signOpen = false;     // no signer: the ways to sign are open under the button
 let draftFocused = false; // an editable has the caret — scheduleRender holds repaints
 let pendingRender = false;
 let justPub = null;       // {d, id} — shows the relay tally on the card just published
@@ -3254,6 +3306,7 @@ function startDraft(){
   draft = { title:"", summary:"", content:"", srcName:"", srcUrl:"", time:"", y:null, m:null, day:null, date2:null,
             dsuf: mintSuffix(), stage:"idle", seedYr: (face && face.yr) || String(new Date().getFullYear()),
             ...keptDraft() };
+  signOpen = nstartMsg === "none";
   // the card opens at the top, asking for the year first; the wheel stays one click away
   draftPlaced(draftDate() ? null : ".dy");
 }
@@ -3322,7 +3375,20 @@ function draftNodeHtml(e, future){
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
   const btn = hasSigner
     ? `<button class="dpub" type="button" disabled title="needs a date and what happened">Sign your name &amp; add</button>`
-    : `<button class="dpub dhand" type="button" disabled title="no signer in this browser — the next page signs with your phone or a key">Sign your name &amp; add →</button>`;
+    : `<button class="dpub dhand" type="button" disabled title="no signer in this browser yet — this shows the ways to sign">Sign your name &amp; add</button>`;
+  const msg = hasSigner && nstartMsg === "none" ? "in" : nstartMsg;   // a late answer still signs them in
+  const note = { wait: `<span class="dnote">Signing you in with your new signature…</span>`,
+                 in:   `<span class="dnote">Welcome — you're signed in. Your card is right where you left it.</span>`,
+                 none: `<span class="dnote warn">You're not signed in yet. Your card is still saved here.</span>` }[msg] || "";
+  const ways = hasSigner || !signOpen ? "" : `<div class="dsign"><span class="dlab">How do you want to sign?</span>` +
+    `<div class="dopt first"><b>I'm new here</b><i>Make your signature — free, about 5 minutes.</i>` +
+    `<p>Your signature is yours to hold — not a password. Nobody can reset it, not us, not anyone. ` +
+    `So we don't make it. A free helper, <b style="display:inline">nstart.me</b>, does: ` +
+    `1 pick your name · 2 save your backup · 3 come straight back to this card.</p>` +
+    `<p><i>This card stays saved here while you're gone.</i></p>` +
+    `<a class="dgo" href="${esc(nstartUrl())}">Go to nstart.me →</a></div>` +
+    `<div class="dopt"><b>I already have a signer</b><i>A phone app, a signer link or a key — the sign-in page takes it from here.</i><br>` +
+    `<button class="dother" type="button">Sign in another way →</button></div></div>`;
   const lab = (text, note) => `<span class="dlab">${text}${note ? ` <i>${note}</i>` : ""}</span>`;
   const months = `<option value="">—</option>` + MONTH_NAMES.map((n, i) => {
     const v = String(i + 1).padStart(2, "0");
@@ -3358,9 +3424,11 @@ function draftNodeHtml(e, future){
     src +
     lab("The full story", "optional — as long as you need") +
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
+    note +
     `<div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
     `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>` +
     `<span class="dline derr hid"></span></div>` +
+    ways +
     `</div></div>`;
 }
 
@@ -3459,9 +3527,21 @@ areaEl.addEventListener("click", e => {
     x.classList.add("arm"); x.textContent = "throw this draft away? click again ✕"; return;
   }
   if (e.target.closest(".dkeep")) return keepDraft();
+  if (e.target.closest(".dother")) return handoffDraft();
+  if (e.target.closest(".dgo")){       // the link itself navigates; first note where to bring them back
+    keepDraftNow();
+    try { localStorage.setItem(NSTART, activeF.slice(2)); } catch {}
+    return;
+  }
   if (e.target.closest(".dtab, .dwheel")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
   const b = e.target.closest(".dpub");
-  if (b) b.classList.contains("dhand") ? handoffDraft() : publishDraft(b);
+  if (b && !b.classList.contains("dhand")) return publishDraft(b);
+  if (b){
+    signOpen = !signOpen;
+    render();
+    const w = areaEl.querySelector(".draftcard .dsign");
+    if (w) w.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 });
 addEventListener("keydown", e => {
   if (e.key === "Escape" && pick && !draft) return endPick();
@@ -3502,7 +3582,7 @@ async function publishDraft(btn){
     justPub = { d: tmpl.tags[0][1], id: ev.id };
     setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
     try { localStorage.removeItem(keepKey()); } catch {}
-    draft = null;
+    draft = null; nstartMsg = null;
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
     publish(ev);
