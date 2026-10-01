@@ -664,6 +664,7 @@
   .draftcard .ded:focus,.draftcard input:focus,.draftcard select:focus{outline:2px solid var(--rail);
     outline-offset:1px;background:var(--panel)}
   .draftcard select:disabled,.draftcard input:disabled{opacity:.45}
+  .draftcard .req{border-color:var(--rail)}   /* required: a gold border, and the label says so too */
   .draftcard .dwhen{display:grid;grid-template-columns:6em 10em 4.5em;gap:12px}
   .draftcard .dwhen label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--dim)}
   .draftcard .dsrc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -1846,7 +1847,7 @@ function scheduleRender(){
     renderTimer = null;
     // a live event mid-composition would rebuild the draft card and eat the caret —
     // hold the repaint while an editable has focus; focusout flushes it (write side)
-    if (draftFocused){ pendingRender = true; return; }
+    if (draftFocused || draftPress){ pendingRender = true; return; }
     render();
   }, 120);
 }
@@ -3319,6 +3320,7 @@ function draftCollision(d, pk){
 // NIP-07 publishes right here; with no extension the draft hands off to add.html.
 let draft = null;         // {title,summary,content, y,m,day, stage:'year'|'month'|'day'|'set'|'idle', seedYr}
 let draftFocused = false; // an editable has the caret — scheduleRender holds repaints
+let draftPress = false;   // a press in the card: a repaint between down and up eats the click
 let pendingRender = false;
 let justPub = null;       // {d, id} — shows the relay tally on the card just published
 const CAP_T = 50, CAP_S = 500;   // soft caps: the counter appears, typing is never blocked
@@ -3412,8 +3414,8 @@ function draftNodeHtml(e, future){
                  none: `<span class="dnote warn">You're not signed in yet. Your card is still saved here.</span>` }[msg] || "";
   // no signer yet: who you are, under the card — the click on "Add my card" makes the key
   const you = hasSigner ? "" : `<div class="dyou">` +
-    `<span class="dlab">Your name <i>shown on every card you add</i></span>` +
-    `<input class="dnm" autocomplete="nickname" value="${esc(draft.name || "")}">` +
+    `<span class="dlab">Your name <i>only this first time — after this, the page remembers you</i></span>` +
+    `<input class="dnm req" autocomplete="nickname" value="${esc(draft.name || "")}">` +
     `<span class="dlab">About you <i>optional</i></span>` +
     `<input class="dab" placeholder="a line about you" value="${esc(draft.about || "")}">` +
     `<span class="dways">Already have a nostr signer? <button class="dother" type="button">Sign in another way</button>` +
@@ -3426,7 +3428,7 @@ function draftNodeHtml(e, future){
   const when = `<span class="dlab">When? <i>Year alone is fine.</i>` +
     `<button class="dwheel" type="button" title="spin the date wheel on the left — it also does a span, from one date to another">or use the date wheel</button></span>` +
     `<div class="dwhen">` +
-    `<label>Year<input class="dy" inputmode="numeric" maxlength="4" autocomplete="off" value="${draft.y ? +draft.y : ""}"></label>` +
+    `<label>Year<input class="dy req" inputmode="numeric" maxlength="4" autocomplete="off" value="${draft.y ? +draft.y : ""}"></label>` +
     `<label>Month<select class="dm"${draft.y ? "" : " disabled"}>${months}</select></label>` +
     `<label>Day<input class="dd" inputmode="numeric" maxlength="2" autocomplete="off"${draft.m ? "" : " disabled"}` +
     ` value="${draft.day ? +draft.day : ""}"></label>` +
@@ -3446,10 +3448,10 @@ function draftNodeHtml(e, future){
     `<button class="dx" type="button" title="throw this draft away">✕</button></div>` +
     when +
     lab("What happened?", "One thing. More to tell? Add another card after.") +
-    ed("ded-t", "h4", "the event, one line", draft.title) +
+    ed("ded-t req", "h4", "the event, one line", draft.title) +
     `<div class="dline dcol hid"></div>` +
     lab("In plain words", "a sentence or two") +
-    ed("ded-s", "div", "a sentence or two a newcomer would understand", draft.summary) +
+    ed("ded-s req", "div", "a sentence or two a newcomer would understand", draft.summary) +
     src +
     lab("The full story", "optional — as long as you need") +
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
@@ -3492,7 +3494,7 @@ function draftRefresh(){
 areaEl.addEventListener("input", e => {
   if (!draft) return;
   if (e.target.matches(".draftcard .dsn, .draftcard .dsu, .draftcard .dnm, .draftcard .dab")){
-    draft[{ dsn: "srcName", dsu: "srcUrl", dnm: "name", dab: "about" }[e.target.className]] = e.target.value;
+    draft[{ dsn: "srcName", dsu: "srcUrl", dnm: "name", dab: "about" }[e.target.classList[0]]] = e.target.value;
     draftRefresh();
     return keepDraftNow();
   }
@@ -3545,9 +3547,17 @@ areaEl.addEventListener("focusin", e => {
 areaEl.addEventListener("focusout", e => {
   if (e.target.closest && e.target.closest(".draftcard")){
     draftFocused = false;
-    if (pendingRender){ pendingRender = false; render(); }
+    if (pendingRender && !draftPress){ pendingRender = false; render(); }
   }
 });
+areaEl.addEventListener("pointerdown", e => {
+  if (e.target.closest && e.target.closest(".draftcard")) draftPress = true;
+});
+addEventListener("pointerup", () => setTimeout(() => {   // after the click has landed
+  if (!draftPress) return;
+  draftPress = false;
+  if (pendingRender && !draftFocused){ pendingRender = false; render(); }
+}));
 areaEl.addEventListener("click", e => {
   if (!draft) return;
   // throwing away takes two clicks: the first only asks, in words, on the button itself
