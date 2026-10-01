@@ -102,6 +102,7 @@
   .hrow{max-width:720px;margin:0 auto;display:flex;align-items:baseline;
     justify-content:space-between;gap:14px;flex-wrap:wrap}
   h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .back{margin-right:auto;font-size:13.5px}
   .sub{max-width:720px;margin:6px auto 0;color:var(--dim);font-size:13.5px}
 
   main{max-width:720px;margin:0 auto;padding:22px 18px 90px}
@@ -299,6 +300,7 @@
 <header>
   <div class="hrow">
     <h1>Add to the record</h1>
+    <nav class="back"><a id="toview" href="./">← cardex</a> · <a id="todots" href="dots.html">dots</a></nav>
     <div class="dtog" id="theme" role="group" aria-label="theme">
       <button class="ds" data-t="dark">dark</button>
       <button class="ds" data-t="medium">sepia</button>
@@ -307,7 +309,7 @@
   </div>
   <p class="sub">Write a kind-30828 card: start a timeline, add an entry to someone
     else's, or revise a card that is already there. Your key signs it, the relays keep
-    it, and <a id="toview" href="./">the cardex</a> (or <a id="todots" href="dots.html">dots</a>) reads it on the next load — nothing here is
+    it, and the cardex (or dots) reads it on the next load — nothing here is
     stored on a server. <a href="CONVENTION.md">How to write one</a> ·
     <a href="NIP-DRAFT.md">the spec</a>.</p>
 </header>
@@ -1611,6 +1613,8 @@ function renderPubTally(){
   if (!t) return;
   const open = [...relayUp.values()].filter(v => v === "up").length;
   pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
+  const c = $("f-coll").value.trim();   // go see it where it landed
+  if (c) $("pub-msg").insertAdjacentHTML("beforeend", ` · <a href="./?c=${encodeURIComponent(c)}">see it on the timeline →</a>`);
 }
 
 async function publish(){
