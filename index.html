@@ -683,17 +683,19 @@
   .draftcard .dnote{display:block;margin-top:18px;padding:10px 12px;border-radius:6px;font-size:15px;
     border:1px solid var(--accent)}
   .draftcard .dnote.warn{border-color:var(--warn)}
-  .draftcard .dsign{margin-top:18px;padding-top:4px;border-top:1px solid var(--faint)}
-  .draftcard .dopt{border:1px solid var(--faint);border-radius:8px;padding:12px 14px;margin-top:10px}
-  .draftcard .dopt.first{border:2px solid var(--accent)}
-  .draftcard .dopt b{display:block;font-size:16px}
-  .draftcard .dopt i{font-style:normal;font-size:14px;color:var(--dim)}
-  .draftcard .dopt p{margin:8px 0 0;font-size:15px;line-height:1.45}
-  .draftcard .dgo,.draftcard .dother{display:inline-flex;align-items:center;box-sizing:border-box;
-    height:var(--fh);margin-top:12px;padding:0 18px;border-radius:6px;font:inherit;font-size:15px;
-    font-weight:600;text-decoration:none;cursor:pointer}
-  .draftcard .dgo{background:var(--rail);border:1px solid var(--rail);color:var(--ink)}
-  .draftcard .dother{background:none;border:1px solid var(--faint);color:var(--text)}
+  .draftcard .dyou{margin-top:22px;padding-top:4px;border-top:1px solid var(--faint)}
+  .draftcard .dways{display:block;margin-top:12px;font-size:14px;color:var(--dim)}
+  .draftcard .dgo,.draftcard .dother{font:inherit;font-size:14px;color:var(--dim);background:none;border:0;
+    padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  .draftcard .dgo:hover,.draftcard .dother:hover{color:var(--text)}
+  /* the newcomer's key, on the card they just added */
+  .keybox{margin-top:14px;padding:12px 14px;border:2px solid var(--accent);border-radius:8px;font-size:15px;line-height:1.45}
+  .keybox code{display:block;margin:10px 0;padding:8px 10px;background:var(--panel);border-radius:6px;
+    font-family:var(--mono);font-size:13px;word-break:break-all;user-select:all}
+  .keybox .kbtns{display:flex;gap:10px;flex-wrap:wrap}
+  .keybox button,.keybox a{font:inherit;font-size:15px;padding:6px 16px;border-radius:6px;cursor:pointer;
+    background:none;border:1px solid var(--faint);color:var(--text);text-decoration:none}
+  .keybox .ksaved{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:600}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
@@ -1502,7 +1504,7 @@ function b32polymod(vals){
   }
   return chk;
 }
-function bech32(hrp, hex){                 // npub for pubkeys (nsec only in the test harness)
+function bech32(hrp, hex){                 // npub for pubkeys, nsec for the page key
   const data = [];
   for (let i=0;i<hex.length;i+=2) data.push(parseInt(hex.slice(i,i+2),16));
   // convert 8-bit → 5-bit
@@ -2389,7 +2391,8 @@ function renderTimeline(entries){
         (justPub && justPub.d === e.d ? tallyHtml(justPub.id) : "") + `</div>${depthMark(ev, e.d)}` +
         `<h4>${headTitle(ev, e.d)}` +
         `${future ? `<span class="upcoming">upcoming</span>` : ""}${xBadge(sp, xc)}</h4>` +
-        creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) + `${xf}</div></div>`;
+        creditRow(ev, par && par.pubkey) + revisedRow(ev, e) + cardBody(ev, e.d) + box + tail(ev) +
+        (keyShow && keyShow.d === e.d && pageKey ? keyBoxHtml() : "") + `${xf}</div></div>`;
     }
     prevSide = side;
     // an opened rival takes a row of its own on the submitted side — the line bends round it
@@ -2970,7 +2973,15 @@ let myPk = null;                // my pubkey once a signer produced one — ligh
 // signer that cannot sign — every tap would fail at the last step. Presence of the object is
 // a claim; signEvent is the capability.
 const signerReady = () => !!(window.nostr && typeof window.nostr.signEvent === "function");
-let hasSigner = signerReady();
+// THE PAGE KEY (2026-09-30, user's call — nstart's forced bunker was too much for a first card).
+// A newcomer's key is made HERE, only when they click "Add my card" with their name filled in:
+// a choice, never a fallback (the 08-07 bug was a fallback). Last in line — a bunker or an
+// extension always signs instead. New storage name on purpose: an old wtc:sk must never wake.
+const PAGE_KEY = "wtc:pagekey";
+let pageKey = null;               // {sk, saved}
+try { pageKey = JSON.parse(localStorage.getItem(PAGE_KEY) || "null"); } catch {}
+const storePageKey = () => { try { localStorage.setItem(PAGE_KEY, JSON.stringify(pageKey)); } catch {} };
+let hasSigner = signerReady() || !!pageKey;
 // extensions can inject after first paint — look twice more, then stop asking
 if (!hasSigner) [400, 1500].forEach(ms => setTimeout(() => {
   if (!hasSigner && signerReady()){ hasSigner = true; scheduleRender(); }
@@ -3085,8 +3096,8 @@ async function eventId(ev){
   return bytesToHex(await sha256(new TextEncoder().encode(ser)));
 }
 
-// NIP-01 id + signature from a raw secret key. No runtime caller — the test harness's
-// fixture builder, and the only way it can produce a genuinely signed event to feed the gate.
+// NIP-01 id + signature from a raw secret key — the page key's signer, and the test
+// harness's fixture builder.
 async function signWithMint(tmpl, skHex){
   const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
   ev.id = await eventId(ev);               // same serialization the gate re-derives
@@ -3100,6 +3111,8 @@ async function signWithMint(tmpl, skHex){
 let signerP = null;
 function getSigner(){
   if (bunkerSigner) return Promise.resolve(bunkerSigner);
+  if (!signerReady() && pageKey)
+    return Promise.resolve({ pubkey: xonlyPub(pageKey.sk), sign: t => signWithMint(t, pageKey.sk) });
   if (!signerP){
     signerP = (async () => {
       if (!signerReady()) throw new Error("no signer");   // same capability test as hasSigner
@@ -3186,6 +3199,26 @@ function publish(ev){
 function rememberPk(pk){
   myPk = pk;
   try { localStorage.setItem(PK_KEY, pk); } catch {}
+}
+function mintPageKey(){
+  let sk;
+  do sk = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+  while (!(BigInt("0x" + sk) > 0n && BigInt("0x" + sk) < CURVE_N));
+  pageKey = { sk, saved: false };
+  storePageKey();
+  hasSigner = true;
+}
+// the newcomer's key, shown once on the card they just added — never a gate, closes either way
+let keyShow = null;       // {d, copied}
+function keyBoxHtml(){
+  const nsec = bech32("nsec", pageKey.sk);
+  return `<div class="keybox"><b>Your card is in.</b> This is your key. It puts your name on every card you add. ` +
+    `Nobody can reset it, not us, not anyone, so keep a copy somewhere safe.` +
+    `<code>${nsec}</code><div class="kbtns">` +
+    `<button class="kcopy" type="button">${keyShow.copied ? "Copied ✓" : "Copy"}</button>` +
+    `<a class="kdl" download="wiki-timechain-key.txt" href="data:text/plain;charset=utf-8,${encodeURIComponent(
+      "Your Wiki-Timechain key. Keep it private.\n\n" + nsec + "\n")}">Download</a>` +
+    `<button class="ksaved" type="button">I saved it</button></div></div>`;
 }
 
 // ═══════════════ authoring core — ported from add.html, so a draft composed here builds
@@ -3285,7 +3318,6 @@ function draftCollision(d, pk){
 // the three text tiers teach by SIZE — the title edits at title size while you type.
 // NIP-07 publishes right here; with no extension the draft hands off to add.html.
 let draft = null;         // {title,summary,content, y,m,day, stage:'year'|'month'|'day'|'set'|'idle', seedYr}
-let signOpen = false;     // no signer: the ways to sign are open under the button
 let draftFocused = false; // an editable has the caret — scheduleRender holds repaints
 let pendingRender = false;
 let justPub = null;       // {d, id} — shows the relay tally on the card just published
@@ -3303,10 +3335,9 @@ function startDraft(){
   const face = drumTicks.length
     ? drumTicks.reduce((a, t) => Math.abs(t.y - scrollY - innerHeight/2) < Math.abs(a.y - scrollY - innerHeight/2) ? t : a)
     : null;
-  draft = { title:"", summary:"", content:"", srcName:"", srcUrl:"", time:"", y:null, m:null, day:null, date2:null,
+  draft = { title:"", summary:"", content:"", srcName:"", srcUrl:"", time:"", name:"", about:"", y:null, m:null, day:null, date2:null,
             dsuf: mintSuffix(), stage:"idle", seedYr: (face && face.yr) || String(new Date().getFullYear()),
             ...keptDraft() };
-  signOpen = nstartMsg === "none";
   // the card opens at the top, asking for the year first; the wheel stays one click away
   draftPlaced(draftDate() ? null : ".dy");
 }
@@ -3317,8 +3348,8 @@ function keptDraft(){
 }
 function keepDraftNow(){
   if (!draft) return;
-  const { title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf } = draft;
-  try { localStorage.setItem(keepKey(), JSON.stringify({ title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf,
+  const { title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf, name, about } = draft;
+  try { localStorage.setItem(keepKey(), JSON.stringify({ title, summary, content, srcName, srcUrl, time, y, m, day, date2, dsuf, name, about,
                                                           stage: y ? "set" : "idle" })); } catch {}
 }
 function closeDraft(){
@@ -3373,22 +3404,20 @@ function draftNodeHtml(e, future){
   const ed = (cls, tagName, ph, text) =>
     `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
-  const btn = hasSigner
-    ? `<button class="dpub" type="button" disabled title="needs a date and what happened">Sign your name &amp; add</button>`
-    : `<button class="dpub dhand" type="button" disabled title="no signer in this browser yet — this shows the ways to sign">Sign your name &amp; add</button>`;
+  const btn = `<button class="dpub" type="button" disabled title="needs a date, what happened and plain words${hasSigner ? "" : ", and your name"}">` +
+    `${hasSigner ? "Sign your name &amp; add" : "Add my card"}</button>`;
   const msg = hasSigner && nstartMsg === "none" ? "in" : nstartMsg;   // a late answer still signs them in
   const note = { wait: `<span class="dnote">Signing you in with your new signature…</span>`,
                  in:   `<span class="dnote">Welcome — you're signed in. Your card is right where you left it.</span>`,
                  none: `<span class="dnote warn">You're not signed in yet. Your card is still saved here.</span>` }[msg] || "";
-  const ways = hasSigner || !signOpen ? "" : `<div class="dsign"><span class="dlab">How do you want to sign?</span>` +
-    `<div class="dopt first"><b>I'm new here</b><i>Make your signature — free, about 5 minutes.</i>` +
-    `<p>Your signature is yours to hold — not a password. Nobody can reset it, not us, not anyone. ` +
-    `So we don't make it. A free helper, <b style="display:inline">nstart.me</b>, does: ` +
-    `1 pick your name · 2 save your backup · 3 come straight back to this card.</p>` +
-    `<p><i>This card stays saved here while you're gone.</i></p>` +
-    `<a class="dgo" href="${esc(nstartUrl())}">Go to nstart.me →</a></div>` +
-    `<div class="dopt"><b>I already have a signer</b><i>A phone app, a signer link or a key — the sign-in page takes it from here.</i><br>` +
-    `<button class="dother" type="button">Sign in another way →</button></div></div>`;
+  // no signer yet: who you are, under the card — the click on "Add my card" makes the key
+  const you = hasSigner ? "" : `<div class="dyou">` +
+    `<span class="dlab">Your name <i>shown on every card you add</i></span>` +
+    `<input class="dnm" autocomplete="nickname" value="${esc(draft.name || "")}">` +
+    `<span class="dlab">About you <i>optional</i></span>` +
+    `<input class="dab" placeholder="a line about you" value="${esc(draft.about || "")}">` +
+    `<span class="dways">Already have a nostr signer? <button class="dother" type="button">Sign in another way</button>` +
+    ` · <a class="dgo" href="${esc(nstartUrl())}">or make one at nstart.me</a></span></div>`;
   const lab = (text, note) => `<span class="dlab">${text}${note ? ` <i>${note}</i>` : ""}</span>`;
   const months = `<option value="">—</option>` + MONTH_NAMES.map((n, i) => {
     const v = String(i + 1).padStart(2, "0");
@@ -3419,16 +3448,15 @@ function draftNodeHtml(e, future){
     lab("What happened?", "One thing. More to tell? Add another card after.") +
     ed("ded-t", "h4", "the event, one line", draft.title) +
     `<div class="dline dcol hid"></div>` +
-    lab("In plain words", "optional") +
+    lab("In plain words", "a sentence or two") +
     ed("ded-s", "div", "a sentence or two a newcomer would understand", draft.summary) +
     src +
     lab("The full story", "optional — as long as you need") +
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
-    note +
+    you + note +
     `<div class="dfoot"><span class="cnt cnt-t hid"></span><span class="cnt cnt-s hid"></span>${btn}` +
     `<button class="dkeep" type="button" title="close the card — it waits here for next time (Esc)">Close — keep my draft</button>` +
     `<span class="dline derr hid"></span></div>` +
-    ways +
     `</div></div>`;
 }
 
@@ -3457,13 +3485,15 @@ function draftRefresh(){
   const b = card.querySelector(".dpub");
   // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
   // checked outright or an untitled card would sail through.
-  b.disabled = !(draftDate() && draft.title.trim() && d && !(col && col.block));
+  b.disabled = !(draftDate() && draft.title.trim() && draft.summary.trim() && (hasSigner || draft.name.trim())
+                 && d && !(col && col.block));
 }
 
 areaEl.addEventListener("input", e => {
   if (!draft) return;
-  if (e.target.matches(".draftcard .dsn, .draftcard .dsu")){
-    draft[e.target.classList.contains("dsn") ? "srcName" : "srcUrl"] = e.target.value;
+  if (e.target.matches(".draftcard .dsn, .draftcard .dsu, .draftcard .dnm, .draftcard .dab")){
+    draft[{ dsn: "srcName", dsu: "srcUrl", dnm: "name", dab: "about" }[e.target.className]] = e.target.value;
+    draftRefresh();
     return keepDraftNow();
   }
   const ed = e.target.closest(".ded");
@@ -3535,13 +3565,14 @@ areaEl.addEventListener("click", e => {
   }
   if (e.target.closest(".dtab, .dwheel")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
   const b = e.target.closest(".dpub");
-  if (b && !b.classList.contains("dhand")) return publishDraft(b);
-  if (b){
-    signOpen = !signOpen;
-    render();
-    const w = areaEl.querySelector(".draftcard .dsign");
-    if (w) w.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }
+  if (b) return publishDraft(b);
+});
+// the key box on the card just added — outside the draft, which is gone by then
+areaEl.addEventListener("click", e => {
+  if (!keyShow) return;
+  if (e.target.closest(".kcopy"))
+    navigator.clipboard.writeText(bech32("nsec", pageKey.sk)).then(() => { keyShow.copied = true; render(); });
+  if (e.target.closest(".ksaved")){ pageKey.saved = true; storePageKey(); keyShow = null; render(); }
 });
 addEventListener("keydown", e => {
   if (e.key === "Escape" && pick && !draft) return endPick();
@@ -3564,7 +3595,17 @@ async function publishDraft(btn){
   const err = areaEl.querySelector(".derr");
   err.classList.add("hid");
   try {
-    const s = await getSigner(), c = activeF.slice(2);
+    const c = activeF.slice(2), fresh = !hasSigner;
+    if (fresh) mintPageKey();
+    const s = await getSigner();
+    // a new key introduces itself first: its name, then a follow of this timeline's keeper
+    if (fresh){
+      const now = Math.floor(Date.now() / 1000), K = notaryOf(c);
+      const prof = await s.sign({ kind: 0, created_at: now, tags: [], content: JSON.stringify(
+        { name: draft.name.trim(), ...(draft.about.trim() ? { about: draft.about.trim() } : {}) }) });
+      ingestProfile(prof); publish(prof);
+      if (K) publish(await s.sign({ kind: 3, created_at: now, tags: [["p", K.pubkey]], content: "" }));
+    }
     const tmpl = buildDraftTemplate({ ...draft, content: contentWithSource(draft), date: draftDate(), coll: c, pubkey: s.pubkey });
     // wtc:pk can be stale — the collision that matters is against the key that will sign
     const col = draftCollision(tmpl.tags[0][1], s.pubkey);
@@ -3581,6 +3622,7 @@ async function publishDraft(btn){
     rememberPk(ev.pubkey);
     justPub = { d: tmpl.tags[0][1], id: ev.id };
     setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
+    if (pageKey && !pageKey.saved && s.pubkey === xonlyPub(pageKey.sk)) keyShow = { d: tmpl.tags[0][1] };
     try { localStorage.removeItem(keepKey()); } catch {}
     draft = null; nstartMsg = null;
     if (pickStage) pickExit();
