@@ -91,7 +91,7 @@
     -webkit-text-size-adjust:100%}
   a{color:var(--accent)}
   code{font-family:var(--mono);font-size:.92em;color:var(--text-2)}
-  /* where a link goes, printed beside its label — the viewer's rule, so the preview matches */
+  /* where a link goes, printed beside its label — the viewer's rule */
   .lhost{margin-left:4px;font-family:var(--mono);font-size:.82em;color:var(--dim);
     white-space:nowrap}
   .lhost::before{content:"⟨"}
@@ -103,20 +103,14 @@
     justify-content:space-between;gap:14px;flex-wrap:wrap}
   h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
   .back{margin-right:auto;font-size:13.5px}
-  .sub{max-width:720px;margin:6px auto 0;color:var(--dim);font-size:13.5px}
 
   main{max-width:720px;margin:0 auto;padding:22px 18px 90px}
-  /* Five steps read as five steps: a filled numeral, a louder label, and a rule between
-     sections. The old h2 was a dim mono line the same weight as every `label` under it,
-     so the page ran together into one column of small grey type. */
+  /* a louder label and a rule between sections, so the page doesn't run together */
   section{margin:0 0 26px}
   section+section{border-top:1px solid var(--border-soft);margin-top:30px;padding-top:24px}
   h2{margin:0 0 4px;display:flex;align-items:center;gap:9px;
     font-size:13.5px;font-family:var(--mono);letter-spacing:.09em;
     text-transform:uppercase;color:var(--text-2);font-weight:600}
-  h2 i{flex:0 0 auto;font-style:normal;letter-spacing:0;font-size:12px;
-    width:21px;height:21px;border-radius:6px;display:grid;place-items:center;
-    background:var(--rail);color:var(--ink)}
   .note{margin:0 0 12px;color:var(--dim);font-size:13px}
 
   label{display:block;margin:13px 0 4px;font-size:12px;font-family:var(--mono);
@@ -148,50 +142,14 @@
   button.go{background:var(--rail);color:var(--ink);border-color:var(--rail);font-weight:600}
   button.slim{padding:7px 11px;font-size:13px}
 
-  /* the segmented control, same class names and behaviour as the viewer's */
-  .dtog{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
-  .ds{background:transparent;border:0;border-right:1px solid var(--border);cursor:pointer;
-    font-family:var(--mono);font-size:11px;color:var(--dim);padding:3px 9px;line-height:1.5;
-    border-radius:0}
-  .ds:last-child{border-right:0}
-  .ds:hover{color:var(--text);border-color:var(--border)}
-  .ds.on{background:var(--rail);color:var(--ink)}   /* on-state = fill + dark ink, not hue */
-
   /* ── sign in ── */
-  /* The rungs run simplest → most technical, so the nsec sits SECOND, where a newcomer's
-     eye lands. The arm is what pays for that: a dashed line from "no key yet" down the
-     gutter, PAST the secret-key rung, turning into the extension. Grid, not absolute
-     positioning — the line spans rows 1–2 and the ↳ is its own cell in row 3, so it lands
-     on the right rung at any width without measuring anything. */
-  .ladder{display:grid;grid-template-columns:26px 1fr;gap:9px 8px;margin:9px 0}
-  .ladder>.rung{grid-column:2;margin:0}
-  .arm{grid-column:1;grid-row:1/3;border-left:2px dashed var(--rail);
-    margin:32px 0 -9px 8px}
-  /* The elbow is DRAWN, not a glyph — two dashed borders and a solid arrowhead, so it
-     reads at the same weight as the run above it instead of shrinking to a character. */
-  .armtip{grid-column:1;grid-row:3;align-self:start;position:relative;
-    height:34px;margin-left:8px;
-    border-left:2px dashed var(--rail);border-bottom:2px dashed var(--rail);
-    border-bottom-left-radius:9px}
-  .armtip::after{content:"";position:absolute;right:-7px;bottom:-5px;
-    border:6px solid transparent;border-left-color:var(--rail);border-right-width:0}
-  /* Arrived from the viewer with a key already in hand: no signpost, so no arm to point it,
-     so no gutter column either. Hiding alone would leave a 26px empty track. */
-  .ladder.plain{grid-template-columns:1fr}
-  .ladder.plain>.rung{grid-column:1}
-  .ladder.plain>.rung.start,.ladder.plain>.arm,.ladder.plain>.armtip{display:none}
+  /* two choices up front; the pasted secret key folds under "other ways" */
   .rung{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:9px 0;
     background:var(--panel)}
   .rung h3{margin:0 0 2px;font-size:14px;font-weight:600}
   .rung p{margin:0 0 9px;color:var(--dim);font-size:12.5px}
   .rung p:last-child{margin-bottom:0}
-  .rung.start{background:var(--panel-2);border-style:dashed}  /* a signpost, not an action */
-  /* The two extension links take the arm's amber so the signpost is one colour end to end;
-     underlined, because amber-vs-blue can't be the only thing saying "link". */
-  .rung.start a{color:var(--rail);text-decoration:underline;text-underline-offset:2px}
-  /* The highlight sits on the rung the arm POINTS AT — the arm, the border and the kicker
-     are one amber run. The nsec rung is left plain: its warning is the copy's job, and a
-     second highlighted rung would make the arm mean nothing. */
+  /* "start here": the one highlighted choice */
   .rung.picked{border-color:var(--rail);background:linear-gradient(180deg,var(--glow),var(--panel))}
   .kick{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
     color:var(--rail);display:block;margin-bottom:3px}
@@ -234,23 +192,7 @@
   summary{cursor:pointer;font-size:12px;font-family:var(--mono);color:var(--dim);
     letter-spacing:.05em;text-transform:uppercase}
 
-  /* ── preview: the viewer's own card, so what you see is what lands ── */
-  .pv{border:1px solid var(--border);border-radius:12px;background:var(--panel);
-    padding:13px 15px;margin:10px 0 0}
-  .pv .ctab{display:flex;align-items:baseline;gap:10px;width:fit-content;
-    max-width:calc(100% + 15px);margin:-13px 0 10px -15px;padding:6px 28px 5px 15px;
-    background:var(--panel-2);border-bottom:1px solid var(--border);
-    border-radius:11px 0 0 0;white-space:nowrap;
-    clip-path:polygon(0 0,calc(100% - 17px) 0,100% 100%,0 100%);
-    font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .pv .ctab .td{font-size:16.5px;color:var(--past);flex:none}
-  .pv .ctab .sl{color:var(--faint);flex:none}
-  .pv .ctab .by{overflow:hidden;text-overflow:ellipsis}
-  .pv.future .ctab .td{color:var(--future)}
-  .pv h4{margin:0;font-size:17.5px;line-height:1.3;font-weight:600;color:var(--text)}
-  .pv .cbody{margin-top:7px;font-size:15.5px;line-height:1.55;color:var(--text-3)}
-  .pv .cbody p{margin:0 0 8px}
-  .pv .cbody p:last-child{margin-bottom:0}
+  /* content marks — renderContent's output */
   del{text-decoration:line-through;text-decoration-thickness:1px;color:var(--dim)}
   ins{text-decoration:none;color:var(--text);border-radius:2px;padding:0 3px;
     background:var(--rail-tint)}
@@ -262,25 +204,15 @@
   .dgut.add .dm{color:var(--rail)}
   .dtx{flex:1 1 auto;color:var(--dim)}
   .dgut.add .dtx{color:var(--text)}
-  .revl{display:inline-block;margin:0 0 8px;padding:1px 7px;border:1px dashed var(--gutline);
-    border-radius:4px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--dim)}
 
   pre.json{margin:10px 0 0;padding:11px 12px;background:var(--panel-2);
     border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:340px;
     font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--text-3)}
 
-  .relays{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
-  .rl{font-family:var(--mono);font-size:11px;color:var(--dim);
-    border:1px solid var(--border);border-radius:5px;padding:1px 7px}
-  .rl.up{border-color:var(--rail);color:var(--rail)}
-  .rl.down{border-style:dashed;opacity:.6}
-
   .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
 </style>
 <script>
-// Theme applied BEFORE first paint, from the same key the viewer writes — a reader who
-// set light there does not get a black flash here. Dark is the default, no attribute.
+// Theme from the cardex's setting, before first paint — no switch here. Dark = no attribute.
 (function(){
   try{
     var t = localStorage.getItem("wtc:theme");
@@ -301,48 +233,15 @@
   <div class="hrow">
     <h1>Add to the record</h1>
     <nav class="back"><a id="toview" href="./">← cardex</a> · <a id="todots" href="dots.html">dots</a></nav>
-    <div class="dtog" id="theme" role="group" aria-label="theme">
-      <button class="ds" data-t="dark">dark</button>
-      <button class="ds" data-t="medium">sepia</button>
-      <button class="ds" data-t="light">light</button>
-    </div>
   </div>
-  <p class="sub">Write a kind-30828 card: start a timeline, add an entry to someone
-    else's, or revise a card that is already there. Your key signs it, the relays keep
-    it, and the cardex (or dots) reads it on the next load — nothing here is
-    stored on a server. <a href="CONVENTION.md">How to write one</a> ·
-    <a href="NIP-DRAFT.md">the spec</a>.</p>
 </header>
 
 <main>
   <section id="sec-sign">
-    <h2><i>1</i>sign in</h2>
+    <h2>sign in</h2>
     <div id="signed-out">
-      <p class="note">A card is a record. A record needs a real key behind it — no throwaway
-        identity here. Three ways in, easiest first. Use the one you already have. The last two
-        come back on their own next visit; the secret-key rung never does.</p>
-      <div class="ladder">
-        <div class="rung start">
-          <h3>No key yet?</h3>
-          <p>Skip the next one. Install a browser extension —
-            <a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener noreferrer">nos2x</a>
-            or <a href="https://getalby.com" target="_blank" rel="noopener noreferrer">Alby</a>
-            — and let it make a key for you. Then come back to the rung it points at.</p>
-        </div>
-        <div class="arm"></div>
-
-        <div class="rung">
-          <h3>Secret key</h3>
-          <p>Paste your secret key here if you are brave and have a stomach of steel…
-            yeah, don't do that with your nostr key.</p>
-          <p><strong>Or even better — use a throwaway key!</strong></p>
-          <div class="row" style="margin-top:9px">
-            <input id="nsec-in" type="password" placeholder="nsec1…" autocomplete="off" spellcheck="false">
-            <button class="slim" id="b-nsec" style="flex:0 0 auto">use for this tab</button>
-          </div>
-        </div>
-
-        <div class="armtip" aria-hidden="true"></div>
+      <p class="note">A card is a record, so it needs a real key behind it. Both ways come back
+        on their own next visit.</p>
         <div class="rung picked">
           <span class="kick">start here</span>
           <h3>Browser extension</h3>
@@ -353,7 +252,7 @@
         </div>
 
         <div class="rung">
-          <h3>Remote signer</h3>
+          <h3>Phone signer</h3>
           <p>Your key lives on your phone or another device. Every signature asks that device
             first — you approve it there. Paste the <code>bunker://</code> address your
             signer app shows you. <span class="proto">NIP-46</span></p>
@@ -380,7 +279,21 @@
             <p class="msg" id="nc-msg"></p>
           </div>
         </div>
-      </div>
+      <details>
+        <summary>other ways</summary>
+        <div class="rung">
+          <h3>Secret key</h3>
+          <p>Paste your secret key here if you are brave and have a stomach of steel…
+            yeah, don't do that with your nostr key.</p>
+          <p><strong>Or even better — use a throwaway key!</strong></p>
+          <div class="row" style="margin-top:9px">
+            <input id="nsec-in" type="password" placeholder="nsec1…" autocomplete="off" spellcheck="false">
+            <button class="slim" id="b-nsec" style="flex:0 0 auto">use for this tab</button>
+          </div>
+        </div>
+      </details>
+      <p class="note" style="margin-top:12px">No key? Write your first card in the
+        <a id="tonew" href="./">cardex</a> — it makes one for you.</p>
       <p class="msg" id="sign-msg"></p>
     </div>
 
@@ -399,7 +312,7 @@
        record is the only thing that opens it, and it stands the card form down entirely —
        an act is not a card and shares nothing with it but the key that signs it. -->
   <section id="sec-act" style="display:none">
-    <h2><i>2</i>the act</h2>
+    <h2>the act</h2>
     <p class="note" id="act-note"></p>
     <pre class="json" id="act-what"></pre>
     <div class="bar">
@@ -411,18 +324,10 @@
   </section>
 
   <section id="sec-card">
-    <h2><i>2</i>the card</h2>
+    <h2>the card</h2>
     <p class="note" id="card-note">One fact per card. The collection is the timeline it joins — pick an
       existing one or type a new slug, which is all it takes to start one — it is minted as a
       notary under your key when you publish.</p>
-
-    <div id="mine-row">
-      <label for="f-load">edit one of your cards <span class="h">(loads it back into this form; publishing replaces it)</span></label>
-      <div class="row">
-        <select id="f-load"><option value="">— new card —</option></select>
-        <button class="slim" id="b-load" style="flex:0 0 auto">load</button>
-      </div>
-    </div>
 
     <label for="f-coll">collection <span class="h">— the timeline this joins. Required.</span></label>
     <div class="row">
@@ -467,7 +372,7 @@ Source: [label](https://primary-source)"></textarea>
   </section>
 
   <section id="sec-fork">
-    <h2><i>3</i>revises another card <span style="text-transform:none;letter-spacing:0;font-family:var(--font);color:var(--faint)">— optional</span></h2>
+    <h2>revises another card <span style="text-transform:none;letter-spacing:0;font-family:var(--font);color:var(--faint)">— optional</span></h2>
     <p class="note">Leave this alone for an ordinary card. Pick a card here and yours
       becomes a revision of it: the viewer draws the lineage, and if your content carries
       djot marks — <code>{-removed-}</code> and <code>{+added+}</code> — it renders as a
@@ -490,24 +395,12 @@ Source: [label](https://primary-source)"></textarea>
     </details>
   </section>
 
-  <section id="sec-preview">
-    <h2><i>4</i>preview</h2>
-    <p class="note">The cardex's own card, rendered from what you have typed.</p>
-    <div id="pv-host"></div>
-    <details>
-      <summary>the event that will be signed</summary>
-      <pre class="json" id="pv-json"></pre>
-    </details>
-  </section>
-
   <section id="sec-publish">
-    <h2><i>5</i>publish</h2>
+    <h2>publish</h2>
     <div class="bar">
       <button class="go" id="b-pub" disabled>sign &amp; publish</button>
       <span class="msg" id="pub-msg" style="margin:0"></span>
     </div>
-    <div class="relays" id="relays"></div>
-    <pre class="json" id="pub-json" style="display:none"></pre>
   </section>
 </main>
 
@@ -549,22 +442,6 @@ const MARKER = "wikitimechain";   // the corpus marker; lives on the notary, not
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;")
   .replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
-
-// ═══════════════ theme ═══════════════
-function setTheme(t){
-  if (t === "dark") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = t;
-  try { localStorage.setItem("wtc:theme", t); } catch {}
-  paintTheme();
-}
-function paintTheme(){
-  const cur = document.documentElement.dataset.theme || "dark";
-  $("theme").querySelectorAll(".ds").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
-}
-$("theme").addEventListener("click", e => {
-  const b = e.target.closest(".ds"); if (b) setTheme(b.dataset.t);
-});
-paintTheme();
 
 // ═══════════════ bech32 (BIP-173) — encode is the viewer's, decode is new ═══════════════
 const B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -1002,7 +879,6 @@ function setSigner(s){
     ? "This browser remembers nothing. Close the tab, or sit idle for fifteen minutes, and you are out."
     : "This browser will sign you back in on your next visit. Sign out to forget it.";
   signMsg("");
-  renderMine();          // your cards can only be listed once we know who you are
   tryRevise();           // an addressed card might turn out to be this key's own
   refresh();
 }
@@ -1029,7 +905,6 @@ function signOut(keep){
   if (keep !== true) { ncClose(); forget(); }
   $("signed-out").style.display = "";
   $("signed-in").style.display = "none";
-  renderMine();
   refresh();
 }
 
@@ -1081,7 +956,6 @@ resume();
 // read feeds all three things this page needs — the collection list, the d-collision guard,
 // and the fork picker — so there is no second query and no baked pubkey anywhere.
 const cards   = new Map();   // "pubkey:d" → newest event   (NIP-01 addressable dedup)
-const relayUp = new Map();
 let eosed = 0, settled = false;
 
 const tagOf   = (ev, k) => (ev.tags.find(t => t[0] === k) || [])[1] || "";
@@ -1128,15 +1002,13 @@ function ingest(ev){
 let drawT = null;
 function scheduleDraw(){
   if (drawT) return;
-  drawT = setTimeout(() => { drawT = null; renderCollections(); renderMine(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
+  drawT = setTimeout(() => { drawT = null; renderCollections(); renderForks(); renderInherit(); tryRevise(); tryPrefill(); }, 150);
 }
 
 function connect(url){
   let ws;
-  try { ws = new WebSocket(url); } catch { relayUp.set(url,"down"); renderRelays(); return; }
-  relayUp.set(url, "connecting");
+  try { ws = new WebSocket(url); } catch { return; }
   ws.onopen = () => {
-    relayUp.set(url, "up"); renderRelays();
     ws.send(JSON.stringify(["REQ", "tsieve", { kinds:[KIND], limit:500 }]));   // markerless: passes() gates shape
     ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER] }]));   // a card submits to one of these
     // Only when an act is actually crossing. The notaries are what a context can legally
@@ -1168,8 +1040,6 @@ function connect(url){
       if (t){ data[2] ? t.ok++ : (t.no++, t.why = t.why || String(data[3] || "")); renderPubTally(); }
     }
   };
-  ws.onerror = () => { relayUp.set(url,"down"); renderRelays(); };
-  ws.onclose = () => { if (relayUp.get(url) !== "up") relayUp.set(url,"down"); renderRelays(); };
   sockets.push(ws);
 }
 const sockets = [];
@@ -1183,13 +1053,6 @@ function markSettled(){
 }
 setTimeout(markSettled, 9000);   // relays that never EOSE must not lock the page forever
 
-function renderRelays(){
-  $("relays").innerHTML = RELAYS.map(r => {
-    const st = relayUp.get(r) || "connecting";
-    return `<span class="rl ${st}">${esc(r.replace(/^wss?:\/\//,""))}</span>`;
-  }).join("");
-}
-renderRelays();
 RELAYS.forEach(connect);
 
 // ═══════════════ authoring helpers (ported from the Forge writer) ═══════════════
@@ -1207,7 +1070,7 @@ function fixLinkTargets(s){
   return String(s).replace(/\]\(([^)]*)\)/g, (_, url) => "](" + url.replace(/\s+/g, "") + ")");
 }
 
-// ═══════════════ the djot-ish renderer — the viewer's, so the preview is honest ═══════════════
+// ═══════════════ the djot-ish renderer — the viewer's ═══════════════
 const MARK = /\{([-+])([^]*?)\1\}/g;
 // the viewer's hostMark, so you see your own link the way a reader will (index.html for why)
 function hostMark(url, label){
@@ -1305,22 +1168,8 @@ function renderCollections(){
   sel.value = keep || (seen.includes(pre) ? pre : "");
 }
 
-// Your own cards, for editing. Needs a signer — before that there is nobody to filter on,
-// which is the whole reason no pubkey is baked into this page.
-function renderMine(){
-  const sel = $("f-load");
-  const mine = signer
-    ? [...cards.values()].filter(e => e.pubkey === signer.pubkey)
-        .sort((a,b) => (dateOf(a) < dateOf(b) ? 1 : -1))
-    : [];
-  sel.innerHTML = '<option value="">— new card —</option>' + mine.map(e =>
-    `<option value="${esc(dOf(e))}">${esc(tagOf(e,"title") || dOf(e))} · ${esc(showDate(dateOf(e)))} · ${esc(collOf(e))}</option>`
-  ).join("");
-  $("b-load").disabled = !mine.length;
-}
-
-function loadMine(){
-  const d = $("f-load").value;
+// A card of yours, back into the form — the "revise" link's edit door (tryRevise).
+function loadMine(d){
   if (!d || !signer) return;
   const ev = cards.get(signer.pubkey + ":" + d);
   if (!ev) return;
@@ -1354,21 +1203,7 @@ function loadMine(){
   cardMsg(`loaded "${tagOf(ev,"title") || d}" — publishing replaces it`, "ok");
   refresh();
 }
-$("b-load").addEventListener("click", loadMine);
 
-// Picking "— new card —" is a real intent: wipe the edit state, or the loaded card's
-// published_at and d-guard exemption ride silently into the next card. Collection stays —
-// the common case is several cards into one timeline.
-function resetForm(){
-  ["f-title","f-d","f-summary","f-content","f-extra",
-   "f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
-  delete $("f-d").dataset.touched;
-  $("f-fork").value = "";
-  loadedD = null; loadedPubAt = "";
-  cardMsg("");
-  refresh();
-}
-$("f-load").addEventListener("change", () => { if (!$("f-load").value) resetForm(); });
 
 // ═══════════════ the fork picker ═══════════════
 // Forge takes a raw hex event id and pubkey here, which is fine when you wrote every card
@@ -1510,7 +1345,7 @@ function collisionCheck(d){
   return null;
 }
 
-// ═══════════════ preview + gating ═══════════════
+// ═══════════════ gating ═══════════════
 function refresh(){
   // Act mode drives its own gate and its own button. The card form is not on screen and
   // must never become publishable from here — an act and a card share only the signer.
@@ -1535,12 +1370,6 @@ function refresh(){
     else if (noSrc) cardMsg("no source yet — say where this comes from: a line like Source: [label](https://…). You can publish without one, but a record wants a source.", "warnish");
     else if (!$("card-msg").classList.contains("ok")) cardMsg("");
   }
-
-  // An untouched form has nothing wrong with it yet — say what's missing, don't cry error.
-  const pristine = !val("f-title") && !val("f-d") && !$("f-content").value.trim();
-  $("pv-host").innerHTML = tmpl ? previewHtml(tmpl)
-    : `<p class="msg${pristine ? "" : " bad"}">${esc(pristine ? "fill in the card above and it appears here" : err || "")}</p>`;
-  $("pv-json").textContent = tmpl ? JSON.stringify(tmpl, null, 2) : "";
 
   const why = !signer ? "sign in first"
     : err ? err
@@ -1586,21 +1415,6 @@ function renderInherit(){
         .map(l => `<span class="tg">${esc(l)}</span>`).join("") : "");
 }
 
-function previewHtml(tmpl){
-  const t  = k => (tmpl.tags.find(x => x[0] === k) || [])[1] || "";
-  const date = showDate(t("event_date"));
-  const future = t("event_date").split("/")[0] > new Date().toISOString().slice(0, 10);
-  const who = signer ? npub(signer.pubkey).slice(0, 12) + "…" : "unsigned";
-  const isRev = tmpl.tags.some(x => x[0] === "a" && CITE.has(x[3]));
-  return `<div class="pv${future ? " future" : ""}">
-    <div class="ctab"><span class="td">${esc(date)}</span><span class="sl">/</span>
-      <span class="by">by ${esc(who)}</span></div>
-    ${isRev ? `<div class="revl">revises ${esc(val("f-fork-d"))}</div>` : ""}
-    ${t("title") ? `<h4>${esc(t("title"))}</h4>` : ""}
-    <div class="cbody">${renderContent(tmpl.content)}</div>
-  </div>`;
-}
-
 // ═══════════════ publish ═══════════════
 const tallies = new Map();     // event id → { ok, no, why }
 function pubMsg(text, cls){
@@ -1611,8 +1425,7 @@ function pubMsg(text, cls){
 function renderPubTally(){
   const [id, t] = [...tallies.entries()].pop() || [];
   if (!t) return;
-  const open = [...relayUp.values()].filter(v => v === "up").length;
-  pubMsg(`published — accepted by ${t.ok} of ${open} relays${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
+  pubMsg(`sent to ${t.ok} of ${RELAYS.length}${t.no ? `, refused by ${t.no}${t.why ? ` (${t.why})` : ""}` : ""}`, "ok");
   const c = $("f-coll").value.trim();   // go see it where it landed
   if (c) $("pub-msg").insertAdjacentHTML("beforeend", ` · <a href="./?c=${encodeURIComponent(c)}">see it on the timeline →</a>`);
 }
@@ -1647,8 +1460,6 @@ async function publish(){
   ingest(signed);                       // your own card is in the set immediately
   loadedD = (signed.tags.find(t => t[0] === "d") || [])[1];
   loadedPubAt = (signed.tags.find(t => t[0] === "published_at") || [])[1] || "";  // an immediate re-edit keeps it
-  $("pub-json").style.display = "";
-  $("pub-json").textContent = JSON.stringify(signed, null, 2);
   pubMsg(`sent to ${open.length} relays — waiting for their verdicts…`);
   $("b-pub").disabled = false;
 }
@@ -1659,7 +1470,7 @@ $("b-pub").addEventListener("click", publish);
 // timeline already chosen.
 const qc = new URLSearchParams(location.search).get("c");
 if (qc) $("f-coll").value = qc;
-if (qc) for (const [id, pg] of [["toview", "./"], ["todots", "dots.html"]]) $(id).href = pg + "?c=" + encodeURIComponent(qc);   // back to the timeline you came from
+if (qc) for (const [id, pg] of [["toview", "./"], ["todots", "dots.html"], ["tonew", "./"]]) $(id).href = pg + "?c=" + encodeURIComponent(qc);   // back to the timeline you came from
 
 // ?d/&e/&p: a card arrives addressed — the "revise" link beside any card's pyramid in the
 // viewer. Which door it opens is decided late: the fork fields fill NOW, so a visitor can
@@ -1683,21 +1494,13 @@ if (qrev){
 }
 
 // Arriving addressed is one job, so the page shows that job — the same fold handoffMode does
-// for a carried draft. The edit picker goes first and is the urgent one: its change handler
-// calls resetForm(), which blanks the three fork fields the link just filled, undoing the
-// revise with one click. Section 3 is already decided, so it collapses to the one fact it
+// for a carried draft. Section 3 is already decided, so it collapses to the one fact it
 // holds; nothing is removed, and the section itself is the way back.
 function reviseMode(){
-  $("mine-row").style.display = "none";
   $("sec-fork").style.display = "none";
   $("rev-chip").style.display = "";
   reviseChip(null);
   document.querySelector("header h1").textContent = "Revise a card";
-  document.querySelector("header .sub").innerHTML =
-    'Your card becomes a proposed revision of the one you clicked: the viewer draws the ' +
-    'lineage, and djot marks — <code>{-removed-}</code> and <code>{+added+}</code> — render ' +
-    'as a diff against what it said. <a href="CONVENTION.md">How to cut one</a> · ' +
-    '<a href="NIP-DRAFT.md">the spec</a>.';
   $("card-note").textContent = "The card you are revising, loaded as it stands. Mark up what changed.";
 }
 // Named while it can be — the target may still be in flight from the relays, so this runs
@@ -1747,16 +1550,14 @@ function tryRevise(){
   if (!qrev || !signer || signer.pubkey !== qrev.p) return;
   if (!cards.get(signer.pubkey + ":" + qrev.d)) return;   // not landed yet — ingest retries
   ["f-fork-d","f-fork-pk","f-fork-e"].forEach(id => $(id).value = "");
-  $("f-load").value = qrev.d;
+  const d = qrev.d;
   qrev = null;
-  // It is an edit of your own card now, so the picker is the thing that names it — give it
-  // back, drop the chip, and leave section 3 folded behind fork-wake as handoff mode does.
-  $("mine-row").style.display = "";
+  // An edit of your own card now: drop the chip, leave section 3 folded behind fork-wake.
   $("rev-chip").style.display = "none";
   $("fork-wake").style.display = "";
   document.querySelector("header h1").textContent = "Edit your card";
   $("card-note").textContent = "This card is yours, so publishing replaces it — no fork, no proposal.";
-  loadMine();
+  loadMine(d);
 }
 
 // ?draft=1: a card composed on the viewer's timeline, crossing here to be signed (no
@@ -1782,12 +1583,9 @@ if (new URLSearchParams(location.search).get("draft") === "1"){
 
 // A draft carried from the viewer arrives with its decisions already made: the timeline is
 // chosen, the fields are filled, and it is a NEW card by construction. So the page shows that
-// job and stands the others down. The edit picker goes first and is the urgent one — its
-// change handler calls resetForm(), and the draft is consume-once (deleted from storage on
-// read), so one click there would blank the only copy. Nothing is removed, only folded: the
-// revision link wakes its section, and an ordinary visit never enters this function.
+// job and stands the others down. Nothing is removed, only folded: the revision link wakes
+// its section, and an ordinary visit never enters this function.
 function handoffMode(){
-  $("mine-row").style.display = "none";
   $("sec-fork").style.display = "none";
   $("fork-wake").style.display = "";
   $("card-note").textContent = "Carried over from the timeline. Check it, then publish.";
@@ -2188,7 +1986,6 @@ function actGate(){
 function preferBunkerRung(){
   let saved = null; try { saved = localStorage.getItem(SIGNIN); } catch {}
   if (window.nostr || saved) return;
-  document.querySelector(".ladder").classList.add("plain");
   const ext = $("b-nip07").closest(".rung"), bunk = $("b-bunker").closest(".rung");
   ext.classList.remove("picked");
   bunk.classList.add("picked");
@@ -2198,15 +1995,9 @@ function preferBunkerRung(){
 // Act mode stands the card form down entirely. Nothing is removed that an act needs.
 function actMount(){
   $("sec-act").style.display = "";
-  ["sec-card","sec-fork","sec-preview"].forEach(id => $(id).style.display = "none");
-  const P = $("sec-publish");
-  P.querySelector("h2").innerHTML = "<i>3</i>relays";
-  P.querySelector(".bar").style.display = "none";
+  ["sec-card","sec-fork"].forEach(id => $(id).style.display = "none");
+  $("sec-publish").style.display = "none";
   document.querySelector("header h1").textContent = "Sign an act";
-  document.querySelector("header .sub").innerHTML =
-    'A kind-8828 act carried here from the timeline, because the viewer had no key of yours ' +
-    'to sign it with. Sign in below and it goes to the relays. ' +
-    '<a href="NIP-DRAFT.md">the spec</a>.';
   preferBunkerRung();
 }
 
