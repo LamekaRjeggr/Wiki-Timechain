@@ -1301,11 +1301,12 @@ const clip = s => s.length > 420 ? s.slice(0, 420) + " …" : s;  // display-onl
 // so a link that says one thing and goes somewhere else can't hide behind its text — hover is
 // no defense on a phone, and the cards come from keys nobody vouched for. The host is whatever
 // `new URL` says, which is ASCII punycode: `xn--bitcin-p1a.org` explains itself where the
-// pretty Cyrillic spelling of bitcoin.org does not. Suppressed when the label already says it.
+// pretty Cyrillic spelling of bitcoin.org does not. Suppressed when the label already says it —
+// as a whole name: "bitcoin.org" must not vouch for coin.org, nor "x.com" for x.co.
 function hostMark(url, label){
   let h;
   try { h = new URL(url.replaceAll("&amp;","&")).hostname.replace(/^www\./, ""); } catch { return ""; }
-  if (!h || label.toLowerCase().includes(h.toLowerCase())) return "";
+  if (!h || new RegExp(`(^|[^a-z0-9-])${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9-])`, "i").test(label)) return "";
   return `<span class="lhost">${esc(h)}</span>`;
 }
 
@@ -1319,7 +1320,7 @@ const MARK = /\{([-+])([^]*?)\1\}/g;
 function renderContent(text, plain){
   const inline = s => s
     .replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, (_, lab, url) =>
-      `<a href="${url}" target="_blank" rel="noopener noreferrer">${lab}</a>` + hostMark(url, lab))
+      `<a href="${url}" target="_blank" rel="nofollow ugc noopener noreferrer">${lab}</a>` + hostMark(url, lab))   // nofollow: no search-rank payoff for spam
     .replace(/\{-([^]*?)-\}/g, plain ? "" : "<del>$1</del>")
     .replace(/\{\+([^]*?)\+\}/g, plain ? "$1" : "<ins>$1</ins>")
     .replace(/ {2,}/g, plain ? " " : "$&");    // a lifted-out deletion leaves a double space
