@@ -661,7 +661,7 @@
   .draftcard .ded:focus,.draftcard input:focus,.draftcard select:focus{outline:2px solid var(--rail);
     outline-offset:1px;background:var(--panel)}
   .draftcard select:disabled,.draftcard input:disabled{opacity:.45}
-  .draftcard .req{border-color:var(--rail)}   /* required: a gold border, and the label says so too */
+  .draftcard .req{border-width:1.5px;border-color:var(--rail)}   /* required: a thicker gold border */
   .draftcard .dwhen{display:grid;grid-template-columns:6em 10em 4.5em;gap:12px}
   .draftcard .dwhen label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--dim)}
   .draftcard .dsrc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -688,12 +688,14 @@
   .paper{--pp:#f3ecdc;--pi:#1d1a14;--pe:#5c4a2a;--pd:#6b604c;--pb:#fffaf0;--pl:#c9b998;
     background:var(--pp);color:var(--pi);border:4px double var(--pe);border-radius:10px;padding:14px 16px}
   .paper .ph{display:block;font-size:16px;font-weight:700;margin-bottom:8px}
-  .draftcard .dyou{margin-top:22px}
-  .draftcard .paper .dlab{color:var(--pi)}
-  .draftcard .paper .dlab i{color:var(--pd)}
-  .draftcard .paper input{background:var(--pb);border-color:var(--pl);color:var(--pi)}
-  .draftcard .paper input.req{border:2px solid var(--rail)}
-  .draftcard .paper input::placeholder{color:var(--pd)}
+  /* "⚿ You" is paper dimmed into the dark: same warm family, quieter than the key box */
+  .draftcard .dyou{--pd:#9a8f78;--pi:var(--text);margin-top:22px;background:#2a2721;
+    border:1px solid #6b604c;border-radius:8px;padding:12px 16px}
+  .draftcard .dyou .ph{display:block;font-size:13px;font-weight:600;color:#d9cfb8;margin-bottom:8px}
+  .draftcard .dyou .dlab i{color:var(--pd)}
+  .draftcard .dyou input{background:#211f1a;border-color:#4d4637}
+  .draftcard .dyou input.req{border-color:var(--rail)}
+  .draftcard .dyou input::placeholder{color:var(--pd)}
   .draftcard .dways{display:block;margin-top:12px;font-size:14px;color:var(--pd)}
   .draftcard .dgo,.draftcard .dother{font:inherit;font-size:14px;color:var(--pd);background:none;border:0;
     padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
@@ -3529,15 +3531,15 @@ function draftNodeHtml(e, future){
   const ed = (cls, tagName, ph, text) =>
     `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
-  const btn = `<button class="dpub" type="button" disabled title="needs a date, what happened and plain words${hasSigner ? "" : ", and your name"}">` +
+  const btn = `<button class="dpub" type="button" disabled title="needs a year, a title and a summary${hasSigner ? "" : ", and your name"}">` +
     `${draft.edit ? "Save changes" : hasSigner ? "Sign your name &amp; add" : "Add my card"}</button>`;
   const msg = hasSigner && nstartMsg === "none" ? "in" : nstartMsg;   // a late answer still signs them in
   const note = { wait: `<span class="dnote">Signing you in with your new signature…</span>`,
                  in:   `<span class="dnote">Welcome — you're signed in. Your card is right where you left it.</span>`,
                  none: `<span class="dnote warn">You're not signed in yet. Your card is still saved here.</span>` }[msg] || "";
   // no signer yet: who you are, under the card — the click on "Add my card" makes the key
-  const you = hasSigner ? "" : `<div class="dyou paper"><span class="ph">⚿ You</span>` +
-    `<span class="dlab">Your name <i>required · asked only this first time</i></span>` +
+  const you = hasSigner ? "" : `<div class="dyou"><span class="ph">⚿ You</span>` +
+    `<span class="dlab">Your name</span>` +
     `<input class="dnm req" autocomplete="nickname" value="${esc(draft.name || "")}">` +
     `<span class="dlab">About you <i>optional</i></span>` +
     `<input class="dab" placeholder="a line about you" value="${esc(draft.about || "")}">` +
@@ -3548,7 +3550,7 @@ function draftNodeHtml(e, future){
     const v = String(i + 1).padStart(2, "0");
     return `<option value="${v}"${draft.m === v ? " selected" : ""}>${n}</option>`;
   }).join("");
-  const when = `<span class="dlab">When? <i>Year alone is fine.</i>` +
+  const when = `<span class="dlab">When?` +
     `<button class="dwheel" type="button" title="spin the date wheel on the left — it also does a span, from one date to another">or use the date wheel</button></span>` +
     `<div class="dwhen">` +
     `<label>Year<input class="dy req" inputmode="numeric" maxlength="4" autocomplete="off" value="${draft.y ? +draft.y : ""}"></label>` +
@@ -3570,11 +3572,11 @@ function draftNodeHtml(e, future){
     `<span class="sl">/</span><span class="by">${draft.edit ? "editing your card" : "your new card — saved as you type"}</span>` +
     `<button class="dx" type="button" title="throw this draft away">✕</button></div>` +
     when +
-    lab("What happened?", "One thing. More to tell? Add another card after.") +
-    ed("ded-t req", "h4", "the event, one line", draft.title) +
+    lab("Title / Headline") +
+    ed("ded-t req", "h4", "e.g. Town library opens on Main Street", draft.title) +
     `<div class="dline dcol hid"></div>` +
-    lab("In plain words", "a sentence or two") +
-    ed("ded-s req", "div", "a sentence or two a newcomer would understand", draft.summary) +
+    lab("Summary") +
+    ed("ded-s req", "div", "e.g. The town's first public library opens with 2,000 books, most of them given by local families.", draft.summary) +
     src +
     lab("The full story", "optional — as long as you need") +
     ed("ded-b", "div", "quotes, names, numbers, what each source says", draft.content) +
@@ -3613,7 +3615,7 @@ function draftRefresh(){
   // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
   // checked outright or an untitled card would sail through.
   // say in words what the button still waits for — the gold borders alone don't say "before you can add"
-  const need = [!draftDate() && "a year", !draft.title.trim() && "what happened", !draft.summary.trim() && "plain words",
+  const need = [!draftDate() && "a year", !draft.title.trim() && "title", !draft.summary.trim() && "summary",
                 !hasSigner && !draft.name.trim() && "your name"].filter(Boolean);
   card.querySelector(".dneed").textContent = need.length ? "Still needed: " + need.join(", ") : "";
   b.disabled = !!need.length || !d || !!(col && col.block);
