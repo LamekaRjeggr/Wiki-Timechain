@@ -700,6 +700,8 @@
   .draftcard .dneed{display:block;margin-top:18px;font-size:15px;color:var(--warn)}
   .draftcard .dneed:empty{display:none}
   .keybox{margin-top:14px;font-size:15px;line-height:1.45}
+  /* while the key is up, every other card steps back until "I saved it" */
+  .keyon .node:not(:has(.keybox)){opacity:.3;transition:opacity .3s}
   /* the key itself glows: the one thing in the box to carry away */
   .keybox code{display:block;margin:10px 0;padding:8px 10px;background:#211f1a;border:1.5px solid var(--rail);
     box-shadow:0 0 10px var(--rail);border-radius:6px;font-family:var(--mono);font-size:18px;line-height:1.6;
@@ -2071,6 +2073,7 @@ kidsEl.onclick = e => { const b = e.target.closest("button[data-d]"); if (b) sel
 
 // ═══════════════ render ═══════════════
 function render(){
+  areaEl.classList.toggle("keyon", !!keyShow);
   // deep link wins until the visitor picks. ?c= is the shareable form; ?l=/?t=
   // land on the first timeline carrying that tag — never a merged spine.
   // a ?c= names a notary and needs no card (reads are lazy — its cards arrive only once it is on screen)
@@ -3815,6 +3818,8 @@ async function publishDraft(btn){
     if (pickStage) pickExit();
     ingest(ev);                                  // reward first: the card is live in place now
     publish(ev);
+    if (keyShow){ render(); const k = areaEl.querySelector(".keybox");
+      if (k) k.scrollIntoView({ block: "center", behavior: "smooth" }); }
     // your own manual notary: the act rides with the card, same click — no owner special
     // case in the rule, just no chore. Under `auto` nothing is needed.
     if (N.pubkey === ev.pubkey) acceptCard(ev.pubkey, tmpl.tags[0][1]);
