@@ -673,7 +673,9 @@
   .draftcard .dpub,.draftcard .dkeep{height:var(--fh);padding:0 18px;border-radius:6px;cursor:pointer;
     font:inherit;font-size:15px;font-weight:600}
   .draftcard .dpub{background:var(--rail);border:1px solid var(--rail);color:var(--ink)}
-  .draftcard .dpub:disabled{background:var(--panel);color:var(--dim);border-color:var(--faint);opacity:1}
+  .draftcard .dpub:disabled,.draftcard .dpub.wait{background:var(--panel);color:var(--dim);border-color:var(--faint);opacity:1}
+  .draftcard .flash{animation:dflash .4s 2}   /* the box the button sent you to */
+  @keyframes dflash{50%{box-shadow:0 0 0 4px var(--rail)}}
   .draftcard .dkeep{background:none;border:1px solid var(--faint);color:var(--text);font-weight:400}
   .draftcard .dkeep:hover{border-color:var(--dim)}
   .draftcard .ddel{margin-left:auto;height:var(--fh);padding:0 18px;border-radius:6px;cursor:pointer;
@@ -683,19 +685,14 @@
   .draftcard .dnote{display:block;margin-top:18px;padding:10px 12px;border-radius:6px;font-size:15px;
     border:1px solid var(--accent)}
   .draftcard .dnote.warn{border-color:var(--warn)}
-  /* EVERYTHING ABOUT THE KEY is paper: light on the dark page, a double border, a ⚿ heading.
-     Gold = accepted and blue = submitted, so the key gets lightness + border instead of a hue */
-  .paper{--pp:#f3ecdc;--pi:#1d1a14;--pe:#5c4a2a;--pd:#6b604c;--pb:#fffaf0;--pl:#c9b998;
-    background:var(--pp);color:var(--pi);border:4px double var(--pe);border-radius:10px;padding:14px 16px}
-  .paper .ph{display:block;font-size:16px;font-weight:700;margin-bottom:8px}
-  /* "⚿ You" is paper dimmed into the dark: same warm family, quieter than the key box */
-  .draftcard .dyou{--pd:#9a8f78;--pi:var(--text);margin-top:22px;background:#2a2721;
+  /* EVERYTHING ABOUT YOU (name, key) is one warm box dimmed into the dark, a ⚿ heading */
+  .dyou{--pd:#9a8f78;--pi:var(--text);margin-top:22px;background:#2a2721;
     border:1px solid #6b604c;border-radius:8px;padding:12px 16px}
-  .draftcard .dyou .ph{display:block;font-size:13px;font-weight:600;color:#d9cfb8;margin-bottom:8px}
-  .draftcard .dyou .dlab i{color:var(--pd)}
-  .draftcard .dyou input{background:#211f1a;border-color:#4d4637}
-  .draftcard .dyou input.req{border-color:var(--rail)}
-  .draftcard .dyou input::placeholder{color:var(--pd)}
+  .dyou .ph{display:block;font-size:13px;font-weight:600;color:#d9cfb8;margin-bottom:8px}
+  .dyou .dlab i{color:var(--pd)}
+  .dyou input{background:#211f1a;border-color:#4d4637}
+  .dyou input.req{border-color:var(--rail)}
+  .dyou input::placeholder{color:var(--pd)}
   .draftcard .dways{display:block;margin-top:12px;font-size:14px;color:var(--pd)}
   .draftcard .dgo,.draftcard .dother{font:inherit;font-size:14px;color:var(--pd);background:none;border:0;
     padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
@@ -703,12 +700,14 @@
   .draftcard .dneed{display:block;margin-top:18px;font-size:15px;color:var(--warn)}
   .draftcard .dneed:empty{display:none}
   .keybox{margin-top:14px;font-size:15px;line-height:1.45}
-  .keybox code{display:block;margin:10px 0;padding:8px 10px;background:var(--pb);border:1px solid var(--pl);
-    border-radius:6px;font-family:var(--mono);font-size:18px;line-height:1.6;word-spacing:.35em;user-select:all}
+  /* the key itself glows: the one thing in the box to carry away */
+  .keybox code{display:block;margin:10px 0;padding:8px 10px;background:#211f1a;border:1.5px solid var(--rail);
+    box-shadow:0 0 10px var(--rail);border-radius:6px;font-family:var(--mono);font-size:18px;line-height:1.6;
+    word-spacing:.35em;user-select:all}
   .keybox .kbtns{display:flex;gap:10px;flex-wrap:wrap}
   .keybox button,.keybox a{font:inherit;font-size:15px;font-weight:600;padding:6px 16px;border-radius:6px;cursor:pointer;
-    background:none;border:1px solid var(--pe);color:var(--pi);text-decoration:none}
-  .keybox .ksaved{background:var(--pi);border-color:var(--pi);color:var(--pp)}
+    background:none;border:1px solid #6b604c;color:var(--pi);text-decoration:none}
+  .keybox .ksaved{background:var(--pi);border-color:var(--pi);color:#211f1a}
   /* the pick ghost — the draft while its date is still being chosen. A whole card re-sorting
      into place on every settle is what read as jarring: the page relayouts and the cards you
      were reading move under you. A hollow node gliding the spine carries the same claim and
@@ -3322,7 +3321,7 @@ areaEl.addEventListener("click", e => {
 let keyShow = null;       // {d, copied}
 function keyBoxHtml(){
   const nsec = bech32("nsec", pageKey.sk);
-  return `<div class="keybox paper"><span class="ph">⚿ Your key</span>` +
+  return `<div class="keybox dyou"><span class="ph">⚿ Your key</span>` +
     `<b>Your card is in.</b> This key puts your name on every card you add. ` +
     `Nobody can reset it, not us, not anyone, so keep a copy somewhere safe.` +
     // shown in fours so it can be copied by hand; Copy and Download give it whole
@@ -3452,7 +3451,7 @@ function startDraft(){
             dsuf: mintSuffix(), stage:"idle", seedYr: (face && face.yr) || String(new Date().getFullYear()),
             ...keptDraft() };
   // the card opens at the top, asking for the year first; the wheel stays one click away
-  draftPlaced(draftDate() ? null : ".dy");
+  draftPlaced();
 }
 // your own card, opened in place to change or delete — same card as a new one, holding its d
 function startEdit(ev){
@@ -3496,15 +3495,30 @@ function discardDraft(){
 // read it back as the reader scrolling.
 // only ever called for a card: mid-pick there is no card to place, and the traverse has
 // already put the page where the ghost is
+// No focus given = the first box still needed. The box, not the card, is what the page
+// follows: a card taller than a phone, centered, puts its top boxes off screen.
 function draftPlaced(focus){
   if (pickStage) return;
   pickToEl.classList.toggle("show", !!draft && draft.stage === "set" && draft.date2 == null);
   keepDraftNow();
   render();
+  const sel = focus || (draft && draftNeeds()[0] || [])[0];
+  const f = sel && areaEl.querySelector(".draftcard " + sel);
+  if (f) return draftFocus(f);
   const n = areaEl.querySelector(".node.draft");
   if (n) n.scrollIntoView({ block: "center", behavior: "smooth" });
-  const f = focus && areaEl.querySelector(".draftcard " + focus);
-  if (f) f.focus({ preventScroll: true });
+}
+// a box near the top of the screen, so a phone's keyboard opening under it leaves it in view.
+// Instant, never a glide: a tap during the glide lands on the box that slid under the finger.
+function draftFocus(f){
+  scrollTo({ top: f.getBoundingClientRect().top + scrollY - innerHeight / 5, behavior: "instant" });
+  f.focus({ preventScroll: true });
+}
+// the boxes the button waits for, in the order they sit on the card: [selector, words]
+function draftNeeds(){
+  return [[".dy", "a year", !draftDate()], [".ded-t", "title", !draft.title.trim()],
+          [".ded-s", "summary", !draft.summary.trim()], [".dnm", "your name", !hasSigner && !draft.name.trim()]]
+    .filter(n => n[2]);
 }
 
 // the synthetic spine entry — while the wheel spins it rides the tentative date; with no
@@ -3531,7 +3545,7 @@ function draftNodeHtml(e, future){
   const ed = (cls, tagName, ph, text) =>
     `<${tagName} class="ded ${cls}" contenteditable="plaintext-only" data-ph="${esc(ph)}"` +
     ` spellcheck="false">${esc(text).replace(/\n/g, "<br>")}</${tagName}>`;
-  const btn = `<button class="dpub" type="button" disabled title="needs a year, a title and a summary${hasSigner ? "" : ", and your name"}">` +
+  const btn = `<button class="dpub" type="button" title="needs a year, a title and a summary${hasSigner ? "" : ", and your name"}">` +
     `${draft.edit ? "Save changes" : hasSigner ? "Sign your name &amp; add" : "Add my card"}</button>`;
   const msg = hasSigner && nstartMsg === "none" ? "in" : nstartMsg;   // a late answer still signs them in
   const note = { wait: `<span class="dnote">Signing you in with your new signature…</span>`,
@@ -3615,10 +3629,11 @@ function draftRefresh(){
   // d no longer gates this — it exists from the first keystroke now, so the TITLE has to be
   // checked outright or an untitled card would sail through.
   // say in words what the button still waits for — the gold borders alone don't say "before you can add"
-  const need = [!draftDate() && "a year", !draft.title.trim() && "title", !draft.summary.trim() && "summary",
-                !hasSigner && !draft.name.trim() && "your name"].filter(Boolean);
+  const need = draftNeeds().map(n => n[1]);
   card.querySelector(".dneed").textContent = need.length ? "Still needed: " + need.join(", ") : "";
-  b.disabled = !!need.length || !d || !!(col && col.block);
+  // still needs something = looks waiting but stays pressable — the press shows where
+  b.classList.toggle("wait", !!need.length);
+  b.disabled = !d || !!(col && col.block);
 }
 
 areaEl.addEventListener("input", e => {
@@ -3676,6 +3691,8 @@ areaEl.addEventListener("focusin", e => {
 });
 areaEl.addEventListener("focusout", e => {
   if (e.target.closest && e.target.closest(".draftcard")){
+    // box to box inside the card is still composing — a flush here would eat the next box
+    if (e.relatedTarget && e.relatedTarget.closest(".draftcard")) return;
     draftFocused = false;
     if (pendingRender && !draftPress){ pendingRender = false; render(); }
   }
@@ -3710,7 +3727,12 @@ areaEl.addEventListener("click", e => {
   }
   if (e.target.closest(".dtab, .dwheel")) { if (!pickStage){ draft.date2 = null; pickPass = 1; pickEnter("year"); } return; }
   const b = e.target.closest(".dpub");
-  if (b) return publishDraft(b);
+  if (!b) return;
+  const miss = draftNeeds()[0];
+  if (!miss) return publishDraft(b);
+  const f = areaEl.querySelector(".draftcard " + miss[0]);
+  draftFocus(f);
+  f.classList.remove("flash"); void f.offsetWidth; f.classList.add("flash");   // reflow restarts it
 });
 // the key box on the card just added — outside the draft, which is gone by then
 areaEl.addEventListener("click", e => {
