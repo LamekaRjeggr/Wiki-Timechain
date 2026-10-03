@@ -208,7 +208,7 @@
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
   .hmenu{position:relative} #hbtn{font-size:18px;line-height:1;padding:6px 11px}   /* share lives behind three lines, top right */
   .hpop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;gap:6px;min-width:170px;padding:6px;background:var(--panel);border:1px solid var(--border);border-radius:9px}
-  .hpop[hidden]{display:none} .hpop .linkbtn{text-align:left}
+  .hpop[hidden]{display:none} @media (pointer:coarse){#sharepic{display:none}}   /* the share picture is a desktop chore, by hand */ .hpop .linkbtn{text-align:left}
   .linkbtn.ord{font-family:var(--mono);font-size:14px;padding:2px 9px;margin-left:10px}   /* the word IS the state */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
@@ -835,6 +835,8 @@
           <span class="hpop" hidden>
             <button id="copylink" class="linkbtn" type="button"
               title="Copy a shareable link to the selected view">⧉ Copy link</button>
+            <button id="sharepic" class="linkbtn" type="button"
+              title="Download a picture of this timeline and copy its link — post the picture, paste the link as the caption">▣ Share picture</button>
             <button id="exportbtn" class="linkbtn" type="button"
               title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
           </span></span></div>
@@ -1134,6 +1136,50 @@ copyBtn.addEventListener("click", async () => {
     copyBtn.textContent = "Copy failed — use the address bar";
   }
   setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = COPY_LABEL; }, 1600);
+});
+
+// the share picture: 1200×630, the size Facebook shows whole. Facebook never makes an uploaded
+// picture clickable, so the link goes on the clipboard for the caption, and on the picture, small,
+// as a backup. Always dark. Title "X (Place)" splits: the place is the subtitle. Three cards —
+// oldest, middle, newest — and the strip from the page, those three ringed.
+const SHARE_LABEL = "▣ Share picture", shareBtn = document.getElementById("sharepic");
+shareBtn.addEventListener("click", async () => {
+  const all = activeF ? entriesOf(activeF) : []; if (!all.length) return;
+  const u = timelineUrl(); ["open","plain","show"].forEach(a => u.searchParams.delete(a));   // the timeline, not your reading state
+  let copied = true; try { await navigator.clipboard.writeText(u.href); } catch { copied = false; }   // first, while the click still counts
+  const { es, fr, at, brk } = mapScale(all), name = slugName(activeF.slice(2)), m = /^(.*\S)\s*\(([^()]+)\)$/.exec(name);
+  const hooks = [...new Set([0, es.length >> 1, es.length - 1])].map(i => es[i]);
+  const cv = Object.assign(document.createElement("canvas"), { width:1200, height:630 }), g = cv.getContext("2d");
+  const MONO = getComputedStyle(document.documentElement).getPropertyValue("--mono"), F = (px, b = "") => `${b} ${px}px ${MONO}`;
+  const fit = (t, w) => { if (g.measureText(t).width <= w) return t; while (t && g.measureText(t + "…").width > w) t = t.slice(0, -1); return t + "…"; };
+  g.fillStyle = "#0b0c0e"; g.fillRect(0, 0, 1200, 630);
+  const glow = g.createRadialGradient(600, 0, 0, 600, 0, 600); glow.addColorStop(0, "rgba(255,176,46,.10)"); glow.addColorStop(1, "rgba(255,176,46,0)");
+  g.fillStyle = glow; g.fillRect(0, 0, 1200, 630); g.textBaseline = "alphabetic";
+  const span = mapYr(fr[0]) === mapYr(fr[fr.length - 1]) ? mapYr(fr[0]) : `${mapYr(fr[0])} – ${mapYr(fr[fr.length - 1])}`;
+  g.font = F(22, "bold"); g.fillStyle = "#ffb02e"; g.textAlign = "right"; g.fillText(`${es.length} event${es.length === 1 ? "" : "s"} · ${span}`, 1130, 70);
+  g.font = F(20); g.fillStyle = "#b3b7bf"; g.textAlign = "left"; g.letterSpacing = "2px"; g.fillText("CARDEX · A TIMELINE", 70, 70); g.letterSpacing = "0px";
+  let ts = 50; const title = m ? m[1] : name; g.font = F(ts, "bold"); while (ts > 34 && g.measureText(title).width > 1060) g.font = F(ts -= 2, "bold");
+  g.fillStyle = "#c8f5c5"; g.fillText(fit(title, 1060), 70, 150);
+  if (m){ g.font = F(30); g.fillStyle = "#e9eaee"; g.fillText(fit(m[2], 1060), 70, 196); }
+  g.fillStyle = "#ffb02e"; g.fillRect(70, m ? 218 : 172, 56, 3);
+  hooks.forEach((e, k) => { const y = (m ? 280 : 250) + k * 52;
+    g.font = F(24); g.textAlign = "right"; g.fillStyle = mapAcc(e) ? "#ffb02e" : "#4aa3ff"; g.fillText(mapYr(e.frac), 160, y);
+    g.textAlign = "left"; g.fillStyle = "#c6c8ce"; g.fillText(fit(shortTitle(e.title), 950), 180, y); });
+  const X0 = 90, X1 = 1110, Y = 480, x = p => X0 + p / 100 * (X1 - X0);
+  g.fillStyle = "#5a4415"; g.fillRect(X0 - 12, Y - 1, X1 - X0 + 24, 2);
+  g.font = F(18); g.textAlign = "center";
+  brk.forEach(p => { g.fillStyle = "#0b0c0e"; g.fillRect(x(p) - 14, Y - 6, 28, 12); g.fillStyle = "#b3b7bf"; g.fillText("//", x(p), Y + 6); });
+  es.forEach((e, i) => { const up = mapAcc(e), cy = up ? Y - 10 : Y + 10;   // gold rests above the line, blue hangs under
+    g.beginPath(); g.arc(x(at[i]), cy, 7, 0, 7); g.lineWidth = 3; g.strokeStyle = up ? "#ffb02e" : "#4aa3ff"; g.stroke();
+    if (hooks.includes(e)){ g.beginPath(); g.arc(x(at[i]), cy, 12, 0, 7); g.lineWidth = 2; g.strokeStyle = "#e9eaee"; g.stroke(); } });
+  g.fillStyle = "#b3b7bf"; g.textAlign = "left"; g.fillText(mapYr(fr[0]), X0 - 12, Y + 50);
+  if (es.length > 1){ g.textAlign = "right"; g.fillText(mapYr(fr[fr.length - 1]), X1 + 12, Y + 50); }
+  g.textAlign = "left"; g.fillText("Every event cites its source.", 70, 590);
+  g.textAlign = "right"; g.fillStyle = "#4aa3ff"; g.fillText(fit(u.host + u.pathname.replace(/\/index\.html$/, "/") + u.search, 640), 1130, 590);
+  cv.toBlob(b => { const a = Object.assign(document.createElement("a"), { href:URL.createObjectURL(b), download:`${activeF.slice(2)}.png` });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); });
+  shareBtn.textContent = copied ? "Picture saved · link copied ✓" : "Picture saved · copy the link yourself";
+  setTimeout(() => { shareBtn.textContent = SHARE_LABEL; }, 2200);
 });
 
 // plain-text export of the selected timeline, AS SEEN: each card contributes the lines its
@@ -2086,19 +2132,22 @@ function renderTabs(){
 // card squeezes in instead of crushing the rest into a corner. Spans sit at their start.
 const mapEl = document.getElementById("collmap");
 let mapPick = null;   // [timeline, d]: the random card, picked again each time a timeline opens
-function renderMap(all){
-  nowEl.classList.toggle("mapped", !!all.length); mapEl.hidden = !all.length; if (!all.length) return;
+const mapAcc = e => e.evs.length || e.lapsed.length ? "ac" : "", mapYr = f => { const y = Math.floor(f); return y < 0 ? -y + " BCE" : String(y); };
+function mapScale(all){   // the cards by date, each one's place along the strip in %, and the gaps worth a // mark
   const es = [...all].sort((a, b) => a.frac - b.frac), fr = es.map(e => e.frac), gaps = fr.slice(1).map((f, i) => f - fr[i]);
   const pos = gaps.filter(g => g > 0).sort((a, b) => a - b), K = 10 * (pos[pos.length >> 1] || 1), big = Math.max(K, (fr[fr.length - 1] - fr[0]) / 8);   // big: a squeeze worth a mark
   const w = gaps.map(g => g > K ? K * (1 + Math.log10(g / K)) : g), tot = w.reduce((a, v) => a + v, 0);
   let run = 0; const at = tot ? [0, ...w.map(v => (run += v) / tot * 100)] : es.map(() => 50);
+  return { es, fr, gaps, at, brk:gaps.map((g, i) => g > big ? (at[i] + at[i + 1]) / 2 : -1).filter(x => x >= 0) };
+}
+function renderMap(all){
+  nowEl.classList.toggle("mapped", !!all.length); mapEl.hidden = !all.length; if (!all.length) return;
+  const { es, fr, gaps, at, brk } = mapScale(all), acc = mapAcc, yr = mapYr;
   if (!mapPick || mapPick[0] !== activeF || !es.some(e => e.d === mapPick[1])) mapPick = [activeF, es[Math.floor(Math.random() * es.length)].d];
-  const acc = e => e.evs.length || e.lapsed.length ? "ac" : "", yr = f => { const y = Math.floor(f); return y < 0 ? -y + " BCE" : String(y); };
-  const brk = gaps.map((g, i) => g > big ? `<b style="left:${(at[i] + at[i + 1]) / 2}%">//</b>` : "").join("");
   const nf = yearFrac(new Date().toISOString().slice(0, 10)), j = fr.findIndex((f, i) => f <= nf && nf < fr[i + 1]);
   const nx = j < 0 ? -1 : at[j] + (at[j + 1] - at[j]) * (nf - fr[j]) / gaps[j];
   const p = es.find(e => e.d === mapPick[1]), px = at[es.indexOf(p)], a = px < 10 ? "" : yr(fr[0]), z = px > 90 ? "" : yr(fr[fr.length - 1]);   // an end year under the drop gives way
-  mapEl.innerHTML = `<div class="ln">${brk}${es.map((e, i) => `<i class="${acc(e)}${e.d === p.d ? " on" : ""}" style="left:${at[i]}%"></i>`).join("")}</div>` +
+  mapEl.innerHTML = `<div class="ln">${brk.map(x => `<b style="left:${x}%">//</b>`).join("")}${es.map((e, i) => `<i class="${acc(e)}${e.d === p.d ? " on" : ""}" style="left:${at[i]}%"></i>`).join("")}</div>` +
     `<div class="yrs"><span>${a}</span>${nx > 12 && nx < 88 ? `<em style="left:${nx}%">now</em>` : ""}<span>${a === z ? "" : z}</span></div>` +   // the text starts at the dot, or ends at it past the middle
     `<div class="pk"><i class="${acc(p)}" style="left:${px}%"></i><span style="${px > 60 ? `right:${100 - px}%;max-width:${px}%` : `left:${px}%;max-width:${100 - px}%`}"><b class="${acc(p)}">${yr(p.frac)}</b> ${esc(shortTitle(p.title))}</span></div>`;
 }
