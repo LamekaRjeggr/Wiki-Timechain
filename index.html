@@ -1139,8 +1139,8 @@ copyBtn.addEventListener("click", async () => {
 });
 
 // the share picture: 1200×630, the size Facebook shows whole. Facebook never makes an uploaded
-// picture clickable, so the link goes on the clipboard for the caption, and on the picture, small,
-// as a backup. Always dark. Title "X (Place)" splits: the place is the subtitle. Three cards —
+// picture clickable, so the link goes on the clipboard for the caption; the picture names no site
+// (user's call). Always dark. Title "X (Place)" splits: the place is the subtitle. Three cards —
 // oldest, middle, newest — and the strip from the page, those three ringed.
 const SHARE_LABEL = "▣ Share picture", shareBtn = document.getElementById("sharepic");
 shareBtn.addEventListener("click", async () => {
@@ -1175,7 +1175,6 @@ shareBtn.addEventListener("click", async () => {
   g.fillStyle = "#b3b7bf"; g.textAlign = "left"; g.fillText(mapYr(fr[0]), X0 - 12, Y + 50);
   if (es.length > 1){ g.textAlign = "right"; g.fillText(mapYr(fr[fr.length - 1]), X1 + 12, Y + 50); }
   g.textAlign = "left"; g.fillText("Every event cites its source.", 70, 590);
-  g.textAlign = "right"; g.fillStyle = "#4aa3ff"; g.fillText(fit(u.host + u.pathname.replace(/\/index\.html$/, "/") + u.search, 640), 1130, 590);
   cv.toBlob(b => { const a = Object.assign(document.createElement("a"), { href:URL.createObjectURL(b), download:`${activeF.slice(2)}.png` });
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); });
   shareBtn.textContent = copied ? "Picture saved · link copied ✓" : "Picture saved · copy the link yourself";
