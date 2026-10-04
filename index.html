@@ -2071,9 +2071,11 @@ function myCardsByName(){
       const c = subOf(t[1]); by.set(c, (by.get(c) || []).concat(ev)); }
   return by;
 }
-const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c);
-  return { wrote:(wrote.get(c) || []).length, fol:folNotaries(c).length, copies:notariesOf(c).length, at:recentOf(c), d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:wanted.has(c) ? entriesOf("c:" + c).length : null,
-           nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; }); };
+const members = (N, c) => notarySources(N).filter(a => subOf(a) !== c);   // a source with the timeline's own name is the one it copies, not a member
+const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c), es = wanted.has(c) ? entriesOf("c:" + c) : null, ys = [...new Set((es || []).map(e => e.frac).sort((a, b) => a - b).filter((f, i, a) => !i || i === a.length - 1).map(mapYr))];
+  return { wrote:(wrote.get(c) || []).length, fol:folNotaries(c).length, copies:notariesOf(c).length, at:recentOf(c), d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:es && es.length, span:ys.join("–"),
+           nTl:members(N, c).length, tree:members(N, c).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; })
+  .filter(x => fetching() || x.n || x.nTl || x.mine || x.wrote); };   // an empty copy of a timeline the relays lack is hidden, as on dots
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
 const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
 let heads = null;   // lib/heads.mjs: the unsigned 30829s for a new timeline and a tree's timelines
@@ -2173,7 +2175,7 @@ function renderMap(all){
 
 // a timetree lists the timelines it groups; one the relays don't have is named, not waited on
 function renderKids(){
-  const src = notarySources(activeF ? notaryOf(activeF.slice(2)) : null), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const src = activeF ? members(notaryOf(activeF.slice(2)), activeF.slice(2)) : [], pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   kidsEl.hidden = !src.length; if (!src.length) return;
   kidsEl.innerHTML = `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` + src.map(a => { const d = subOf(a);
     return notaries.has(a) ? `<button type="button" data-d="${esc(d)}"><b>${esc(slugName(d))}</b><small>${pl(entriesOf("c:" + d).length, "event")}</small></button>`
