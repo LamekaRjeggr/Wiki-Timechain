@@ -135,7 +135,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { mountLibrary, headForm } from "./lib/library.mjs?v=3";
+import { mountLibrary, headForm } from "./lib/library.mjs?v=4";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs?v=2";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
 import * as cache from "./lib/cache.mjs";
@@ -163,7 +163,7 @@ const vOK = new Set(), vBad = new Set(), sockets = [], heard = new Set();   // h
 let cached = false, saved = false; const KEY = cache.keyOf(RELAYS);   // cached: the page opened on the saved copy, so its counts show, marked as checking
 let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0 && !FROM, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
+let lens = ["mine", "follows"].includes(Q.get("v")) ? Q.get("v") : "", me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0 && !FROM, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 let TA = 22 * Math.PI / 180; const NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
 let myPk = null, pageKey = null; try { pageKey = JSON.parse(localStorage.getItem("wtc:pagekey") || "null"); myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || (pageKey && xonlyPub(pageKey.sk)) || null; } catch {}   // pageKey: a key cardex made for someone with no nostr app — last in line
 const NOW = new Date().toISOString().slice(0, 10);
@@ -291,11 +291,12 @@ function dotsFor(d, projections, all){
   }
   return [...byId.values()].sort(byDate);
 }
-const parentsOf = d => [...new Set([...notaries.keys()].map(subOf))].filter(p => p !== d && sourceSubjects(notariesOf(p).map(([, n]) => n)).includes(d));   // the timetrees that hold a timeline: the way up
+const picksOf = (d, ln = lens) => notariesOf(d).map(([, n]) => n).filter(n => ln === "mine" ? n.pubkey === myPk : ln === "follows" ? !!follows?.has(n.pubkey) : true);   // whose picks make a timetree: the tab you came from — My collection = yours, Follows = theirs, else every copy's
+const parentsOf = d => [...new Set([...notaries.keys()].map(subOf))].filter(p => p !== d && sourceSubjects(picksOf(p)).includes(d));   // the timetrees that hold a timeline: the way up
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d, summaryOf = d => notariesOf(d).map(([, n]) => tag(n, "summary")).find(Boolean) || "";
-function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card you have not refused, coloured by whether any card is held, reaching to its last; null when empty
+function subjectDot(d, projections, all, hop = true, ln = lens){   // a whole timeline as ONE dot at its earliest card you have not refused, coloured by whether any card is held, reaching to its last; null when empty
   const dl = dotsFor(d, projections, all).filter(x => keep(x, d)), ns = notariesOf(d);
-  const srcs = hop ? sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a head reaches as far as the timelines it points at; one hop
+  const srcs = hop ? sourceSubjects(picksOf(d, ln)).map(x => subjectDot(x, projections, all, false)).filter(Boolean) : [];   // a head reaches as far as the timelines it points at; one hop
   const mineEmpty = ns.some(([c, n]) => c === myCoordOf(d) && !(ADD && local && !isLocal(n.id))) && !dl.length && !srcs.length;   // my own head, still empty: it stays on the menu so it can be filled, dot at today — on local only until it is pushed
   if (!dl.length && !srcs.length && !mineEmpty) return null;
   const first = [...dl, ...srcs].sort((a, b) => refused.has(a.id) - refused.has(b.id) || byDate(a, b))[0] || { id:"tl:" + d, author:ns[0][1].pubkey, created_at:ns[0][1].created_at, accs:[], date:new Date().toISOString().slice(0, 10) };
@@ -306,10 +307,10 @@ function subjectDot(d, projections, all, hop = true){   // a whole timeline as O
 }
 let emptyN = 0;
 function members(d, projections, all, of){   // what a timeline holds: its cards, and one dot per timeline it points at; d = null is the timeline of timelines, one dot per subject
-  if (d){ const ns = notariesOf(d); return [...dotsFor(d, projections, all).filter(x => keep(x, d)), ...sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all)).filter(Boolean)].map(x => of ? { ...x, of } : x); }   // of: the timeline a member came in with
+  if (d) return [...dotsFor(d, projections, all).filter(x => keep(x, d)), ...sourceSubjects(picksOf(d)).map(x => subjectDot(x, projections, all)).filter(Boolean)].map(x => of ? { ...x, of } : x);   // of: the timeline a member came in with
   const out = [], held = new Map(); emptyN = 0;   // held: card set → the dot already showing it — timelines holding exactly the same cards fold into one dot
   for (const s of new Set([...notaries.keys()].map(subOf))){
-    const dot = subjectDot(s, projections, all); if (!dot){ if (!me && !ADD) emptyN++; continue; }
+    const dot = subjectDot(s, projections, all, true, ""); if (!dot){ if (!me && !ADD) emptyN++; continue; }
     const key = dot.all.size ? [...dot.all.keys()].sort().join(" ") : "tl " + s, prev = held.get(key);
     if (prev){   // same cards, another keeper: add the keeper, pool the accepts
       prev.ns.push(...dot.ns.filter(n => !prev.ns.includes(n))); prev.tls.push(s);
@@ -328,7 +329,7 @@ function choose(c, path = []){   // c = a subject d → that timeline; null → 
   setUrl(); schedule();
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
-  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (local !== LOCAL0) q.set("local", local ? "1" : "0");
+  const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (lens) q.set("v", lens); if (local !== LOCAL0) q.set("local", local ? "1" : "0");
   for (const k of ["relay", "add", "lib"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
   const c = coord ? "?c=" + encodeURIComponent(coord) : "";   // the other two pages read c= the same way: land on this timeline there
@@ -660,7 +661,9 @@ function library(projections, all){   // one row per subject; mine = a timeline 
       at.set(s, Math.max(at.get(s) || 0, e.created_at)); if (e.kind === KIND && e.pubkey === myPk) wrote.set(s, (wrote.get(s) || 0) + 1); }
   const rowOf = tls => { const ns = tls.flatMap(d => notariesOf(d).map(([, n]) => n.pubkey)); return { copies:new Set(ns).size, fol:follows ? new Set(ns.filter(p => follows.has(p))).size : 0,
     at:Math.max(0, ...tls.map(d => at.get(d) || 0)), wrote:tls.reduce((k, d) => k + (wrote.get(d) || 0), 0), mine:mine(tls) }; };   // the same row details cardex hands over
-  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls, ...x.mem.map(m => m.title)].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
+  const lensed = (x, ln) => { const ms = [...new Set(x.tls.flatMap(d => sourceSubjects(picksOf(d, ln))))].map(s => subjectDot(s, projections, all, false)).filter(Boolean);   // a tree as one tab reads it: only the picks that tab counts
+    return { tree:x.tls.some(d => picksOf(d, ln).some(n => sourcesOf(n).length)), nTl:ms.length, n:wait ? null : x.n + ms.reduce((k, m) => k + m.n, 0) }; };
+  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls, ...x.mem.map(m => m.title)].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), tab:{ mine:lensed(x, "mine"), fol:lensed(x, "follows") }, ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
     here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
@@ -733,7 +736,7 @@ const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib");
-const libUpdate = mountLibrary(lib, c => picking ? togglePick(c) : choose(c));   // the Library also passes which tab — not a path
+const libUpdate = mountLibrary(lib, (c, tab) => { if (picking) return togglePick(c); lens = { mine:"mine", fol:"follows" }[tab] || ""; choose(c); });   // the Library also passes which tab — not a path
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead

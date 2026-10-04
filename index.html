@@ -2050,7 +2050,7 @@ function myCardsByName(){
       const c = subOf(t[1]); by.set(c, (by.get(c) || []).concat(ev)); }
   return by;
 }
-const members = c => [...new Set(notariesOf(c).flatMap(notarySources).map(subOf))].filter(d => d !== c);   // a tree's timelines are a name's: every copy's picks, by name; its own name is the copy it was made from
+const members = c => [...new Set((view === "follows" ? folNotaries(c) : view === "global" ? notariesOf(c) : [notaryOf(c)].filter(Boolean)).flatMap(notarySources).map(subOf))].filter(d => d !== c);   // a tree's timelines: the picks of the copies whose cards you see — everyone's, people you follow, or the one copy; its own name is the copy it was made from
 const kidsEl = document.getElementById("kids");
 let heads = null;   // lib/heads.mjs: the unsigned 30829s for a copy and a first card's timeline
 import("./lib/heads.mjs?v=2").then(m => heads = m);
@@ -2080,7 +2080,7 @@ function renderTabs(){
   // the writer is a separate page (this one never writes a card) — hand it the timeline
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
-  dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
+  dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) + (view === "follows" ? "&v=follows" : !view && meNow() && notaryOf(activeF.slice(2))?.pubkey === meNow() ? "&v=mine" : "") : "dots.html";   // dots reads the tree's picks the same way addNav.href = addLink.href;
   const tk = activeF ? "t" + hasSigner : "";   // ‹ Library, and Add timelines once you can sign
   if (tabsEl.dataset.k !== tk){ tabsEl.dataset.k = tk;
     tabsEl.innerHTML = activeF ? `<button class="linkbtn" type="button" id="tolib" title="Every timeline — pick another">‹ Library</button>${hasSigner ? ` <button class="linkbtn" type="button" id="addtl" title="Pick the timelines this one groups">Add timelines</button>` : ""}` : "";
