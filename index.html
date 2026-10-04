@@ -181,7 +181,7 @@
   .tabs .linkbtn{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:700;font-size:16px;padding:10px 18px;border-radius:8px}
   #kids{max-width:720px;margin:18px auto 0;font-size:15px;color:var(--dim)} #kids p{margin:0 0 6px}
   #kids>button,#kids>span{display:flex;justify-content:space-between;gap:12px;width:100%;margin-top:6px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:inherit;color:var(--text);text-align:left}
-  #kids>button{cursor:pointer} #kids>button:hover{border-color:var(--rail-dim)} #kids small{color:var(--dim);white-space:nowrap}
+  #kids>button,#kids .up{cursor:pointer} #kids .up{font:inherit;color:var(--text);background:none;border:0;padding:0;text-decoration:underline} #kids>button:hover{border-color:var(--rail-dim)} #kids small{color:var(--dim);white-space:nowrap}
 
   /* copy-a-link-to-this-timeline button */
   .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
@@ -2115,8 +2115,9 @@ function renderMap(all){
 // a timetree lists the timelines it groups; one the relays don't have is named, not waited on
 function renderKids(){
   const src = activeF ? members(activeF.slice(2)) : [], pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  kidsEl.hidden = !src.length; if (!src.length) return;
-  kidsEl.innerHTML = `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` + src.map(d => notariesOf(d).length ? `<button type="button" data-d="${esc(d)}"><b>${esc(slugName(d))}</b><small>${pl(entriesOf("c:" + d).length, "event")}</small></button>`
+  const up = activeF ? [...new Set([...notaries.values()].map(n => tag(n,"d")))].filter(p => p !== activeF.slice(2) && members(p).includes(activeF.slice(2))) : [];   // the timetrees that hold this one: the way up
+  kidsEl.hidden = !src.length && !up.length; if (kidsEl.hidden) return;
+  kidsEl.innerHTML = (up.length ? `<p>Part of ${up.map(d => `<button type="button" class="up" data-d="${esc(d)}">▲ ${esc(slugName(d))}</button>`).join(", ")}</p>` : "") + (src.length ? `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` : "") + src.map(d => notariesOf(d).length ? `<button type="button" data-d="${esc(d)}"><b>${esc(slugName(d))}</b><small>${pl(entriesOf("c:" + d).length, "event")}</small></button>`
       : `<span><b>${esc(d.replaceAll("-", " "))}</b><small>${fetching() ? "…" : "not found on the relays"}</small></span>`).join("");
 }
 kidsEl.onclick = e => { const b = e.target.closest("button[data-d]"); if (b) selectF("c:" + b.dataset.d); };

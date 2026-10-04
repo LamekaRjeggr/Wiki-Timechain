@@ -291,6 +291,7 @@ function dotsFor(d, projections, all){
   }
   return [...byId.values()].sort(byDate);
 }
+const parentsOf = d => [...new Set([...notaries.keys()].map(subOf))].filter(p => p !== d && sourceSubjects(notariesOf(p).map(([, n]) => n)).includes(d));   // the timetrees that hold a timeline: the way up
 const titleOf = d => notariesOf(d).map(([, n]) => tag(n, "title")).find(Boolean) || d, summaryOf = d => notariesOf(d).map(([, n]) => tag(n, "summary")).find(Boolean) || "";
 function subjectDot(d, projections, all, hop = true){   // a whole timeline as ONE dot at its earliest card you have not refused, coloured by whether any card is held, reaching to its last; null when empty
   const dl = dotsFor(d, projections, all).filter(x => keep(x, d)), ns = notariesOf(d);
@@ -361,12 +362,13 @@ const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
 const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
 function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here and did not refuse, by date; only what the network has not echoed, never an act
-  if (!coord || !myPk) return [];
-  const cs = whole.filter(x => isLocal(x.id) && x.accs.includes(myCoord()) && !refused.has(x.id)).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
-  const my = notaries.get(myCoord()), ns = [...new Set([...cs.map(subTo), ...(my && sourcesOf(my).length ? [myCoord()] : [])])].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));   // a timetree you built here goes too, with no cards of its own
+  if (!coord || !myPk) return [];   // a timetree goes with the timelines it points at, so it never lands on the network pointing at nothing
+  const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], ds = [coord, ...new Set(srcs.map(subOf).filter(d => d !== coord))];
+  const cs = ds.flatMap(d => whole(d).filter(x => isLocal(x.id) && x.accs.includes(myCoordOf(d)) && !(d === coord && refused.has(x.id)))).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
+  const ns = [...new Set([...srcs, ...cs.map(subTo), ...(srcs.length ? [myCoord()] : [])])].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
   return [...ns, ...cs];
 }
-let pushT = null, whole = [];   // the push clock: one event to the network per minute while the queue has any; nothing stored — a reload resumes from what the relays echo
+let pushT = null, whole = () => [];   // the push clock: one event to the network per minute while the queue has any; nothing stored — a reload resumes from what the relays echo
 const pushChip = () => coord && myPk && (pushT || (local && queue().length)) ?   // offered on the local side; once running it stays in view whichever side you look at
    ` · <button class="chip${pushT ? " on" : ""}" id="pushbtn" title="${pushT ? "one a minute to the network · click to stop" : "send what you accepted here to the network, one a minute"}">${pushT ? `pushing · ${queue().length} left · stop` : `push ${queue().length} ▸`}</button>` : "";
 function tick(){   // the head of the queue goes to every MAIN relay; its echo takes it off the queue, no echo = same event again next minute
@@ -493,10 +495,10 @@ function render(){
   dots.sort(byDate); dots.forEach((x, i) => x.i = i); if (oKey){ const k = dots.findIndex(x => (x.tl || x.id) === oKey); open = k < 0 ? null : k; }
   const nC = dots.filter(x => !x.tl).length, nT = dots.length - nC, what = [nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";
   if (coord){
-    whole = dotsFor(coord, fold.projections, all);   // whole: the timeline, whichever side the chips show — the push queue reads it
+    whole = d => dotsFor(d, fold.projections, all);   // whole: a timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc" && !x.tl).length, mine = canSign() && notaries.has(myCoord());   // path · what · notaries · filters · actions
     const ttl = mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord));
-    const rest = `${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${canSign() ? ` · <button class="chip" id="addtl">Add timelines</button>` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
+    const rest = `${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${canSign() ? ` · <button class="chip" id="addtl">Add timelines</button>` : ""}${parentsOf(coord).filter(p => !trail.includes(p)).map(p => ` · part of <button class="chip uptree" data-d="${esc(p)}">▲ ${esc(titleOf(p))}</button>`).join("")}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
     const up = trail[trail.length - 1];
     ntry.innerHTML = PHONE.matches   // a phone: one row — back one level, the title, ⋯ for the rest
       ? `<div class="prow"><button id="back">‹ ${up ? esc(titleOf(up)) : "Library"}</button><span class="ptitle">${ttl}</span><button id="morebtn" aria-expanded="${more}" aria-label="more">⋯</button></div>${more ? `<div class="pmore">${rest}</div>` : ""}`
@@ -505,6 +507,7 @@ function render(){
     document.getElementById("back").onclick = () => PHONE.matches && up ? choose(up, trail.slice(0, -1)) : choose(null);
     ntry.querySelectorAll(".crumb").forEach(b => b.onclick = () => choose(trail[+b.dataset.k], trail.slice(0, +b.dataset.k)));
     const nc = document.getElementById("nchip"); if (nc) nc.onclick = () => { names = !names; render(); };   // folded behind ⋯ on a phone
+    ntry.querySelectorAll(".uptree").forEach(b => b.onclick = () => choose(b.dataset.d));
     const addtl = document.getElementById("addtl"); if (addtl) addtl.onclick = startPick;
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
     const del = document.getElementById("delbtn"); if (del) del.onclick = deleteHead;
