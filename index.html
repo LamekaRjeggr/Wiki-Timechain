@@ -178,7 +178,7 @@
   .seg button.on{background:var(--panel);color:var(--text);font-weight:700}
 
   /* the Library (lib/library.mjs) reads the dots page's color names; here they point at ours */
-  .tabs{display:flex} .tabs:empty{display:none}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px} .tabs:empty{display:none}
   .tabs .linkbtn{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:700;font-size:16px;padding:10px 18px;border-radius:8px}
   #intro{max-width:720px;margin:14px auto 0;padding:0 16px;font-size:16px;line-height:1.5;color:var(--dim);text-align:center} #intro .sep{margin:0 8px;color:var(--faint)} #intro span{white-space:nowrap} @media (max-width:480px){#intro{font-size:14px} #intro .sep{display:none} #intro span{display:block;white-space:normal}}   /* a phone: one half per line */ #intro p{margin:4px 0} #intro b{color:var(--text)} #intro a{color:var(--accent)}
   #kids{max-width:720px;margin:18px auto 0;font-size:15px;color:var(--dim)} #kids p{margin:0 0 6px}
@@ -2075,9 +2075,28 @@ const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c =
            nTl:notarySources(N).length, tree:notarySources(N).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; }); };
 let libUpdate = null;   // the module loads beside this classic script; render waits for it
 const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
-import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, tab) => { selectF("c:" + c);
+let heads = null;   // lib/heads.mjs: the unsigned 30829s for a new timeline and a tree's timelines
+import("./lib/heads.mjs").then(m => heads = m);
+import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, tab) => { if (treePick){ treePick.set.has(c) ? treePick.set.delete(c) : treePick.set.add(c); return scheduleRender(); }
+  selectF("c:" + c);
   if (tab === "fol" || tab === "all"){ view = tab === "fol" ? "follows" : "global"; history.replaceState(null, "", timelineUrl()); render(); }
   if (tab === "mine" && !openMyCopy(c)) seekMine(c); }); scheduleRender(); });
+async function newTimeline(v){   // the Library's form: an empty head under your key, then it opens
+  const s = await getSigner(), ev = await s.sign(heads.newHead(v));
+  rememberPk(ev.pubkey); ingestNotary(ev); publish(ev); selectF("c:" + heads.slug(v.title)); openMyCopy(heads.slug(v.title));
+}
+// Add timelines: the Library opens on every timeline, a tap adds or takes one off, Done signs your copy with the new set
+let treePick = null;   // { c, my, srcs, set }: the tree being filled, your copy of it, the coords it points at now, the names ticked
+const subOf = a => a.split(":").slice(2).join(":"), myCopy = c => notariesOf(c).find(n => n.pubkey === meNow());
+function treeStart(){ const c = activeF.slice(2), my = myCopy(c), srcs = notarySources(my);
+  treePick = { c, my, srcs, set:new Set(srcs.map(subOf)) }; selectF(null); }
+async function treeDone(){
+  const p = treePick; treePick = null; selectF("c:" + p.c); openMyCopy(p.c);
+  const list = [...p.set].map(d => { const n = myCopy(d) || notariesOf(d)[0]; return p.srcs.find(a => subOf(a) === d) || n && coordOf(n); }).filter(Boolean);   // a name already pointed at keeps its coord; a new one points at your copy, else the oldest
+  if (list.length === p.srcs.length && list.every(a => p.srcs.includes(a))) return;
+  const s = await getSigner(), base = p.my || { created_at:0, content:"", tags:[["d", p.c], ["title", slugName(p.c)], ["t", MARKER]] };   // no copy of yours yet: this makes it
+  const ev = await s.sign(heads.withSources(base, list)); rememberPk(ev.pubkey); ingestNotary(ev); publish(ev); openMyCopy(p.c);
+}
 // a My collection row opens YOUR copy of the name, not the default
 function openMyCopy(c){
   const N = notariesOf(c).find(n => n.pubkey === meNow());
@@ -2120,10 +2139,10 @@ function renderTabs(){
   // you are reading, so "add a card" lands with the collection already chosen
   addLink.href = activeF ? "add.html?c=" + encodeURIComponent(activeF.slice(2)) + (ntry ? "&k=" + ntry.pubkey.slice(0, 12) : "") : "add.html";
   dotsNav.href = activeF ? "dots.html?c=" + encodeURIComponent(activeF.slice(2)) : "dots.html"; addNav.href = addLink.href;
-  if (activeF && !tabsEl.firstChild){
-    tabsEl.innerHTML = `<button class="linkbtn" type="button" title="Every timeline — pick another">‹ Library</button>`;
-    tabsEl.firstChild.onclick = () => selectF(null);
-  } else if (!activeF) tabsEl.innerHTML = "";
+  const tk = activeF ? "t" + hasSigner : "";   // ‹ Library, and Add timelines once you can sign
+  if (tabsEl.dataset.k !== tk){ tabsEl.dataset.k = tk;
+    tabsEl.innerHTML = activeF ? `<button class="linkbtn" type="button" id="tolib" title="Every timeline — pick another">‹ Library</button>${hasSigner ? ` <button class="linkbtn" type="button" id="addtl" title="Pick the timelines this one groups">Add timelines</button>` : ""}` : "";
+    tabsEl.onclick = e => e.target.id === "tolib" ? selectF(null) : e.target.id === "addtl" && treeStart(); }
 }
 
 // the strip under the title (CSS .collmap). Even spacing, except a gap ten times the usual one:
@@ -2181,7 +2200,8 @@ function render(){
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn });
+    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn,
+      onNew:hasSigner ? newTimeline : null, pick:treePick && { title:slugName(treePick.c), self:treePick.c, has:d => treePick.set.has(d) }, onDone:treeDone });
     drumMeasure(); return;
   }
 
