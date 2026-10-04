@@ -490,7 +490,7 @@ function render(){
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   // one rule for every view: what you look at is a timeline, its members are cards and timelines; an unfolded timeline's members ride along too, by date
   const oKey = open !== null && dots[open] ? dots[open].tl || dots[open].id : null;   // the open one, by key: a card arriving before it shifts every index
-  dots = members(coord, fold.projections, all); const have = new Set(dots.map(x => x.tl || x.id));
+  dots = members(coord, fold.projections, all); const have = new Set([coord, ...dots.map(x => x.tl || x.id)]);   // coord first: a tree that loops back never shows inside itself
   for (let i = 0; i < dots.length; i++){ const x = dots[i]; if (x.tl && unfolded.has(x.tl)) for (const m of members(x.tl, fold.projections, all, x.tl)) if (!have.has(m.tl || m.id)){ have.add(m.tl || m.id); dots.push(m); } }   // members of members too: the list grows while it walks
   dots.sort(byDate); dots.forEach((x, i) => x.i = i); if (oKey){ const k = dots.findIndex(x => (x.tl || x.id) === oKey); open = k < 0 ? null : k; }
   const nC = dots.filter(x => !x.tl).length, nT = dots.length - nC, what = [nC ? `${nC} card${nC === 1 ? "" : "s"}` : "", nT ? `${nT} timeline${nT === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "empty";
