@@ -649,6 +649,7 @@ function library(projections, all){   // one row per subject; mine = a timeline 
     at:Math.max(0, ...tls.map(d => at.get(d) || 0)), wrote:tls.reduce((k, d) => k + (wrote.get(d) || 0), 0), mine:mine(tls) }; };   // the same row details cardex hands over
   libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
+    here:"dots", other:ADD && local ? null : { name:"cardex", url:d => "./?c=" + encodeURIComponent(d) },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
 }

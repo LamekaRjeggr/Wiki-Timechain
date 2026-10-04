@@ -2201,7 +2201,7 @@ function render(){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
     if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn,
-      onNew:hasSigner ? newTimeline : null, pick:treePick && { title:slugName(treePick.c), self:treePick.c, has:d => treePick.set.has(d) }, onDone:treeDone });
+      here:"cardex", other:{ name:"dots", url:d => "dots.html?c=" + encodeURIComponent(d) }, onNew:hasSigner ? newTimeline : null, pick:treePick && { title:slugName(treePick.c), self:treePick.c, has:d => treePick.set.has(d) }, onDone:treeDone });
     drumMeasure(); return;
   }
 
