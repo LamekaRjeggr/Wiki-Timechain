@@ -483,7 +483,7 @@ function mapOf(){   // date → px along the line: the seat mid-line, even spaci
 
 function render(){
   if (pickWant && (notaries.has(myCoordOf(pickWant)) || !loading())){ coord = pickWant; pickWant = null; startPick(); }
-  if (!saved && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay))) store();   // every relay answered or failed once: a dead one is not waited on
+  if (!saved && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay) || performance.now() > 5000)) store();   // every relay answered, failed once, or still hangs past 5s (as loading() gives up on it): a dead one is not waited on
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   // one rule for every view: what you look at is a timeline, its members are cards and timelines; an unfolded timeline's members ride along too, by date
