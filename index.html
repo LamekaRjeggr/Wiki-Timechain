@@ -180,12 +180,9 @@
   /* the Library (lib/library.mjs) reads the dots page's color names; here they point at ours */
   .tabs{display:flex;flex-wrap:wrap;gap:8px} .tabs:empty{display:none}
   .tabs .linkbtn{background:var(--rail);border-color:var(--rail);color:var(--ink);font-weight:700;font-size:16px;padding:10px 18px;border-radius:8px}
-  #intro{max-width:720px;margin:14px auto 0;padding:0 16px;font-size:16px;line-height:1.5;color:var(--dim);text-align:center} #intro .sep{margin:0 8px;color:var(--faint)} #intro span{white-space:nowrap} @media (max-width:480px){#intro{font-size:14px} #intro .sep{display:none} #intro span{display:block;white-space:normal}}   /* a phone: one half per line */ #intro p{margin:4px 0} #intro b{color:var(--text)} #intro a{color:var(--accent)}
   #kids{max-width:720px;margin:18px auto 0;font-size:15px;color:var(--dim)} #kids p{margin:0 0 6px}
   #kids>button,#kids>span{display:flex;justify-content:space-between;gap:12px;width:100%;margin-top:6px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:inherit;color:var(--text);text-align:left}
   #kids>button{cursor:pointer} #kids>button:hover{border-color:var(--rail-dim)} #kids small{color:var(--dim);white-space:nowrap}
-  #lib:not([hidden]){display:flex;flex-direction:column} #lib #nosign{order:1}   /* sign-in waits under the list: read first */
-  #lib{--pick:var(--rail);--t0:var(--text);--t1:var(--dim);--t2:var(--dim);--line:var(--border);--sans:var(--font);padding:0 16px}
 
   /* copy-a-link-to-this-timeline button */
   .pickrow{margin-top:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
@@ -864,11 +861,6 @@
   </header>
 
   <main>
-    <section id="intro" hidden>
-      <p><span><b>Timeline</b> = dated cards</span> <span class="sep">·</span> <span><b>Timetree</b> = timeline(s) = dated cards</span></p>
-      <p><a href="add.html">Publish a card</a></p>
-    </section>
-    <section id="lib" aria-label="Library" hidden></section>
     <section id="kids" hidden></section>
     <div class="fglyph" id="sumtog" title="How much of each card to show — the floor; a lit line is showing. Any one card can be cycled past it on its own glyph.">
           <span class="fs t" title="titles — always shown">titles</span>
@@ -1102,7 +1094,8 @@ const nowEl    = document.getElementById("collnow");   // the selected timeline,
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
 const addLink  = document.getElementById("addlink"), dotsNav = document.getElementById("dotsnav"), addNav = document.getElementById("addnav");   // → add.html, the write side
 let view = ["follows","global"].includes(_q.get("v")) ? _q.get("v") : "";   // follows: every copy someone you follow keeps, read as one · global: every copy of the name
-let onlyAcc = _q.get("only") === "accepted";   // the All · Accepted switch, carried in the link
+let onlyAcc = _q.get("only") === "accepted";
+let mineWanted = _q.get("mine") === "1";   // from the Library's My collection: your copy opens, else your earliest card   // the All · Accepted switch, carried in the link
 metaEl.addEventListener("click", e => {
   const b = e.target.closest("[data-only]"); if (!b || (b.dataset.only === "accepted") === onlyAcc) return;
   onlyAcc = !onlyAcc;
@@ -1115,7 +1108,7 @@ const shown = es => onlyAcc ? es.filter(e => e.evs.length || e.lapsed.length).ma
 // URL that reproduces the current view — the shareable deep link
 function timelineUrl(){
   const u = new URL(location);
-  ["c","k","l","t","plain","sum","depth","show","open","only","v"].forEach(a => u.searchParams.delete(a));
+  ["c","k","l","t","plain","sum","depth","show","open","only","v","mine"].forEach(a => u.searchParams.delete(a));
   if (view) u.searchParams.set("v", view);
   if (onlyAcc) u.searchParams.set("only", "accepted");
   if (activeF) u.searchParams.set(axisOf(activeF), valOf(activeF));
@@ -1644,23 +1637,10 @@ function creditRow(ev, skip){
 // Discovery = the notaries (see ingestNotary). Cards are fetched per timeline, when looked at:
 // the relay's #a index is the manifest, so a reload costs the notaries plus one timeline.
 // (re)subscribe membership on every open socket whenever a notary arrives or a slug is wanted
-// the Everyone tab's order: a name's newest activity — a card or act on any copy, or a copy itself.
-// One open REQ for the newest 200 cards and acts across every notary; a name past those keeps its copies' own times.
-const seenAt = new Map(); let askedRec = "";
-const recentOf = c => Math.max(seenAt.get(c) || 0, ...notariesOf(c).map(n => n.created_at));
-function ingestRecent(ev){
-  for (const t of ev.tags) if (t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")){
-    const c = subOf(t[1]);
-    if (ev.created_at > (seenAt.get(c) || 0)){ seenAt.set(c, ev.created_at); scheduleRender(); }
-  }
-}
-const askRecent = ws => notaries.size && ws.readyState === WebSocket.OPEN &&
-  (ws.send(JSON.stringify(["CLOSE","rec"])), ws.send(JSON.stringify(["REQ","rec",{ kinds:[KIND, ACT_KIND], "#a":[...notaries.keys()].sort(), limit:200 }])));
 function scheduleMemberFetch(){
   if (memberTimer) return;
   memberTimer = setTimeout(() => {
     memberTimer = null;
-    const rk = [...notaries.keys()].sort().join(); if (rk !== askedRec){ askedRec = rk; sockets.forEach(askRecent); }
     if (!memberFilters().length) return;
     sockets.forEach(ws => {
       if (ws.readyState !== WebSocket.OPEN) return;
@@ -2072,53 +2052,13 @@ function myCardsByName(){
   return by;
 }
 const members = (N, c) => notarySources(N).filter(a => subOf(a) !== c);   // a source with the timeline's own name is the one it copies, not a member
-const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c), es = wanted.has(c) ? entriesOf("c:" + c) : null, ys = [...new Set((es || []).map(e => e.frac).sort((a, b) => a - b).filter((f, i, a) => !i || i === a.length - 1).map(mapYr))];
-  return { wrote:(wrote.get(c) || []).length, fol:folNotaries(c).length, copies:notariesOf(c).length, at:recentOf(c), d:c, title:slugName(c), text:c + " " + (N ? tag(N,"summary") : ""), n:es && es.length, span:ys.join("–"),
-           nTl:members(N, c).length, tree:members(N, c).length > 0, mine:notariesOf(c).some(n => n.pubkey === meNow()) }; })
-  .filter(x => fetching() || x.n || x.nTl || x.mine || x.wrote); };   // an empty copy of a timeline the relays lack is hidden, as on dots
-let libUpdate = null;   // the module loads beside this classic script; render waits for it
-const libEl = document.getElementById("lib"), introEl = document.getElementById("intro"), kidsEl = document.getElementById("kids");
-let heads = null;   // lib/heads.mjs: the unsigned 30829s for a new timeline and a tree's timelines
+const kidsEl = document.getElementById("kids");
+let heads = null;   // lib/heads.mjs: the unsigned 30829s for a copy and a first card's timeline
 import("./lib/heads.mjs").then(m => heads = m);
-import("./lib/library.mjs").then(m => { libUpdate = m.mountLibrary(libEl, (c, tab) => { if (treePick){ treePick.set.has(c) ? treePick.set.delete(c) : treePick.set.add(c); return scheduleRender(); }
-  selectF("c:" + c);
-  if (tab === "fol" || tab === "all"){ view = tab === "fol" ? "follows" : "global"; history.replaceState(null, "", timelineUrl()); render(); }
-  if (tab === "mine" && !openMyCopy(c)) seekMine(c); }); scheduleRender(); });
-async function newTimeline(v){   // the Library's form: an empty head under your key, then it opens
-  const s = await getSigner(), ev = await s.sign(heads.newHead(v));
-  rememberPk(ev.pubkey); ingestNotary(ev); publish(ev); selectF("c:" + heads.slug(v.title)); openMyCopy(heads.slug(v.title));
-}
-// Add timelines: the Library opens on every timeline, a tap adds or takes one off, Done signs your copy with the new set
-let treePick = null;   // { c, my, srcs, set }: the tree being filled, your copy of it, the coords it points at now, the names ticked
 const myCopy = c => notariesOf(c).find(n => n.pubkey === meNow());
-function treeStart(){ const c = activeF.slice(2), my = myCopy(c), srcs = notarySources(my);
-  treePick = { c, my, srcs, set:new Set(srcs.map(subOf)) }; selectF(null); }
-async function treeDone(){
-  const p = treePick; treePick = null; selectF("c:" + p.c); openMyCopy(p.c);
-  const list = [...p.set].map(d => { const n = myCopy(d) || notariesOf(d)[0]; return p.srcs.find(a => subOf(a) === d) || n && coordOf(n); }).filter(Boolean);   // a name already pointed at keeps its coord; a new one points at your copy, else the oldest
-  if (list.length === p.srcs.length && list.every(a => p.srcs.includes(a))) return;
-  const s = await getSigner(), base = p.my || heads.newHead({ title:slugName(p.c) }, p.c);   // no copy of yours yet: this makes it
-  const ev = await s.sign(heads.withSources(base, list)); rememberPk(ev.pubkey); ingestNotary(ev); publish(ev); openMyCopy(p.c);
-}
-// a My collection row opens YOUR copy of the name, not the default
-function openMyCopy(c){
-  const N = notariesOf(c).find(n => n.pubkey === meNow());
-  if (!N) return false;
-  activeN = coordOf(N);
-  history.replaceState(null, "", timelineUrl());
-  render();
-  return true;
-}
-// no copy of yours: the default opens, scrolled to your earliest card once it renders
-let seekD = null;
-function seekMine(c){
-  const mine = (myCardsByName().get(c) || []).sort((a, b) => yearFrac(dateOf(a)) - yearFrac(dateOf(b)));
-  if (mine.length){ seekD = tag(mine[0], "d"); render(); }
-}
-async function libSignIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
-  if (!signerReady()) return void (location.href = "add.html");
-  rememberPk((await getSigner()).pubkey); scheduleRender();
-}
+// the Library is dots' (lib=cardex: its switch starts on cardex, a tap comes back here); the saved copy goes first so it opens on what this page knows
+const toLibrary = (q = "", how = "assign") => { if (saved) store(); location[how]("dots.html?lib=cardex" + q); };
+let seekD = null;   // a card to scroll to once it renders
 
 // the name's notaries, one chip each, when more than one key holds it. Switching chips
 // switches timelines: a notary IS the timeline, the name is only what it is called.
@@ -2145,7 +2085,7 @@ function renderTabs(){
   const tk = activeF ? "t" + hasSigner : "";   // ‹ Library, and Add timelines once you can sign
   if (tabsEl.dataset.k !== tk){ tabsEl.dataset.k = tk;
     tabsEl.innerHTML = activeF ? `<button class="linkbtn" type="button" id="tolib" title="Every timeline — pick another">‹ Library</button>${hasSigner ? ` <button class="linkbtn" type="button" id="addtl" title="Pick the timelines this one groups">Add timelines</button>` : ""}` : "";
-    tabsEl.onclick = e => e.target.id === "tolib" ? selectF(null) : e.target.id === "addtl" && treeStart(); }
+    tabsEl.onclick = e => e.target.id === "tolib" ? toLibrary() : e.target.id === "addtl" && toLibrary("&pick=" + encodeURIComponent(activeF.slice(2))); }
 }
 
 // the strip under the title (CSS .collmap). Even spacing, except a gap ten times the usual one:
@@ -2196,19 +2136,17 @@ function render(){
   // back from nstart.me: the card they were writing opens again, where they left it
   if (nstartBack && activeF === "c:" + nstartBack && !draft){ nstartBack = null; setTimeout(startDraft); }
   if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
-  if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
+  if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one, so the saved copy holds them all
+  if (mineWanted && activeF && meNow()){ const c = activeF.slice(2), N = myCopy(c);
+    if (N || !fetching()){ mineWanted = false; if (N) activeN = coordOf(N);
+      else { const m = (myCardsByName().get(c) || []).sort((a, b) => yearFrac(dateOf(a)) - yearFrac(dateOf(b)))[0]; if (m) seekD = tag(m, "d"); }
+      history.replaceState(null, "", timelineUrl()); } }
   const rs = [...relayState.values()];   // every relay answered or gave up (a down one is not tried again this visit), and every timeline fetched whole
   if (!saved && !fetching() && rs.includes("up") && !rs.includes("connecting") && [...slugs].every(c => wanted.has(c))) store();
   renderStatus();
   renderTabs();
-  libEl.hidden = introEl.hidden = !!activeF; areaEl.hidden = sumTog.hidden = !activeF; renderKids();   // the floor words belong to a timeline, not the Library
-  if (!activeF){
-    const down = [...relayState.values()].every(v => v === "down");
-    const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait && !cached ? rows.map(x => ({ ...x, n:null })) : rows, checking:wait && cached, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn,
-      here:"cardex", other:{ name:"dots", url:d => "dots.html?c=" + encodeURIComponent(d) }, onNew:hasSigner ? newTimeline : null, pick:treePick && { title:slugName(treePick.c), self:treePick.c, has:d => treePick.set.has(d) }, onDone:treeDone });
-    drumMeasure(); return;
-  }
+  if (!activeF){ if (!wantedF || userPicked || !fetching()) toLibrary("", "replace"); return; }   // nothing asked for, or what was asked is not on the relays: the Library lives on dots
+  renderKids();
 
   let entries = activeF ? shown(entriesOf(activeF)) : [];
   if (draft && draft.edit) entries = entries.filter(e => e.d !== draft.edit.d);   // the edit sits in its place
@@ -3194,8 +3132,8 @@ const storePageKey = () => { try { localStorage.setItem(PAGE_KEY, JSON.stringify
 let hasSigner = signerReady() || !!pageKey;
 let _pkPub = [];   // [sk, pub] — the page key's public half, computed once
 function meNow(){   // who "you" are: the signed-in key, else the page key
-  if (myPk || !pageKey) return myPk || null;
-  if (_pkPub[0] !== pageKey.sk) _pkPub = [pageKey.sk, xonlyPub(pageKey.sk)];
+  if (myPk || !pageKey || !sec) return myPk || null;
+  if (_pkPub[0] !== pageKey.sk) _pkPub = [pageKey.sk, sec.xonlyPub(pageKey.sk)];
   return _pkPub[1];
 }
 // extensions can inject after first paint — look twice more, then stop asking
@@ -3218,108 +3156,9 @@ function tallyHtml(id, err){
   return `<span class="oktally${t.done && !t.ok ? " err" : ""}">accepted by ${t.ok} of ${t.sent} relay${t.sent === 1 ? "" : "s"}</span>`;
 }
 
-// ── secp256k1 + BIP-340 schnorr, hand-rolled. VERIFYING is the page's job: it checks
-//    every event the relays hand us — see the gate above connect(). SIGNING no longer
-//    has a runtime caller (the extension signs), and is kept because it is what
-//    .htest/schnorr.mjs runs the official BIP-340 vectors through, and what builds the
-//    genuine event the gate test smuggles its forgeries past. Affine BigInt math,
-//    ~20ms a verify — which is why the gate queues rather than blocks. ──
-const CURVE_P = 2n**256n - 2n**32n - 977n;
-const CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
-const G = [0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,
-           0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n];
-const fmod = (a, m) => ((a % m) + m) % m;
-function finv(a, m){                       // modular inverse (extended euclid)
-  let [r0, r1, s0, s1] = [fmod(a, m), m, 1n, 0n];
-  while (r1 !== 0n){ const q = r0 / r1; [r0, r1] = [r1, r0 - q*r1]; [s0, s1] = [s1, s0 - q*s1]; }
-  return fmod(s0, m);
-}
-function padd(A, B){                       // point add (null = point at infinity)
-  if (!A) return B; if (!B) return A;
-  if (A[0] === B[0] && fmod(A[1] + B[1], CURVE_P) === 0n) return null;
-  const l = A[0] === B[0]
-    ? fmod(3n*A[0]*A[0] * finv(2n*A[1], CURVE_P), CURVE_P)
-    : fmod((B[1]-A[1]) * finv(B[0]-A[0], CURVE_P), CURVE_P);
-  const x = fmod(l*l - A[0] - B[0], CURVE_P);
-  return [x, fmod(l*(A[0]-x) - A[1], CURVE_P)];
-}
-function pmul(Pt, k){                      // double-and-add
-  let R = null, A = Pt;
-  while (k > 0n){ if (k & 1n) R = padd(R, A); A = padd(A, A); k >>= 1n; }
-  return R;
-}
-const hexToBytes = h => Uint8Array.from(h.match(/../g) || [], x => parseInt(x, 16));
-const bytesToHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
-const bytesToInt = b => BigInt("0x" + (bytesToHex(b) || "0"));
-const intTo32   = i => hexToBytes(i.toString(16).padStart(64, "0"));
-const bcat = (...bs) => { const o = new Uint8Array(bs.reduce((n,b) => n + b.length, 0));
-  let at = 0; for (const b of bs){ o.set(b, at); at += b.length; } return o; };
-const sha256 = async b => new Uint8Array(await crypto.subtle.digest("SHA-256", b));
-async function taggedHash(tag, ...msgs){
-  const th = await sha256(new TextEncoder().encode(tag));
-  return sha256(bcat(th, th, ...msgs));
-}
-
-function xonlyPub(skHex){
-  return pmul(G, bytesToInt(hexToBytes(skHex)))[0].toString(16).padStart(64, "0");
-}
-async function schnorrSign(msgHex, skHex, auxHex){   // auxHex fixed only by the test harness
-  const m  = hexToBytes(msgHex);
-  const d0 = bytesToInt(hexToBytes(skHex));
-  const Pt = pmul(G, d0);
-  const d  = (Pt[1] & 1n) ? CURVE_N - d0 : d0;       // BIP-340: even-y secret
-  const aux = auxHex ? hexToBytes(auxHex) : crypto.getRandomValues(new Uint8Array(32));
-  const t = d ^ bytesToInt(await taggedHash("BIP0340/aux", aux));
-  const rand = await taggedHash("BIP0340/nonce", intTo32(t), intTo32(Pt[0]), m);
-  const k0 = fmod(bytesToInt(rand), CURVE_N);
-  if (k0 === 0n) throw new Error("bad nonce");
-  const R = pmul(G, k0);
-  const k = (R[1] & 1n) ? CURVE_N - k0 : k0;
-  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge", intTo32(R[0]), intTo32(Pt[0]), m)), CURVE_N);
-  return bytesToHex(bcat(intTo32(R[0]), intTo32(fmod(k + e*d, CURVE_N))));
-}
-
-// ── the other direction: given a message, a pubkey and a signature, did that key sign
-//    that message? Needs one thing signing didn't — recovering the full point from the
-//    x-only pubkey (BIP-340 keys carry no y), which is a modular square root. ──
-const fpow = (b, e, m) => {                // modular exponent, square-and-multiply
-  let r = 1n; b = fmod(b, m);
-  while (e > 0n){ if (e & 1n) r = fmod(r*b, m); b = fmod(b*b, m); e >>= 1n; }
-  return r;
-};
-function liftX(x){                         // x → the curve point with even y, or null
-  if (x <= 0n || x >= CURVE_P) return null;
-  const c = fmod(x*x*x + 7n, CURVE_P);
-  const y = fpow(c, (CURVE_P + 1n) / 4n, CURVE_P);
-  if (fmod(y*y, CURVE_P) !== c) return null;   // no square root: x is not on the curve
-  return [x, (y & 1n) ? CURVE_P - y : y];
-}
-async function schnorrVerify(msgHex, pkHex, sigHex){
-  if (!/^[0-9a-f]{64}$/.test(String(pkHex)) || !/^[0-9a-f]{128}$/.test(String(sigHex))) return false;
-  const P = liftX(BigInt("0x" + pkHex));
-  if (!P) return false;
-  const r = BigInt("0x" + sigHex.slice(0, 64)), s = BigInt("0x" + sigHex.slice(64));
-  if (r >= CURVE_P || s >= CURVE_N) return false;
-  const e = fmod(bytesToInt(await taggedHash("BIP0340/challenge",
-    intTo32(r), intTo32(P[0]), hexToBytes(msgHex))), CURVE_N);
-  const R = padd(pmul(G, s), pmul(P, CURVE_N - e));      // R = sG − eP
-  return !!R && (R[1] & 1n) === 0n && R[0] === r;
-}
-
-// the NIP-01 id of an event: the hash of its own contents, so it can't be reassigned
-async function eventId(ev){
-  const ser = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
-  return bytesToHex(await sha256(new TextEncoder().encode(ser)));
-}
-
-// NIP-01 id + signature from a raw secret key — the page key's signer, and the test
-// harness's fixture builder.
-async function signWithMint(tmpl, skHex){
-  const ev = { ...tmpl, pubkey: xonlyPub(skHex) };
-  ev.id = await eventId(ev);               // same serialization the gate re-derives
-  ev.sig = await schnorrSign(ev.id, skHex);
-  return ev;
-}
+// the curve math (verify, and signing for the page key) lives in lib/verify.mjs, loaded with the relays; xonlyPub waits on it
+let sec = null;
+const hexToBytes = h => Uint8Array.from(h.match(/../g) || [], x => parseInt(x, 16)), bytesToHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
 
 // ── the signer seam: everything that writes asks getSigner() and nothing else.
 //    Two implementations — a resumed bunker session wins, else the NIP-07 extension.
@@ -3328,7 +3167,7 @@ let signerP = null;
 function getSigner(){
   if (bunkerSigner) return Promise.resolve(bunkerSigner);
   if (!signerReady() && pageKey)
-    return Promise.resolve({ pubkey: xonlyPub(pageKey.sk), sign: t => signWithMint(t, pageKey.sk) });
+    return Promise.resolve({ pubkey: sec.xonlyPub(pageKey.sk), sign: t => sec.signWithMint(t, pageKey.sk) });
   if (!signerP){
     signerP = (async () => {
       if (!signerReady()) throw new Error("no signer");   // same capability test as hasSigner
@@ -3419,10 +3258,7 @@ function rememberPk(pk){
   try { localStorage.setItem(PK_KEY, pk); } catch {}
 }
 function mintPageKey(){
-  let sk;
-  do sk = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-  while (!(BigInt("0x" + sk) > 0n && BigInt("0x" + sk) < CURVE_N));
-  pageKey = { sk, saved: false };
+  pageKey = { sk:sec.newSecret(), saved: false };
   storePageKey();
   hasSigner = true;
 }
@@ -3926,7 +3762,7 @@ async function publishDraft(btn){
     rememberPk(ev.pubkey);
     justPub = { d: tmpl.tags[0][1], id: ev.id };
     setTimeout(() => { justPub = null; scheduleRender(); }, 20000);
-    if (pageKey && !pageKey.saved && s.pubkey === xonlyPub(pageKey.sk)) keyShow = { d: tmpl.tags[0][1] };
+    if (pageKey && !pageKey.saved && s.pubkey === sec.xonlyPub(pageKey.sk)) keyShow = { d: tmpl.tags[0][1] };
     if (!E) try { localStorage.removeItem(keepKey()); } catch {}
     draft = null; nstartMsg = null;
     if (pickStage) pickExit();
@@ -4092,7 +3928,7 @@ function handoffAct(pk, d, w){
   location.href = "add.html?act=1" + (c ? "&c=" + encodeURIComponent(c) : "");
 }
 // test hook — headless harness only, no runtime consumer
-window.__wtc = { schnorrSign, schnorrVerify, xonlyPub, bech32, signWithMint, eventId,
+window.__wtc = { bech32,   // + the curve math, once lib/verify.mjs is here
                  admit, dropped: () => vDropped,
                  buildDraftTemplate, wikiSlug, draftCollision, inheritedTags, ingest,
                  startDraft, discardDraft, pickCommit, pickBack, pickDone, spanOf,
@@ -4143,9 +3979,9 @@ async function drainGate(){
     if (vBad.has(ev.id)) continue;
     let hashOK = false, ok = false, spent = false;
     try {
-      hashOK = (await eventId(ev)) === ev.id;
+      hashOK = (await sec.eventId(ev)) === ev.id;
       if (hashOK && vOK.has(ev.id)) ok = true;
-      else if (hashOK){ spent = true; ok = await schnorrVerify(ev.id, ev.pubkey, ev.sig); }
+      else if (hashOK){ spent = true; ok = await sec.schnorrVerify(ev.id, ev.pubkey, ev.sig); }
     } catch { ok = false; }
     if (ok) { vOK.add(ev.id); fn(ev); }
     else {
@@ -4171,7 +4007,7 @@ function connect(url){
     renderStatus();
     // discovery = the corpus's notaries, kept open so a brand-new timeline appears live
     ws.send(JSON.stringify(["REQ","ntry",{ kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }]));
-    askFollows(ws); askRecent(ws);
+    askFollows(ws);
     const mf = memberFilters();
     if (mf.length)
       ws.send(JSON.stringify(["REQ","wtc", ...live(mf)]));
@@ -4194,7 +4030,6 @@ function connect(url){
       if (sub === "prof")   admit(data[2], ingestProfile);
       if (sub === "act")    admit(data[2], ingestAct);
       if (sub === "fol")    admit(data[2], ingestFollows);
-      if (sub === "rec")    admit(data[2], ingestRecent);
       if (sub === "del" && data[2]?.kind === 5) admit(data[2], ingestDelete);
     }
     if (data[0] === "OK"){                     // a relay's verdict on something we published
@@ -4214,8 +4049,8 @@ function connect(url){
 let P = null, cache = null, cached = false, saved = false;   // lib/pull.mjs: the relays are opened once it is here; lib/cache.mjs: the saved copy, read first. cached: the page opened on it
 const heard = new Set();   // what a relay sent this visit — the saved copy keeps only that
 render();
-Promise.all([import("./lib/pull.mjs"), import("./lib/cache.mjs")]).then(async ([m, c]) => { P = m; cache = c;
-  const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:e => { ingest(e); ingestRecent(e); }, [ACT_KIND]:e => { ingestAct(e); ingestRecent(e); }, 0:ingestProfile, 3:ingestFollows };
+Promise.all([import("./lib/pull.mjs"), import("./lib/cache.mjs"), import("./lib/verify.mjs")]).then(async ([m, c, v]) => { P = m; cache = c; sec = v; Object.assign(window.__wtc, v);
+  const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:ingest, [ACT_KIND]:ingestAct, 0:ingestProfile, 3:ingestFollows };
   for (const [ev] of await c.load(c.keyOf(RELAYS))){ cached = true; vOK.add(ev.id);   // checked before it was saved
     if (ev.kind === ACT_KIND) try { vOK.add(JSON.parse(tag(ev, "snapshot")).id); } catch {}   // and the card it carries
     feed[ev.kind]?.(ev); }

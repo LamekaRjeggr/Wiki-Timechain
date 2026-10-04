@@ -139,6 +139,7 @@ import { mountLibrary, headForm } from "./lib/library.mjs";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
 import * as cache from "./lib/cache.mjs";
+import { xonlyPub, signWithMint } from "./lib/verify.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
@@ -147,6 +148,8 @@ const ADD = Q.get("add") ?? (HOME && !Q.get("relay") ? "ws://127.0.0.1:7777" : "
 const MAIN = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.ditto.pub",
   "wss://offchain.pub", "wss://nostr.mom", "wss://relay.nostr.net"];
 const RELAYS = (Q.get("relay") ? Q.get("relay").split(",") : [...MAIN, ...(ADD || "").split(",").filter(Boolean)]).map(u => /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? u : u.replace(/127\.0\.0\.1|localhost/, location.hostname));   // relay= replaces the network, add= joins it; a loopback relay follows the page's host, so one URL serves the Mac and the iPad
+const FROM = Q.get("lib") === "cardex";   // came from cardex's ‹ Library: the switch starts on cardex, on the network side (cardex never sees the local one)
+const toCardex = (d, tab) => "./?c=" + encodeURIComponent(d) + ({ fol:"&v=follows", all:"&v=global", mine:"&mine=1" }[tab] || "");   // a tap carries its tab: cardex opens in that lens, or on your copy
 const KIND = 30828, ACT_KIND = 8828, NOTARY_KIND = 30829, MARKER = "wikitimechain";
 
 // ── state ──
@@ -160,9 +163,9 @@ const vOK = new Set(), vBad = new Set(), sockets = [], heard = new Set();   // h
 let cached = false, saved = false; const KEY = cache.keyOf(RELAYS);   // cached: the page opened on the saved copy, so its counts show, marked as checking
 let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
-let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
+let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0 && !FROM, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
 let TA = 22 * Math.PI / 180; const NEAR = 0.5, PAD = 12, YR = 864e5 * 365.25, ROW = 17; let ppy = null, seatD = null;   // ROW = one title row on the screen, px; seat = the open card's date, mid-line; NEAR = the part of each half-line spaced evenly, ppy px per year there; PAD keeps the end dots off the band's edge
-let myPk = null; try { myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || null; } catch {}
+let myPk = null, pageKey = null; try { pageKey = JSON.parse(localStorage.getItem("wtc:pagekey") || "null"); myPk = localStorage.getItem("wtc:pk") || JSON.parse(localStorage.getItem("wtc:signin") || "{}").pk || (pageKey && xonlyPub(pageKey.sk)) || null; } catch {}   // pageKey: a key cardex made for someone with no nostr app — last in line
 const NOW = new Date().toISOString().slice(0, 10);
 
 // ── the gate: every event is id-hashed and signature-checked before it counts — in a pool of workers, so the page never waits on the math ──
@@ -253,6 +256,7 @@ function ask(){   // one sub over every timeline known so far; same sub id = the
   if (askedDel !== pks.join()){ askedDel = pks.join(); send(["REQ", "del", { kinds:[5], authors:pks, since:T0 }]); }
   pullAll("del", { kinds:[5] }, "authors", pks);
 }
+const okWait = new Map(), landed = id => new Promise(r => { okWait.set(id, r); setTimeout(r, 3000); });   // a relay took it (or 3s): only then may the page leave for cardex
 let up = 0; const failed = new Set();   // relays that dropped or never opened at least once this visit
 function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
@@ -260,7 +264,7 @@ function connect(url, wait = 2000){   // a relay that drops or never answers is 
   ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullFrom(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER], schedule); asked = askedDel = ""; ask(); askFollows(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
-    route(ws, d);
+    route(ws, d); if (d[0] === "OK") okWait.get(d[1])?.();
     if (d[0] === "OK" && d[2] === true && MAIN.includes(url)){ const s = seenOn.get(d[1]); if (s && !s.has(url)){ s.add(url); schedule(); } return; }   // a main relay stored it: a pushed card keeps its old created_at, so the live subs (since load) never echo it back
     if (d[0] !== "EVENT") return;
     const sub = String(d[1]).split("~")[0];   // a page of history is name~n
@@ -324,7 +328,7 @@ function choose(c, path = []){   // c = a subject d → that timeline; null → 
 }
 function setUrl(){   // c= and me= ride the URL so a reload or a shared link lands on the same view
   const q = new URLSearchParams(); if (coord) q.set("c", coord); if (trail.length) q.set("p", trail.join(",")); if (unfolded.size) q.set("u", [...unfolded].join(",")); if (me) q.set("me", "1"); if (local !== LOCAL0) q.set("local", local ? "1" : "0");
-  for (const k of ["relay", "add"]) if (Q.get(k)) q.set(k, Q.get(k));
+  for (const k of ["relay", "add", "lib"]) if (Q.get(k)) q.set(k, Q.get(k));
   history.replaceState(null, "", "?" + q);
   const c = coord ? "?c=" + encodeURIComponent(coord) : "";   // the other two pages read c= the same way: land on this timeline there
   document.getElementById("towiki").href = "./" + c; document.getElementById("toadd").href = "add.html" + c;
@@ -370,8 +374,8 @@ function tick(){   // the head of the queue goes to every MAIN relay; its echo t
   sockets.forEach(ws => ws.readyState === WebSocket.OPEN && MAIN.includes(ws.relay) && ws.send(JSON.stringify(["EVENT", ev])));
 }
 let bunker = null;   // resumed add.html session (wtc:signin, via bunker); wins over the extension when both exist
-const canSign = () => !!bunker || typeof window.nostr?.signEvent === "function";   // this page never holds a key
-const signer = async () => bunker || { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) };
+const ext = () => typeof window.nostr?.signEvent === "function", canSign = () => !!bunker || ext() || !!pageKey;   // the same order as cardex: bunker, extension, page key
+const signer = async () => bunker || (ext() ? { pubkey: await window.nostr.getPublicKey(), sign: t => window.nostr.signEvent(t) } : { pubkey: xonlyPub(pageKey.sk), sign: t => signWithMint(t, pageKey.sk) });
 const bst = (t, title = "") => { const e = document.getElementById("bst"); e.textContent = t; e.title = title; };   // the bunker's state, next to the relay count: silence was unreadable
 (async function bunkerResume(){   // RESUME ONLY, no login here — mirrors index.html; CSP already lets wss: through for the bunker's own relays
   let s = null; try { s = JSON.parse(localStorage.getItem("wtc:signin") || "null"); } catch {}
@@ -403,19 +407,21 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
 let picking = null;   // adding timelines to a timetree: the Library, where a tap adds or removes instead of opening
 function startPick(){ const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : []; picking = { d:coord, trail, srcs, set:new Set(srcs.map(subOf)) }; choose(null); }
 function togglePick(d){ picking.set.has(d) ? picking.set.delete(d) : picking.set.add(d); schedule(); }
-function pickDone(){   // one signature for everything picked; a name already pointed at keeps its coord, a new one points at my copy if I keep one
+async function pickDone(away){   // one signature for everything picked; a name already pointed at keeps its coord, a new one points at my copy if I keep one. away: back to cardex, on my copy
   const p = picking; picking = null; choose(p.d, p.trail);
   const list = [...p.set].map(d => p.srcs.find(c => subOf(c) === d) || (notaries.has(myCoordOf(d)) ? myCoordOf(d) : [...notaries.keys()].find(c => subOf(c) === d))).filter(Boolean);
-  if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))) setSources(list);
+  if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))){ const ev = await setSources(list); if (away) await landed(ev.id); }
+  if (away) location.href = toCardex(p.d, "mine");
 }
+let pickWant = FROM && Q.get("pick");   // cardex's Add timelines: picking starts once my copy of the tree is here, or every relay has answered
 async function setSources(list){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
   const { sign, head } = await ready(), mine = await sign(withSources(head, list));
-  admit(mine, ingestNotary); write(mine);
+  admit(mine, ingestNotary); write(mine); return mine;
 }
-async function newTimeline(v){   // an empty head: title + summary from the Library's form; cards by accept, timelines by Add timelines
+async function newTimeline(v, away){   // an empty head: title + summary from the Library's form; cards by accept, timelines by Add timelines. away: it opens in cardex
   const { pubkey, sign } = await signer(); myPk = pubkey;
   const head = await sign(newHead(v));
-  admit(head, ingestNotary); write(head); choose(slug(v.title));
+  admit(head, ingestNotary); write(head); if (away){ await landed(head.id); return void (location.href = toCardex(slug(v.title), "mine")); } choose(slug(v.title));
 }
 function editHead(){   // retitle in the same form as New timeline, under the header: the head is replaced whole, d/t/a kept
   const host = document.getElementById("hedit"), cur = notaries.get(myCoord()); host.hidden = false;
@@ -476,6 +482,7 @@ function mapOf(){   // date → px along the line: the seat mid-line, even spaci
 }
 
 function render(){
+  if (pickWant && (notaries.has(myCoordOf(pickWant)) || !loading())){ coord = pickWant; pickWant = null; startPick(); }
   if (!saved && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay))) store();   // every relay answered or failed once: a dead one is not waited on
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
@@ -650,9 +657,9 @@ function library(projections, all){   // one row per subject; mine = a timeline 
       at.set(s, Math.max(at.get(s) || 0, e.created_at)); if (e.kind === KIND && e.pubkey === myPk) wrote.set(s, (wrote.get(s) || 0) + 1); }
   const rowOf = tls => { const ns = tls.flatMap(d => notariesOf(d).map(([, n]) => n.pubkey)); return { copies:new Set(ns).size, fol:follows ? new Set(ns.filter(p => follows.has(p))).size : 0,
     at:Math.max(0, ...tls.map(d => at.get(d) || 0)), wrote:tls.reduce((k, d) => k + (wrote.get(d) || 0), 0), mine:mine(tls) }; };   // the same row details cardex hands over
-  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
+  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
-    here:"dots", other:ADD && local ? null : { name:"cardex", url:d => "./?c=" + encodeURIComponent(d) },   // cardex reads only the network: the local side has nowhere else to open
+    here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
 }
