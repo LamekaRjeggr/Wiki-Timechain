@@ -363,7 +363,7 @@ const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(N
 function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here and did not refuse, by date; only what the network has not echoed, never an act
   if (!coord || !myPk) return [];
   const cs = whole.filter(x => isLocal(x.id) && x.accs.includes(myCoord()) && !refused.has(x.id)).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
-  const ns = [...new Set(cs.map(subTo))].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
+  const my = notaries.get(myCoord()), ns = [...new Set([...cs.map(subTo), ...(my && sourcesOf(my).length ? [myCoord()] : [])])].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));   // a timetree you built here goes too, with no cards of its own
   return [...ns, ...cs];
 }
 let pushT = null, whole = [];   // the push clock: one event to the network per minute while the queue has any; nothing stored — a reload resumes from what the relays echo
@@ -657,7 +657,7 @@ function library(projections, all){   // one row per subject; mine = a timeline 
       at.set(s, Math.max(at.get(s) || 0, e.created_at)); if (e.kind === KIND && e.pubkey === myPk) wrote.set(s, (wrote.get(s) || 0) + 1); }
   const rowOf = tls => { const ns = tls.flatMap(d => notariesOf(d).map(([, n]) => n.pubkey)); return { copies:new Set(ns).size, fol:follows ? new Set(ns.filter(p => follows.has(p))).size : 0,
     at:Math.max(0, ...tls.map(d => at.get(d) || 0)), wrote:tls.reduce((k, d) => k + (wrote.get(d) || 0), 0), mine:mine(tls) }; };   // the same row details cardex hands over
-  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
+  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls, ...x.mem.map(m => m.title)].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
     here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
