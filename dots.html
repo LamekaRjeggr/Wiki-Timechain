@@ -151,6 +151,7 @@ const cards = new Map();      // pubkey:d → newest 30828
 const acts = new Map();       // id → 8828 (only if the act AND its snapshot verified)
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
+let follows = null, folAt = 0;   // who you follow: your newest kind 3, asked once you are known
 const vOK = new Set(), vBad = new Set(), sockets = [];
 let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
@@ -211,6 +212,11 @@ function ingestAct(ev){
   // the act's signature cannot vouch for the card it carries — that snapshot walks the gate too
   snap && snap.id ? admit(snap, s => { askProfile(s.pubkey); keep(); }) : keep();
 }
+function ingestFollows(ev){
+  if (ev.pubkey !== myPk || ev.created_at <= folAt) return;
+  folAt = ev.created_at; follows = new Set(ev.tags.filter(t => t[0] === "p").map(t => t[1])); schedule();
+}
+const askFollows = () => myPk && send(["REQ", "fol", { kinds:[3], authors:[myPk], limit:1 }]);
 function ingestProfile(ev){
   let name = ""; try { const p = JSON.parse(ev.content); name = p.display_name || p.name || ""; } catch {}
   profiles.set(ev.pubkey, name.trim()); schedule();
@@ -245,7 +251,7 @@ let up = 0;
 function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
   ws.relay = url; const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
-  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullFrom(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER], schedule); asked = askedDel = ""; ask(); };   // a late relay has heard nothing yet
+  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullFrom(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER], schedule); asked = askedDel = ""; ask(); askFollows(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
     route(ws, d);
@@ -256,6 +262,7 @@ function connect(url, wait = 2000){   // a relay that drops or never answers is 
     if (sub === "wtc")  admit(d[2], ingestCard, url);
     if (sub === "act")  admit(d[2], ingestAct, url);
     if (sub === "prof") admit(d[2], ingestProfile, url);
+    if (sub === "fol" && d[2]?.kind === 3) admit(d[2], ingestFollows, url);
     if (sub === "del" && d[2]?.kind === 5) admit(d[2], ingestDelete, url);
   };
   ws.onerror = () => status();
@@ -633,14 +640,20 @@ const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).
 function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
   const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
   const bare = wait || picking ? [...new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
-  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), mine:mine(x.tls) })),
-      ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", mine:mine([d]) }))],
-    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null, signIn,
+  const at = new Map(), wrote = new Map();   // per name: its newest card, act or head; how many of your cards point at it
+  for (const e of [...cards.values(), ...acts.values(), ...notaries.values()]) if (!ADD || onSide(e.id))
+    for (const s of e.kind === NOTARY_KIND ? [tag(e, "d")] : e.tags.filter(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")).map(t => subOf(t[1]))){
+      at.set(s, Math.max(at.get(s) || 0, e.created_at)); if (e.kind === KIND && e.pubkey === myPk) wrote.set(s, (wrote.get(s) || 0) + 1); }
+  const rowOf = tls => { const ns = tls.flatMap(d => notariesOf(d).map(([, n]) => n.pubkey)); return { copies:new Set(ns).size, fol:follows ? new Set(ns.filter(p => follows.has(p))).size : 0,
+    at:Math.max(0, ...tls.map(d => at.get(d) || 0)), wrote:tls.reduce((k, d) => k + (wrote.get(d) || 0), 0), mine:mine(tls) }; };   // the same row details cardex hands over
+  libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
+      ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
+    signedIn:!!myPk, loading:loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
-  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {} render();
+  myPk = await window.nostr.getPublicKey(); try { localStorage.setItem("wtc:pk", myPk); } catch {} follows = null; folAt = 0; askFollows(); render();
 }
 
 function article(x){   // one card's block in the column; a timeline's block leads with its collection line and an open ▸
