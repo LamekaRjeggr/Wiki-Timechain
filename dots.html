@@ -184,7 +184,7 @@ function settle(id, ok){
 }
 
 // ── ingest ──
-const tag = (ev, n) => (ev.tags.find(t => t[0] === n) || [])[1] || "";
+const tag = (ev, n) => (ev.tags.find(t => t[0] === n) || [])[1] || "", subOf = c => c.split(":").slice(2).join(":");   // subOf: the name in a 30829:pk:name address
 const gone = new Map();   // what a kind 5 took back: id → its author, or kind:pk:d → as of when; a copy arriving later from another relay stays out
 const isGone = ev => gone.get(ev.id) === ev.pubkey || (gone.get(ev.kind + ":" + ev.pubkey + ":" + tag(ev, "d")) ?? -1) >= ev.created_at;
 function ingestDelete(ev){   // NIP-09: only the author can take a record back; a coord takes every version up to the delete's own time
@@ -275,7 +275,7 @@ const status = () => { st.textContent = `${sockets.filter(w => w.readyState === 
 
 // a timeline is its subject `d`, whole — every notary that carries that d pours its dots in, then ONE dot per card:
 // gold if any notary accepted it, blue otherwise; `accs` = the notaries that did (the ✓ N pill), so the band never repeats a card
-const notariesOf = d => [...notaries.entries()].filter(([c, n]) => c.split(":").slice(2).join(":") === d && (!ADD || (local ? [...(seenOn.get(n.id) || [])].some(u => !MAIN.includes(u)) : !isLocal(n.id))));   // heads keep to the side too: on local, any head your relay has — a pushed head still names its waiting cards
+const notariesOf = d => [...notaries.entries()].filter(([c, n]) => subOf(c) === d && (!ADD || (local ? [...(seenOn.get(n.id) || [])].some(u => !MAIN.includes(u)) : !isLocal(n.id))));   // heads keep to the side too: on local, any head your relay has — a pushed head still names its waiting cards
 function dotsFor(d, projections, all){
   const byId = new Map();
   for (const [c] of notariesOf(d)) for (const x of dotsOf(c, projections, all)){
@@ -300,7 +300,7 @@ let emptyN = 0;
 function members(d, projections, all, of){   // what a timeline holds: its cards, and one dot per timeline it points at; d = null is the timeline of timelines, one dot per subject
   if (d){ const ns = notariesOf(d); return [...dotsFor(d, projections, all).filter(x => keep(x, d)), ...sourceSubjects(ns.map(([, n]) => n)).map(x => subjectDot(x, projections, all)).filter(Boolean)].map(x => of ? { ...x, of } : x); }   // of: the timeline a member came in with
   const out = [], held = new Map(); emptyN = 0;   // held: card set → the dot already showing it — timelines holding exactly the same cards fold into one dot
-  for (const s of new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))){
+  for (const s of new Set([...notaries.keys()].map(subOf))){
     const dot = subjectDot(s, projections, all); if (!dot){ if (!me && !ADD) emptyN++; continue; }
     const key = dot.all.size ? [...dot.all.keys()].sort().join(" ") : "tl " + s, prev = held.get(key);
     if (prev){   // same cards, another keeper: add the keeper, pool the accepts
@@ -392,13 +392,12 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
   const now = Math.floor(Date.now() / 1000);
   let head = notaries.get(myCoord());
   if (!head){
-    head = await sign({ kind:NOTARY_KIND, created_at:now, content:"", tags:[["d", coord], ["title", titleOf(coord)], ["t", MARKER], ["a", notariesOf(coord)[0][0]]] });
+    head = await sign(newHead({ title:titleOf(coord) }, coord, notariesOf(coord)[0][0]));
     admit(head, ingestNotary); write(head);
   }
   return { sign, now, head };
 }
 let picking = null;   // adding timelines to a timetree: the Library, where a tap adds or removes instead of opening
-const subOf = c => c.split(":").slice(2).join(":");
 function startPick(){ const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : []; picking = { d:coord, trail, srcs, set:new Set(srcs.map(subOf)) }; choose(null); }
 function togglePick(d){ picking.set.has(d) ? picking.set.delete(d) : picking.set.add(d); schedule(); }
 function pickDone(){   // one signature for everything picked; a name already pointed at keeps its coord, a new one points at my copy if I keep one
@@ -640,7 +639,7 @@ const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").rep
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
 function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
   const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
-  const bare = wait || picking ? [...new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
+  const bare = wait || picking ? [...new Set([...notaries.keys()].map(subOf))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
   const at = new Map(), wrote = new Map();   // per name: its newest card, act or head; how many of your cards point at it
   for (const e of [...cards.values(), ...acts.values(), ...notaries.values()]) if (!ADD || onSide(e.id))
     for (const s of e.kind === NOTARY_KIND ? [tag(e, "d")] : e.tags.filter(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")).map(t => subOf(t[1]))){

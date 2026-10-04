@@ -1309,9 +1309,9 @@ function tag(ev, name){ const t = ev.tags.find(t => t[0] === name); return t ? t
 // One place decides membership; a card with no submission belongs to no timeline.
 function collectionSlug(ev){
   const a = ev.tags.find(t => t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":"));
-  return a ? a[1].split(":").slice(2).join(":") : "";
+  return a ? subOf(a[1]) : "";
 }
-const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d");
+const coordOf = n => NOTARY_KIND + ":" + n.pubkey + ":" + tag(n,"d"), subOf = a => a.split(":").slice(2).join(":");   // subOf: the name in an address
 // A notary has an unordered SET of discovery sources. Position, tag order, graph depth,
 // and the number of routes confer no rank or authority; only this notary's own 8828s
 // decide its projection.
@@ -1650,7 +1650,7 @@ const seenAt = new Map(); let askedRec = "";
 const recentOf = c => Math.max(seenAt.get(c) || 0, ...notariesOf(c).map(n => n.created_at));
 function ingestRecent(ev){
   for (const t of ev.tags) if (t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")){
-    const c = t[1].split(":").slice(2).join(":");
+    const c = subOf(t[1]);
     if (ev.created_at > (seenAt.get(c) || 0)){ seenAt.set(c, ev.created_at); scheduleRender(); }
   }
 }
@@ -1684,7 +1684,7 @@ function reachableNotaryCoords(roots){
 // have different d values; sharing a timeline name is a fixture convenience, not a rule.
 // The deep-linked tag path remains for non-collection axes.
 function memberFilters(){
-  const roots = [...notaries.keys()].filter(k => wanted.has(k.split(":").slice(2).join(":")));
+  const roots = [...notaries.keys()].filter(k => wanted.has(subOf(k)));
   const coords = reachableNotaryCoords(roots);
   const f = coords.length ? [{ kinds:[KIND], "#a": coords }] : [];
   if (wantedF && axisOf(wantedF) !== "c") f.push({ kinds:[KIND], ["#" + axisOf(wantedF)]: [valOf(wantedF)] });
@@ -2067,7 +2067,7 @@ function myCardsByName(){
   const me = meNow(), by = new Map();
   if (me) for (const ev of events.values()) if (ev.pubkey === me && !isGone(ev))
     for (const t of ev.tags) if (t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")){
-      const c = t[1].split(":").slice(2).join(":"); by.set(c, (by.get(c) || []).concat(ev)); }
+      const c = subOf(t[1]); by.set(c, (by.get(c) || []).concat(ev)); }
   return by;
 }
 const libRows = () => { const wrote = myCardsByName(); return [...slugs].map(c => { const N = notaryOf(c);
@@ -2087,14 +2087,14 @@ async function newTimeline(v){   // the Library's form: an empty head under your
 }
 // Add timelines: the Library opens on every timeline, a tap adds or takes one off, Done signs your copy with the new set
 let treePick = null;   // { c, my, srcs, set }: the tree being filled, your copy of it, the coords it points at now, the names ticked
-const subOf = a => a.split(":").slice(2).join(":"), myCopy = c => notariesOf(c).find(n => n.pubkey === meNow());
+const myCopy = c => notariesOf(c).find(n => n.pubkey === meNow());
 function treeStart(){ const c = activeF.slice(2), my = myCopy(c), srcs = notarySources(my);
   treePick = { c, my, srcs, set:new Set(srcs.map(subOf)) }; selectF(null); }
 async function treeDone(){
   const p = treePick; treePick = null; selectF("c:" + p.c); openMyCopy(p.c);
   const list = [...p.set].map(d => { const n = myCopy(d) || notariesOf(d)[0]; return p.srcs.find(a => subOf(a) === d) || n && coordOf(n); }).filter(Boolean);   // a name already pointed at keeps its coord; a new one points at your copy, else the oldest
   if (list.length === p.srcs.length && list.every(a => p.srcs.includes(a))) return;
-  const s = await getSigner(), base = p.my || { created_at:0, content:"", tags:[["d", p.c], ["title", slugName(p.c)], ["t", MARKER]] };   // no copy of yours yet: this makes it
+  const s = await getSigner(), base = p.my || heads.newHead({ title:slugName(p.c) }, p.c);   // no copy of yours yet: this makes it
   const ev = await s.sign(heads.withSources(base, list)); rememberPk(ev.pubkey); ingestNotary(ev); publish(ev); openMyCopy(p.c);
 }
 // a My collection row opens YOUR copy of the name, not the default
@@ -2174,7 +2174,7 @@ function renderMap(all){
 function renderKids(){
   const src = notarySources(activeF ? notaryOf(activeF.slice(2)) : null), pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   kidsEl.hidden = !src.length; if (!src.length) return;
-  kidsEl.innerHTML = `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` + src.map(a => { const d = a.split(":").slice(2).join(":");
+  kidsEl.innerHTML = `<p>This timetree groups ${pl(src.length, "timeline")}:</p>` + src.map(a => { const d = subOf(a);
     return notaries.has(a) ? `<button type="button" data-d="${esc(d)}"><b>${esc(slugName(d))}</b><small>${pl(entriesOf("c:" + d).length, "event")}</small></button>`
       : `<span><b>${esc(d.replaceAll("-", " "))}</b><small>${fetching() ? "…" : "not found on the relays"}</small></span>`; }).join("");
 }
@@ -2303,7 +2303,7 @@ function bindTaps(){                                      // gap expanders + acc
       render(); return;
     }
     const xp = e.target.closest(".xp.back");                // a cited card: jump the page to it if it's on this spine
-    if (xp){ const n = document.querySelector(`.node[data-d="${CSS.escape(xp.dataset.c.split(":").slice(2).join(":"))}"]`); if (n) n.scrollIntoView({ behavior:"smooth", block:"center" }); return; }
+    if (xp){ const n = document.querySelector(`.node[data-d="${CSS.escape(subOf(xp.dataset.c))}"]`); if (n) n.scrollIntoView({ behavior:"smooth", block:"center" }); return; }
     const rv = e.target.closest(".rival,.rclose,.revbox,.peek");   // the boxes + peek pills: toggle, repaint
     if (rv){
       const set = rv.classList.contains("revbox") ? showLive : openRivals, c = rv.dataset.c;
@@ -3913,8 +3913,7 @@ async function publishDraft(btn){
     // a NEW name has no notary yet, and a card needs one to be seen — so the first card mints
     // it, open to all. The only automatic notary; a deliberate one is minted elsewhere.
     if (!notaryOf(c)){
-      const n = await s.sign({ kind: NOTARY_KIND, created_at: tmpl.created_at, content: "",
-                               tags: [["d", c], ["title", c.replaceAll("-"," ")], ["t", MARKER]] });
+      const n = await s.sign(heads.newHead({ title:c.replaceAll("-"," ") }, c));
       ingestNotary(n); publish(n);
     }
     const N = notaryOf(c);
@@ -3993,19 +3992,12 @@ async function acceptCard(pk, d, btn){
     if (N && N.pubkey !== s.pubkey){
       let mine = notariesOf(c).find(n => n.pubkey === s.pubkey);
       if (!mine){
-        mine = await s.sign({ kind: NOTARY_KIND, created_at: Math.floor(Date.now() / 1000), content: "",
-          tags: [["d", c], ["title", tag(N,"title") || c], ["t", MARKER], ["a", coordOf(N)]] });
+        mine = await s.sign(heads.newHead({ title:tag(N,"title") || c }, c, coordOf(N)));
         ingestNotary(mine); publish(mine);
       } else if (!notarySources(mine).includes(coordOf(N))){
-        // Curating a second lens expands an unordered discovery set. Preserve every
-        // non-source configuration tag and union the source coordinates; do not encode
-        // a preferred parent or implicit delegation in tag order.
-        const tags = mine.tags.filter(t => !(t[0] === "a" && t[1].startsWith(NOTARY_KIND + ":")));
-        for (const src of [...new Set(notarySources(mine).concat(coordOf(N)))].sort())
-          tags.push(["a", src]);
-        mine = await s.sign({ kind: NOTARY_KIND,
-          created_at: Math.max(Math.floor(Date.now() / 1000), mine.created_at + 1),
-          content: mine.content || "", tags });
+        // Curating a second lens expands an unordered discovery set: union the sources, sorted —
+        // tag order encodes no preferred parent or delegation.
+        mine = await s.sign(heads.withSources(mine, [...new Set(notarySources(mine).concat(coordOf(N)))].sort()));
         ingestNotary(mine); publish(mine);
       }
       activeN = coordOf(mine);
