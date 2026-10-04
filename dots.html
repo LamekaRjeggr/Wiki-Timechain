@@ -317,12 +317,6 @@ function setUrl(){   // c= and me= ride the URL so a reload or a shared link lan
 }
 const keep = (x, d) => (!ADD || onSide(x.id)) && (!me || !myPk || x.author === myPk || x.accs.includes(NOTARY_KIND + ":" + myPk + ":" + d));   // the you filter: yours by hand or by seal; a card of yours someone re-wrote is theirs now
 const localChip = () => ADD ? ` · <button class="chip${local ? " on" : ""}" id="localbtn" aria-pressed="${local}" title="${local ? "cards only your relay has · click for the network" : "cards the network has · click for your relay only"}">${local ? "local" : "nostr"}</button>` : "";   // a two-sided switch, never both: only when an add= relay is in the room
-const tlPick = () => {   // point my head at another timeline; taking one off is the ✕ on its row
-  if (!canSign()) return "";
-  const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], sub = c => c.split(":").slice(2).join(":");
-  const others = [...notaries.entries()].filter(([c, n]) => sub(c) !== coord && !srcs.includes(c)).sort((a, b) => tag(a[1], "title").localeCompare(tag(b[1], "title")));
-  return others.length ? ` <select id="srcpick"><option value="">+ timeline</option>${others.map(([c, n]) => `<option value="${esc(c)}">${esc(tag(n, "title") || sub(c))} · ${esc(who(n.pubkey))}</option>`).join("")}</select>` : "";
-};
 const youChip = () => myPk ? ` · <button class="chip${me ? " on" : ""}" id="mebtn" aria-pressed="${me}" title="only cards you wrote or accepted">you: ${esc(who(myPk))}</button>` : "";
 
 // ── derive + render ──
@@ -391,6 +385,15 @@ async function ready(){   // sign-in + my notary for the open subject, minted on
     admit(head, ingestNotary); write(head);
   }
   return { sign, now, head };
+}
+let picking = null;   // adding timelines to a timetree: the Library, where a tap adds or removes instead of opening
+const subOf = c => c.split(":").slice(2).join(":");
+function startPick(){ const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : []; picking = { d:coord, trail, srcs, set:new Set(srcs.map(subOf)) }; choose(null); }
+function togglePick(d){ picking.set.has(d) ? picking.set.delete(d) : picking.set.add(d); schedule(); }
+function pickDone(){   // one signature for everything picked; a name already pointed at keeps its coord, a new one points at my copy if I keep one
+  const p = picking; picking = null; choose(p.d, p.trail);
+  const list = [...p.set].map(d => p.srcs.find(c => subOf(c) === d) || (notaries.has(myCoordOf(d)) ? myCoordOf(d) : [...notaries.keys()].find(c => subOf(c) === d))).filter(Boolean);
+  if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))) setSources(list);
 }
 async function setSources(list){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
   const { sign, now, head: cur } = await ready();
@@ -475,7 +478,7 @@ function render(){
     whole = dotsFor(coord, fold.projections, all);   // whole: the timeline, whichever side the chips show — the push queue reads it
     const ns = notariesOf(coord), nAcc = dots.filter(x => x.kind === "acc" && !x.tl).length, mine = canSign() && notaries.has(myCoord());   // path · what · notaries · filters · actions
     const ttl = mine ? `<button id="editbtn" class="title" title="retitle your head; d never changes">${esc(titleOf(coord))}</button>` : esc(titleOf(coord));
-    const rest = `${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>${tlPick()}` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
+    const rest = `${[what, mark(nAcc, " accepted")].filter(Boolean).join(" · ")} · <button class="chip" id="nchip" aria-expanded="${names}">${ns.length} notar${ns.length > 1 ? "ies" : "y"}</button>${names ? ` <b>${esc(ns.map(([, n]) => who(n.pubkey)).join(", "))}</b>` : ""}${canSign() ? ` · <button class="chip" id="addtl">Add timelines</button>` : ""}${youChip()}${localChip()}${pushChip()}${mine && !dots.some(x => x.accs.includes(myCoord())) ? ` · <button class="chip" id="delbtn" title="delete your head — it holds no cards of yours">delete</button>` : ""}`;
     const up = trail[trail.length - 1];
     ntry.innerHTML = PHONE.matches   // a phone: one row — back one level, the title, ⋯ for the rest
       ? `<div class="prow"><button id="back">‹ ${up ? esc(titleOf(up)) : "Library"}</button><span class="ptitle">${ttl}</span><button id="morebtn" aria-expanded="${more}" aria-label="more">⋯</button></div>${more ? `<div class="pmore">${rest}</div>` : ""}`
@@ -484,8 +487,7 @@ function render(){
     document.getElementById("back").onclick = () => PHONE.matches && up ? choose(up, trail.slice(0, -1)) : choose(null);
     ntry.querySelectorAll(".crumb").forEach(b => b.onclick = () => choose(trail[+b.dataset.k], trail.slice(0, +b.dataset.k)));
     const nc = document.getElementById("nchip"); if (nc) nc.onclick = () => { names = !names; render(); };   // folded behind ⋯ on a phone
-    const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [];
-    const pick = document.getElementById("srcpick"); if (pick) pick.onchange = () => pick.value && setSources([...srcs, pick.value]);
+    const addtl = document.getElementById("addtl"); if (addtl) addtl.onclick = startPick;
     const ed = document.getElementById("editbtn"); if (ed) ed.onclick = editHead;
     const del = document.getElementById("delbtn"); if (del) del.onclick = deleteHead;
   } else {
@@ -630,10 +632,11 @@ const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").rep
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
 function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
   const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
-  const bare = wait ? [...new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
+  const bare = wait || picking ? [...new Set([...notaries.keys()].map(c => c.split(":").slice(2).join(":")))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
   libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), mine:mine(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", mine:mine([d]) }))],
-    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null, signIn });
+    signedIn:!!myPk, loading:loading(), onNew:canSign() ? newTimeline : null, signIn,
+    pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
@@ -702,7 +705,7 @@ const go = i => { if (exploring()) setReading(true); if (refused.has(dots[i]?.id
 const ntry = document.getElementById("ntry"),
   st = document.getElementById("st"), band = document.getElementById("band"), empty = document.getElementById("empty"),
   card = document.getElementById("card"), drop = document.getElementById("drop"), mapEl = document.getElementById("top"), lib = document.getElementById("lib");
-const libUpdate = mountLibrary(lib, c => choose(c));   // the Library also passes which tab — not a path
+const libUpdate = mountLibrary(lib, c => picking ? togglePick(c) : choose(c));   // the Library also passes which tab — not a path
 // wheel over the band: the seat holds, the years stretch or squeeze
 const zoom = k => { ppy = Math.max(fitPpy(), Math.min(MAXZ, ppy * k)); fitted = null; draw(); };   // out no further than the fit: past it the record would only shrink
 const zoomAt = (cx, cy, k) => {   // the date under the pointer stays under the pointer: the seat moves to make it so — the line grows and shrinks around your hand; a pointer out on a horizon holds the seam's date instead
