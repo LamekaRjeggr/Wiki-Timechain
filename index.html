@@ -2054,7 +2054,7 @@ function myCardsByName(){
 const members = (N, c) => notarySources(N).filter(a => subOf(a) !== c);   // a source with the timeline's own name is the one it copies, not a member
 const kidsEl = document.getElementById("kids");
 let heads = null;   // lib/heads.mjs: the unsigned 30829s for a copy and a first card's timeline
-import("./lib/heads.mjs").then(m => heads = m);
+import("./lib/heads.mjs?v=2").then(m => heads = m);
 const myCopy = c => notariesOf(c).find(n => n.pubkey === meNow());
 // the Library is dots' (lib=cardex: its switch starts on cardex, a tap comes back here); the saved copy goes first so it opens on what this page knows
 const toLibrary = (q = "", how = "assign") => { if (saved) store(); location[how]("dots.html?lib=cardex" + q); };
@@ -4049,7 +4049,7 @@ function connect(url){
 let P = null, cache = null, cached = false, saved = false;   // lib/pull.mjs: the relays are opened once it is here; lib/cache.mjs: the saved copy, read first. cached: the page opened on it
 const heard = new Set();   // what a relay sent this visit — the saved copy keeps only that
 render();
-Promise.all([import("./lib/pull.mjs"), import("./lib/cache.mjs"), import("./lib/verify.mjs")]).then(async ([m, c, v]) => { P = m; cache = c; sec = v; Object.assign(window.__wtc, v);
+Promise.all([import("./lib/pull.mjs"), import("./lib/cache.mjs"), import("./lib/verify.mjs?v=2")]).then(async ([m, c, v]) => { P = m; cache = c; sec = v; Object.assign(window.__wtc, v);
   const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:ingest, [ACT_KIND]:ingestAct, 0:ingestProfile, 3:ingestFollows };
   for (const [ev] of await c.load(c.keyOf(RELAYS))){ cached = true; vOK.add(ev.id);   // checked before it was saved
     if (ev.kind === ACT_KIND) try { vOK.add(JSON.parse(tag(ev, "snapshot")).id); } catch {}   // and the card it carries
