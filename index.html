@@ -1745,6 +1745,7 @@ function ingest(ev){
 }
 // NIP-09: only the author can take a record back; a coord takes every version up to the delete's own time
 function ingestDelete(ev){
+  cache.note(ev);
   for (const [n, v] of ev.tags){
     if (n === "e" && v) gone.set(v, ev.pubkey);
     if (n === "a" && v && v.split(":")[1] === ev.pubkey) gone.set(v, Math.max(gone.get(v) ?? -1, ev.created_at)); }
@@ -1767,7 +1768,7 @@ function scheduleDelFetch(){
 
 function ingestProfile(ev){
   if (!ev || ev.kind !== 0) return;
-  const p = profiles.get(ev.pubkey);
+  const p = profiles.get(ev.pubkey); cache.note(ev);
   if (p && p.at && p.at >= ev.created_at) return;
   let meta; try { meta = JSON.parse(ev.content); } catch { return; }
   profiles.set(ev.pubkey, {
@@ -2194,13 +2195,15 @@ function render(){
   if (nstartBack && activeF === "c:" + nstartBack && !draft){ nstartBack = null; setTimeout(startDraft); }
   if (activeF) wantSlug(activeF.slice(2));   // fetch the timeline on screen, once
   if (!activeF || !fetching()) slugs.forEach(wantSlug);   // then every other one (at once on the Library), so each row gets its real count
+  const rs = [...relayState.values()];   // every relay answered or gave up (a down one is not tried again this visit), and every timeline fetched whole
+  if (!saved && !fetching() && rs.includes("up") && !rs.includes("connecting") && [...slugs].every(c => wanted.has(c))) store();
   renderStatus();
   renderTabs();
   libEl.hidden = introEl.hidden = !!activeF; areaEl.hidden = sumTog.hidden = !activeF; renderKids();   // the floor words belong to a timeline, not the Library
   if (!activeF){
     const down = [...relayState.values()].every(v => v === "down");
     const rows = libRows(), wait = !down && fetching();   // entriesOf in libRows may ask for acts: check after it
-    if (libUpdate) libUpdate({ rows:wait ? rows.map(x => ({ ...x, n:null })) : rows, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn,
+    if (libUpdate) libUpdate({ rows:wait && !cached ? rows.map(x => ({ ...x, n:null })) : rows, checking:wait && cached, signedIn:!!meNow(), folState:!myPk ? "nokey" : !follows && fetching() ? "loading" : "ready", loading:wait || !down && !slugs.size, signIn:libSignIn,
       here:"cardex", other:{ name:"dots", url:d => "dots.html?c=" + encodeURIComponent(d) }, onNew:hasSigner ? newTimeline : null, pick:treePick && { title:slugName(treePick.c), self:treePick.c, has:d => treePick.set.has(d) }, onDone:treeDone });
     drumMeasure(); return;
   }
@@ -3158,7 +3161,7 @@ const tallies  = new Map();     // published event id → {ok,no,sent,done} — 
 let follows = null, folAt = 0;
 function ingestFollows(ev){
   if (ev.kind !== 3 || ev.pubkey !== myPk || ev.created_at <= folAt) return;
-  folAt = ev.created_at;
+  cache.note(ev); folAt = ev.created_at;
   follows = new Set(ev.tags.filter(t => t[0] === "p" && /^[0-9a-f]{64}$/.test(t[1])).map(t => t[1]));
   scheduleRender();
 }
@@ -4181,7 +4184,7 @@ function connect(url){
   ws.onmessage = (m) => {
     let data; try { data = JSON.parse(m.data); } catch { return; }
     P.route(ws, data);
-    if (data[0] === "EVENT"){
+    if (data[0] === "EVENT"){ heard.add(data[2]?.id);
       // every path goes through admit() — there is no unchecked way in
       const sub = String(data[1]).split("~")[0];   // a page of history is name~n
       if (sub === "wtc")    admit(data[2], ingest);
@@ -4206,9 +4209,20 @@ function connect(url){
 }
 
 // ═══════════════ go ═══════════════
-let P = null;   // lib/pull.mjs: the relays are opened once it is here
+let P = null, cache = null, cached = false, saved = false;   // lib/pull.mjs: the relays are opened once it is here; lib/cache.mjs: the saved copy, read first. cached: the page opened on it
+const heard = new Set();   // what a relay sent this visit — the saved copy keeps only that
 render();
-import("./lib/pull.mjs").then(m => { P = m; RELAYS.forEach(connect); });
+Promise.all([import("./lib/pull.mjs"), import("./lib/cache.mjs")]).then(async ([m, c]) => { P = m; cache = c;
+  const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:e => { ingest(e); ingestRecent(e); }, [ACT_KIND]:e => { ingestAct(e); ingestRecent(e); }, 0:ingestProfile, 3:ingestFollows };
+  for (const [ev] of await c.load(c.keyOf(RELAYS))){ cached = true; vOK.add(ev.id);   // checked before it was saved
+    if (ev.kind === ACT_KIND) try { vOK.add(JSON.parse(tag(ev, "snapshot")).id); } catch {}   // and the card it carries
+    feed[ev.kind]?.(ev); }
+  RELAYS.forEach(connect); });
+function store(){   // what no relay sent this visit is gone from them, so it goes here too; then the copy is replaced whole
+  saved = true; for (const m of [notaries, events, acts]) for (const [k, e] of m) if (!heard.has(e.id)){ m.delete(k); validActs.delete(k); }
+  for (const c of slugs) if (!notariesOf(c).length) slugs.delete(c);
+  cache.save(cache.keyOf(RELAYS), [...cache.extra.values(), ...notaries.values(), ...events.values(), ...acts.values()].filter(e => heard.has(e.id)).map(e => [e, []]));
+}
 setTimeout(scheduleRender, 5100);   // fetching() stops waiting on relays that never opened
 setTimeout(() => {
   RELAYS.forEach(r => { if (relayState.get(r) === "connecting") relayState.set(r,"down"); });

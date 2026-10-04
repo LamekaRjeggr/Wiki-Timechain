@@ -138,6 +138,7 @@ import { fold8828 } from "./lib/fold-8828.mjs";
 import { mountLibrary, headForm } from "./lib/library.mjs";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
+import * as cache from "./lib/cache.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
 const Q = new URLSearchParams(location.search);
@@ -155,7 +156,8 @@ const acts = new Map();       // id → 8828 (only if the act AND its snapshot v
 const actE = new Set();       // act ids we hold — a revoke carries no `a`, so it is fetched by #e
 const profiles = new Map();   // pubkey → name
 let follows = null, folAt = 0;   // who you follow: your newest kind 3, asked once you are known
-const vOK = new Set(), vBad = new Set(), sockets = [];
+const vOK = new Set(), vBad = new Set(), sockets = [], heard = new Set();   // heard: what a relay sent this visit — the saved copy keeps only that
+let cached = false, saved = false; const KEY = cache.keyOf(RELAYS);   // cached: the page opened on the saved copy, so its counts show, marked as checking
 let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
@@ -173,7 +175,7 @@ const isLocal = id => ![...(seenOn.get(id) || [])].some(u => MAIN.includes(u));
 const onSide = id => local === isLocal(id);   // local = the to-do: what no MAIN relay has yet (your relay keeps it all, sent or not); nostr = what a MAIN relay echoed
 function admit(ev, fn, url){
   if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id)) || vBad.has(ev.id)) return;
-  const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (ADD && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
+  if (url) heard.add(ev.id); const s = seenOn.get(ev.id) || seenOn.set(ev.id, new Set()).get(ev.id); if (ADD && !s.has(url) && MAIN.includes(url)) schedule(); s.add(url);   // a main echo moves a card from the local side to the nostr side
   if (vOK.has(ev.id)) return fn(ev);
   const p = pend.get(ev.id); if (p) return p.fns.push(fn);
   pend.set(ev.id, { ev, fns:[fn] }); pool[rr++ % pool.length].postMessage([ev.id, ev]);
@@ -188,6 +190,7 @@ const tag = (ev, n) => (ev.tags.find(t => t[0] === n) || [])[1] || "", subOf = c
 const gone = new Map();   // what a kind 5 took back: id → its author, or kind:pk:d → as of when; a copy arriving later from another relay stays out
 const isGone = ev => gone.get(ev.id) === ev.pubkey || (gone.get(ev.kind + ":" + ev.pubkey + ":" + tag(ev, "d")) ?? -1) >= ev.created_at;
 function ingestDelete(ev){   // NIP-09: only the author can take a record back; a coord takes every version up to the delete's own time
+  cache.note(ev);
   for (const [n, v] of ev.tags){
     if (n === "e" && v) gone.set(v, ev.pubkey);
     if (n === "a" && v && v.split(":")[1] === ev.pubkey) gone.set(v, Math.max(gone.get(v) ?? -1, ev.created_at)); }
@@ -217,11 +220,11 @@ function ingestAct(ev){
 }
 function ingestFollows(ev){
   if (ev.pubkey !== myPk || ev.created_at <= folAt) return;
-  folAt = ev.created_at; follows = new Set(ev.tags.filter(t => t[0] === "p").map(t => t[1])); schedule();
+  cache.note(ev); folAt = ev.created_at; follows = new Set(ev.tags.filter(t => t[0] === "p").map(t => t[1])); schedule();
 }
 const askFollows = () => myPk && send(["REQ", "fol", { kinds:[3], authors:[myPk], limit:1 }]);
 function ingestProfile(ev){
-  let name = ""; try { const p = JSON.parse(ev.content); name = p.display_name || p.name || ""; } catch {}
+  cache.note(ev); let name = ""; try { const p = JSON.parse(ev.content); name = p.display_name || p.name || ""; } catch {}
   profiles.set(ev.pubkey, name.trim()); schedule();
 }
 const who = pk => profiles.get(pk) || "unnamed";   // a hash in the header says "for developers"; a missing profile is just unnamed
@@ -250,7 +253,7 @@ function ask(){   // one sub over every timeline known so far; same sub id = the
   if (askedDel !== pks.join()){ askedDel = pks.join(); send(["REQ", "del", { kinds:[5], authors:pks, since:T0 }]); }
   pullAll("del", { kinds:[5] }, "authors", pks);
 }
-let up = 0;
+let up = 0; const failed = new Set();   // relays that dropped or never opened at least once this visit
 function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
   ws.relay = url; const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
@@ -269,7 +272,7 @@ function connect(url, wait = 2000){   // a relay that drops or never answers is 
     if (sub === "del" && d[2]?.kind === 5) admit(d[2], ingestDelete, url);
   };
   ws.onerror = () => status();
-  ws.onclose = () => { status(); setTimeout(() => connect(url, Math.min(60000, wait * 2)), wait); };   // an error always ends in a close: one retry per drop
+  ws.onclose = () => { failed.add(url); status(); setTimeout(() => connect(url, Math.min(60000, wait * 2)), wait); };   // an error always ends in a close: one retry per drop
 }
 const status = () => { st.textContent = `${sockets.filter(w => w.readyState === WebSocket.OPEN).length}/${RELAYS.length} relays${loading() ? " · loading…" : ""}`; };
 
@@ -473,6 +476,7 @@ function mapOf(){   // date → px along the line: the seat mid-line, even spaci
 }
 
 function render(){
+  if (!saved && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay))) store();   // every relay answered or failed once: a dead one is not waited on
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   // one rule for every view: what you look at is a timeline, its members are cards and timelines; an unfolded timeline's members ride along too, by date
@@ -638,7 +642,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
 const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").replace(/^0+(?=\d)/, ""), span = x => yr(x.date) === yr(x.last) ? yr(x.date) : yr(x.date) + "–" + yr(x.last);   // the years a timeline covers
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
 function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
-  const wait = loading(), mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
+  const wait = loading() && !cached, mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
   const bare = wait || picking ? [...new Set([...notaries.keys()].map(subOf))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
   const at = new Map(), wrote = new Map();   // per name: its newest card, act or head; how many of your cards point at it
   for (const e of [...cards.values(), ...acts.values(), ...notaries.values()]) if (!ADD || onSide(e.id))
@@ -649,7 +653,7 @@ function library(projections, all){   // one row per subject; mine = a timeline 
   libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls].join(" "), n:wait ? null : x.n, where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
     here:"dots", other:ADD && local ? null : { name:"cardex", url:d => "./?c=" + encodeURIComponent(d) },   // cardex reads only the network: the local side has nowhere else to open
-    signedIn:!!myPk, loading:loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
+    signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
@@ -790,6 +794,14 @@ let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = reques
 }); }, { passive:true });
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
+const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:ingestCard, [ACT_KIND]:ingestAct, 0:ingestProfile, 3:ingestFollows };
+for (const [ev, urls] of await cache.load(KEY)){ cached = true; seenOn.set(ev.id, new Set(urls)); vOK.add(ev.id);   // checked before it was saved
+  if (ev.kind === ACT_KIND) try { vOK.add(JSON.parse(tag(ev, "snapshot")).id); } catch {}   // and the card it carries
+  feed[ev.kind]?.(ev); }
+function store(){   // the first full load: what no relay sent this visit is gone from them, so it goes here too; then the copy is replaced whole
+  saved = true; for (const m of [notaries, cards, acts]) for (const [k, e] of m) if (!heard.has(e.id)) m.delete(k);
+  cache.save(KEY, [...cache.extra.values(), ...notaries.values(), ...cards.values(), ...acts.values()].filter(e => heard.has(e.id)).map(e => [e, [...seenOn.get(e.id)]]));
+}
 render();
 RELAYS.forEach(u => connect(u));   // not forEach(connect): the index would ride in as the first wait
 [5100, 10100].forEach(t => setTimeout(schedule, t));   // when loading() stops waiting on relays that never opened
