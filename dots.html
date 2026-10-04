@@ -136,6 +136,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
 import { mountLibrary, headForm } from "./lib/library.mjs";
+import { newHead, retitled, withSources, slug } from "./lib/heads.mjs";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
@@ -406,21 +407,18 @@ function pickDone(){   // one signature for everything picked; a name already po
   if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))) setSources(list);
 }
 async function setSources(list){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
-  const { sign, now, head: cur } = await ready();
-  const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, cur.created_at + 1), content:cur.content, tags:[...cur.tags.filter(t => t[0] !== "a"), ...list.map(c => ["a", c])] });
+  const { sign, head } = await ready(), mine = await sign(withSources(head, list));
   admit(mine, ingestNotary); write(mine);
 }
-const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");   // d from the title, once: the title can change later, the d never does
-async function newTimeline({ title, summary }){   // an empty head: title + summary from the Library's form; cards by accept, timelines by Add timelines
+async function newTimeline(v){   // an empty head: title + summary from the Library's form; cards by accept, timelines by Add timelines
   const { pubkey, sign } = await signer(); myPk = pubkey;
-  const head = await sign({ kind:NOTARY_KIND, created_at:Math.floor(Date.now() / 1000), content:"", tags:[["d", slug(title)], ["title", title], ...(summary ? [["summary", summary]] : []), ["t", MARKER]] });
-  admit(head, ingestNotary); write(head); choose(slug(title));
+  const head = await sign(newHead(v));
+  admit(head, ingestNotary); write(head); choose(slug(v.title));
 }
 function editHead(){   // retitle in the same form as New timeline, under the header: the head is replaced whole, d/t/a kept
   const host = document.getElementById("hedit"), cur = notaries.get(myCoord()); host.hidden = false;
   headForm(host, { title:tag(cur, "title"), summary:tag(cur, "summary"), save:"Save" }, async v => { host.hidden = true; if (!v) return;
-    const { sign, now, head } = await ready();
-    const mine = await sign({ kind:NOTARY_KIND, created_at:Math.max(now, head.created_at + 1), content:head.content, tags:[...head.tags.filter(t => t[0] !== "title" && t[0] !== "summary"), ["title", v.title], ...(v.summary ? [["summary", v.summary]] : [])] });
+    const { sign, head } = await ready(), mine = await sign(retitled(head, v));
     admit(mine, ingestNotary); write(mine); });
 }
 async function deleteHead(){   // a kind 5 on my head: id and coord both named; the page forgets it at once, the relay drops it
