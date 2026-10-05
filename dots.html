@@ -135,7 +135,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { mountLibrary, headForm } from "./lib/library.mjs?v=4";
+import { mountLibrary, headForm } from "./lib/library.mjs?v=5";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs?v=2";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
 import * as cache from "./lib/cache.mjs";
@@ -362,10 +362,10 @@ const isMine = x => myPk && x.author === myPk;
 const accsOf = id => dots.find(o => o.id === id)?.accs || [];   // the notaries that accepted this exact card
 const subTo = ev => (ev.tags.find(t => t[0] === "a" && String(t[1]).startsWith(NOTARY_KIND + ":")) || [])[1];   // the notary a card was submitted to
 function queue(){   // what a push sends, in order: the notaries the cards point at (a card nobody can look up is invisible), then each card you accepted here and did not refuse, by date; only what the network has not echoed, never an act
-  if (!coord || !myPk) return [];   // a timetree goes with the timelines it points at, so it never lands on the network pointing at nothing
+  if (!coord || !myPk) return [];   // a timetree goes with the timelines it points at, so it never lands on the network pointing at nothing; my head goes whenever anything does, even when every card was sent to someone else's
   const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : [], ds = [coord, ...new Set(srcs.map(subOf).filter(d => d !== coord))];
   const cs = ds.flatMap(d => whole(d).filter(x => isLocal(x.id) && x.accs.includes(myCoordOf(d)) && !(d === coord && refused.has(x.id)))).map(x => [...cards.values()].find(e => e.id === x.id)).filter(Boolean);
-  const ns = [...new Set([...srcs, ...cs.map(subTo), ...(srcs.length ? [myCoord()] : [])])].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
+  const ns = [...new Set([...srcs, ...cs.map(subTo), ...(srcs.length || cs.length ? [myCoord()] : [])])].map(c => notaries.get(c)).filter(n => n && isLocal(n.id));
   return [...ns, ...cs];
 }
 let pushT = null, whole = () => [];   // the push clock: one event to the network per minute while the queue has any; nothing stored — a reload resumes from what the relays echo
@@ -666,7 +666,8 @@ function library(projections, all){   // one row per subject; mine = a timeline 
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
     here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
-    pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d) }, onDone:pickDone });
+    pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d), was:new Set(picking.srcs.map(subOf)) }, onDone:pickDone,
+    onEdit:canSign() ? d => { coord = d; trail = []; startPick(); } : null });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
