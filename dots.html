@@ -135,7 +135,7 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { mountLibrary, headForm } from "./lib/library.mjs?v=6";
+import { mountLibrary, headForm } from "./lib/library.mjs?v=7";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs?v=2";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
 import * as cache from "./lib/cache.mjs";
@@ -396,12 +396,12 @@ const bst = (t, title = "") => { const e = document.getElementById("bst"); e.tex
   } catch (e) { bst("bunker: " + (e?.message || "no answer"), "phone off, session revoked, or its relay unreachable"); console.warn("dots: bunker resume", e); }   // signed out, not an error — but say so
 })();
 const myCoordOf = d => myPk && d ? NOTARY_KIND + ":" + myPk + ":" + d : "", myCoord = () => myCoordOf(coord);   // my timeline for the open subject, minted on the first accept
-async function ready(){   // sign-in + my notary for the open subject, minted on my first act here
+async function ready(d = coord){   // sign-in + my notary for the open subject (or d), minted on my first act here
   const { pubkey, sign } = await signer(); myPk = pubkey; try { localStorage.setItem("wtc:pk", myPk); } catch {}
   const now = Math.floor(Date.now() / 1000);
-  let head = notaries.get(myCoord());
+  let head = notaries.get(myCoordOf(d));
   if (!head){
-    head = await sign(newHead({ title:titleOf(coord) }, coord, notariesOf(coord)[0][0]));
+    head = await sign(newHead({ title:titleOf(d) }, d, notariesOf(d)[0][0]));
     admit(head, ingestNotary); write(head);
   }
   return { sign, now, head };
@@ -410,14 +410,14 @@ let picking = null;   // adding timelines to a timetree: the Library, where a ta
 function startPick(){ const my = notaries.get(myCoord()), srcs = my ? sourcesOf(my) : []; picking = { d:coord, trail, srcs, set:new Set(srcs.map(subOf)) }; choose(null); }
 function togglePick(d){ picking.set.has(d) ? picking.set.delete(d) : picking.set.add(d); schedule(); }
 async function pickDone(away){   // one signature for everything picked; a name already pointed at keeps its coord, a new one points at my copy if I keep one. away: back to cardex, on my copy
-  const p = picking; picking = null; choose(p.d, p.trail);
+  const p = picking; picking = null; choose(p.lib ? null : p.d, p.trail);   // from the Library's edit: back to the list
   const list = [...p.set].map(d => p.srcs.find(c => subOf(c) === d) || (notaries.has(myCoordOf(d)) ? myCoordOf(d) : [...notaries.keys()].find(c => subOf(c) === d))).filter(Boolean);
-  if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))){ const ev = await setSources(list); if (away) await landed(ev.id); }
+  if (list.length !== p.srcs.length || list.some(c => !p.srcs.includes(c))){ const ev = await setSources(list, p.d); if (away) await landed(ev.id); }
   if (away) location.href = toCardex(p.d, "mine");
 }
 let pickWant = FROM && Q.get("pick");   // cardex's Add timelines: picking starts once my copy of the tree is here, or every relay has answered
-async function setSources(list){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
-  const { sign, head } = await ready(), mine = await sign(withSources(head, list));
+async function setSources(list, d = coord){   // the `a` tags replaced whole: my head keeps d/title/t and points at the new set
+  const { sign, head } = await ready(d), mine = await sign(withSources(head, list));
   admit(mine, ingestNotary); write(mine); return mine;
 }
 async function newTimeline(v, away){   // an empty head: title + summary from the Library's form; cards by accept, timelines by Add timelines. away: it opens in cardex
@@ -667,7 +667,7 @@ function library(projections, all){   // one row per subject; mine = a timeline 
     here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
     signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d), was:new Set(picking.srcs.map(subOf)) }, onDone:pickDone,
-    onEdit:canSign() ? d => { coord = d; trail = []; startPick(); } : null });
+    onEdit:canSign() ? d => { coord = d; trail = []; startPick(); picking.lib = true; } : null });
 }
 async function signIn(){   // an extension signs in here; without one, add.html holds the sign-in and this page rides its session
   if (typeof window.nostr?.getPublicKey !== "function") return void (location.href = "add.html");
