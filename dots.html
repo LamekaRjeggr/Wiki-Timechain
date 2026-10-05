@@ -135,10 +135,10 @@ main{display:grid;grid-template-rows:auto 1fr;width:100%}   /* the whole window:
 
 <script type="module">
 import { fold8828 } from "./lib/fold-8828.mjs";
-import { mountLibrary, headForm } from "./lib/library.mjs?v=7";
+import { mountLibrary, headForm } from "./lib/library.mjs?v=8";
 import { newHead, retitled, withSources, slug } from "./lib/heads.mjs?v=2";
 import { pull as pullFrom, route, busy, T0 } from "./lib/pull.mjs";
-import * as cache from "./lib/cache.mjs";
+import * as cache from "./lib/cache.mjs?v=2";
 import { xonlyPub, signWithMint } from "./lib/verify.mjs?v=2";   /* ?v=: bumped with the lib, like dots-derive below */
 import { dotsOf, byDate, timeMin, sourcesOf, sourceSubjects } from "./lib/dots-derive.mjs?v=5";   /* bump when the lib changes shape: a cached old copy kills the page at import */
 
@@ -160,7 +160,7 @@ const actE = new Set();       // act ids we hold — a revoke carries no `a`, so
 const profiles = new Map();   // pubkey → name
 let follows = null, folAt = 0;   // who you follow: your newest kind 3, asked once you are known
 const vOK = new Set(), vBad = new Set(), sockets = [], heard = new Set();   // heard: what a relay sent this visit — the saved copy keeps only that
-let cached = false, saved = false; const KEY = cache.keyOf(RELAYS);   // cached: the page opened on the saved copy, so its counts show, marked as checking
+let cached = false, saved = -1, shown = false; const KEY = cache.keyOf(RELAYS);   // saved: how much had been heard at the last save — a late relay saves again; cached: the page opened on the saved copy, so its counts show at once; shown: counts once out stay out
 let trail = (Q.get("p") || "").split(",").filter(Boolean);   // trail: the timetrees walked through to get here, oldest first
 let cardW = null, spotOf = new Map(), fitted = null, want = Q.get("c"), coord = null, askT = null, open = null, dots = [], renderT = null, colKey = null;
 let lens = ["mine", "follows"].includes(Q.get("v")) ? Q.get("v") : "", me = Q.get("me") === "1", local = Q.has("local") ? Q.get("local") === "1" : LOCAL0 && !FROM, names = false, unfolded = new Set((Q.get("u") || "").split(",").filter(Boolean)), refused = new Map(), showRef = false, raw = new Set();   // unfolded: timelines whose members ride this view — on the line and in the column
@@ -242,8 +242,10 @@ function askProfile(pk){
 
 // ── relays ──
 const send = m => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)));
-const pullAll = (name, base, k, keys) => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && pullFrom(ws, name, base, k, keys, schedule));   // the history, paged whole (lib/pull.mjs); the live sub beside it starts at T0
-const loading = () => pend.size > 0 || askT !== null || busy(sockets) || sockets.some(w => w.readyState === WebSocket.CONNECTING) && performance.now() < 5000   // a relay still paging, one still opening, records still in the signature check, or a timeline whose cards are not asked for yet: a count now would be a guess
+const pullOne = (ws, name, base, k, keys) => { const old = SINCE && MAIN.includes(ws.relay) ? keys.filter(x => known.has(x)) : [], o = new Set(old);   // a network relay sends only what is new for what the saved copy already holds; your own relay and anything new send it all
+  pullFrom(ws, name, { ...base, since:SINCE }, k, old, schedule); pullFrom(ws, name, base, k, keys.filter(x => !o.has(x)), schedule); };
+const pullAll = (name, base, k, keys) => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && pullOne(ws, name, base, k, keys));   // the history, paged (lib/pull.mjs); the live sub beside it starts at T0
+const loading = () => pend.size > 0 || askT !== null || busy(sockets) || sockets.some(w => w.readyState === WebSocket.CONNECTING) && performance.now() < 1500   // a relay still paging, one still opening (1.5s, then it joins late), records still in the signature check, or a timeline whose cards are not asked for yet: a count now would be a guess
   || !sockets.some(w => w.readyState === WebSocket.OPEN) && performance.now() < 1e4;
 const write = ev => sockets.forEach(ws => ws.readyState === WebSocket.OPEN && !(local && MAIN.includes(ws.relay)) && ws.send(JSON.stringify(["EVENT", ev])));   // the chip on `local` = your acts stay on your relay; the network never hears them
 let asked = "", askedDel = "";
@@ -261,7 +263,7 @@ let up = 0; const failed = new Set();   // relays that dropped or never opened a
 function connect(url, wait = 2000){   // a relay that drops or never answers is tried again, twice as long a wait each time, a minute at most; one that opens starts over
   let ws; try { ws = new WebSocket(url); } catch { return; }
   ws.relay = url; const k = sockets.findIndex(w => w.relay === url); k < 0 ? sockets.push(ws) : sockets[k] = ws;
-  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullFrom(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER], schedule); asked = askedDel = ""; ask(); askFollows(); };   // a late relay has heard nothing yet
+  ws.onopen = () => { wait = 2000; up++; status(); ws.send(JSON.stringify(["REQ", "ntry", { kinds:[NOTARY_KIND], "#t":[MARKER], since:T0 }])); pullOne(ws, "ntry", { kinds:[NOTARY_KIND] }, "#t", [MARKER]); asked = askedDel = ""; ask(); askFollows(); };   // a late relay has heard nothing yet
   ws.onmessage = m => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
     route(ws, d); if (d[0] === "OK") okWait.get(d[1])?.();
@@ -485,7 +487,7 @@ function mapOf(){   // date → px along the line: the seat mid-line, even spaci
 
 function render(){
   if (pickWant && (notaries.has(myCoordOf(pickWant)) || !loading())){ coord = pickWant; pickWant = null; startPick(); }
-  if (!saved && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay) || performance.now() > 5000)) store();   // every relay answered, failed once, or still hangs past 5s (as loading() gives up on it): a dead one is not waited on
+  if (saved !== heard.size && up && !loading() && sockets.every(w => w.readyState === WebSocket.OPEN || failed.has(w.relay) || performance.now() > 1500)) store();   // every relay answered, failed once, or still hangs past 1.5s (as loading() gives up on it): a dead one is not waited on
   const fold = fold8828([...acts.values()], { verifyEvent: e => vOK.has(e.id) }), all = [...cards.values()];
   refused = new Map(fold.refusals.filter(r => r.context === myCoord() && r.fields.length === 6).map(r => [r.eventId, r]));   // only my lens hides; field refusals are held, not drawn yet
   // one rule for every view: what you look at is a timeline, its members are cards and timelines; an unfolded timeline's members ride along too, by date
@@ -652,7 +654,7 @@ function draw(){   // the band alone, from the dots render() left: a scroll, a d
 const yr = s => (/^-?\d+/.exec(s) || [""])[0].replace(/^-0*(\d+)/, "$1 BCE").replace(/^0+(?=\d)/, ""), span = x => yr(x.date) === yr(x.last) ? yr(x.date) : yr(x.date) + "–" + yr(x.last);   // the years a timeline covers
 const isWeave = x => x.tls.some(d => notariesOf(d).some(([, n]) => sourcesOf(n).length));   // a timetree points at other timelines; a timeline only holds events
 function library(projections, all){   // one row per subject; mine = a timeline you keep as a notary. Counts and years show only once every relay has sent all it has: before that they would be guesses
-  const wait = loading() && !cached, mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
+  const wait = !shown && loading() && !cached; shown = !wait; const mine = tls => !!myPk && tls.some(d => notaries.has(myCoordOf(d))), has = new Set(dots.flatMap(x => x.tls));   // the Library is the side the switch shows: on local, the timelines with cards still to push
   const bare = wait || picking ? [...new Set([...notaries.keys()].map(subOf))].filter(d => !has.has(d)) : [];   // names first: a timeline whose cards are still coming lists by name; empty once loaded, it leaves
   const at = new Map(), wrote = new Map();   // per name: its newest card, act or head; how many of your cards point at it
   for (const e of [...cards.values(), ...acts.values(), ...notaries.values()]) if (!ADD || onSide(e.id))
@@ -665,7 +667,7 @@ function library(projections, all){   // one row per subject; mine = a timeline 
   libUpdate({ rows: [...dots.map(x => ({ d:x.tl, title:x.title, text:[x.summary, ...x.tls, ...x.mem.map(m => m.title)].join(" "), n:wait ? null : x.n + x.mem.reduce((k, m) => k + m.n, 0), where:ADD && local && x.n ? `${x.n} waiting` : undefined, nTl:x.nTl, tree:isWeave(x), span:wait ? "" : span(x), tab:{ mine:lensed(x, "mine"), fol:lensed(x, "follows") }, ...rowOf(x.tls) })),
       ...bare.map(d => ({ d, title:titleOf(d), text:summaryOf(d) + " " + d, n:null, nTl:0, tree:notariesOf(d).some(([, n]) => sourcesOf(n).length), span:"", ...rowOf([d]) }))],
     here:"dots", other:ADD && local ? null : { name:"cardex", url:toCardex, lit:FROM },   // cardex reads only the network: the local side has nowhere else to open
-    signedIn:!!myPk, loading:loading(), checking:cached && loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
+    signedIn:!!myPk, loading:loading(), folState:!myPk ? "nokey" : !follows && loading() ? "loading" : "ready", onNew:canSign() ? newTimeline : null, signIn,
     pick:picking && { title:titleOf(picking.d), self:picking.d, has:d => picking.set.has(d), was:new Set(picking.srcs.map(subOf)) }, onDone:pickDone,
     onEdit:canSign() ? d => { coord = d; trail = []; startPick(); picking.lib = true; } : null });
 }
@@ -808,16 +810,20 @@ let sp; addEventListener("scroll", () => { cancelAnimationFrame(sp); sp = reques
 
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 120); });   // label thinning depends on width
 const feed = { 5:ingestDelete, [NOTARY_KIND]:ingestNotary, [KIND]:ingestCard, [ACT_KIND]:ingestAct, 0:ingestProfile, 3:ingestFollows };
+const SNAP = await cache.meta(KEY), FULL = Date.now() - SNAP.full > 864e5, SINCE = FULL ? 0 : Math.floor(SNAP.at / 1000) - 86400;   // once a day the whole history again (a push keeps a card's old date, so "what is new" would miss it); else what is new since the save, a day of margin
 for (const [ev, urls] of await cache.load(KEY)){ cached = true; seenOn.set(ev.id, new Set(urls)); vOK.add(ev.id);   // checked before it was saved
   if (ev.kind === ACT_KIND) try { vOK.add(JSON.parse(tag(ev, "snapshot")).id); } catch {}   // and the card it carries
   feed[ev.kind]?.(ev); }
-function store(){   // the first full load: what no relay sent this visit is gone from them, so it goes here too; then the copy is replaced whole
-  saved = true; for (const m of [notaries, cards, acts]) for (const [k, e] of m) if (!heard.has(e.id)) m.delete(k);
-  cache.save(KEY, [...cache.extra.values(), ...notaries.values(), ...cards.values(), ...acts.values()].filter(e => heard.has(e.id)).map(e => [e, [...seenOn.get(e.id)]]));
+const known = new Set([MARKER, ...[...notaries.keys()], ...[...notaries.values()].flatMap(sourcesOf), ...actE, ...[...notaries.values(), ...cards.values(), ...acts.values()].map(e => e.pubkey)]);   // what the saved copy was pulled for
+function store(){   // after a whole-history visit, what no relay sent is gone from them, so it goes here too and the copy is replaced whole; else what came in is added
+  saved = heard.size; if (FULL) for (const m of [notaries, cards, acts]) for (const [k, e] of m) if (!heard.has(e.id)) m.delete(k);
+  const snaps = [...acts.values()].map(a => { try { return JSON.parse(tag(a, "snapshot")); } catch {} }).filter(s => s?.id && cards.get(s.pubkey + ":" + tag(s, "d"))?.id !== s.id);   // an older version an accept holds: which relays have it says which side it shows on
+  const evs = [...new Map([...cache.extra.values(), ...notaries.values(), ...cards.values(), ...acts.values(), ...snaps].map(e => [e.id, e])).values()];
+  cache.save(KEY, evs.filter(e => !FULL || heard.has(e.id)).map(e => [e, [...(seenOn.get(e.id) || [])].filter(Boolean)]), FULL ? Date.now() : SNAP.full);
 }
 render();
 RELAYS.forEach(u => connect(u));   // not forEach(connect): the index would ride in as the first wait
-[5100, 10100].forEach(t => setTimeout(schedule, t));   // when loading() stops waiting on relays that never opened
+[1600, 10100].forEach(t => setTimeout(schedule, t));   // when loading() stops waiting on relays that never opened
 </script>
 </body>
 </html>
