@@ -622,6 +622,12 @@
     .mtl .rival i{display:none}
     .mtl .nowchip{left:calc(var(--gut) - 10px)}
   }
+  /* phone: the card was 57% of the screen. The spine bleeds into main's 20px padding, the
+     drum indent counts that bleed, and the line's column narrows — the card gets the rest */
+  @media (max-width:640px){
+    .mtl{margin-inline:-14px;--gut:34px;--cgap:8px}
+    .mtl .node:not(.acc)>.xrow,.mtl .node:not(.acc)>.contest,.mtl .gap-c:not(.l) .lab{margin-left:36px}
+  }
 
   /* ── add-card-as-a-card: the draft node, and the drum's pick mode ──
      The draft is the app's own chrome acting — amber (--rail), dashed like a proposal —
