@@ -204,7 +204,7 @@
   .linkbtn.copied{color:var(--rail);border-color:var(--rail)}
   .hmenu{position:relative} #hbtn{font-size:18px;line-height:1;padding:6px 11px}   /* share lives behind three lines, top right */
   .hpop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;gap:6px;min-width:170px;padding:6px;background:var(--panel);border:1px solid var(--border);border-radius:9px}
-  .hpop[hidden]{display:none} @media (pointer:coarse){#sharepic{display:none}}   /* the share picture is a desktop chore, by hand */ .hpop .linkbtn{text-align:left}
+  .hpop[hidden]{display:none} @media (pointer:coarse){#sharepic{display:none}}   /* the share picture is a desktop chore, by hand */ .hpop .linkbtn{text-align:left} .whom,#addtlm{display:none} @media (max-width:640px){.whom{display:block} #addtlm:not([hidden]){display:inline-block}}
   .linkbtn.ord{font-family:var(--mono);font-size:14px;padding:2px 9px;margin-left:10px}   /* the word IS the state */
 
   main{max-width:1000px;margin:0 auto;padding:0 20px 90px}
@@ -236,7 +236,11 @@
 
   @media (max-width:640px){
     h1{font-size:17px}
-    .mast{display:flex;flex-wrap:wrap} .mastr{margin-left:auto} .brand{order:1;width:100%}   /* phone: buttons row, name under it */
+    /* phone: one slim row — ‹ Library · Cardex · ☰. The page links, theme and who you are
+       move into ☰ (seatHead); "Connected" only shows when it is not true */
+    .sub,.tabs #addtl,.mastsub:has(.status.ok){display:none} .status .me{display:none}
+    .tabs .linkbtn{background:transparent;border-color:var(--border);color:var(--text);font-size:15px;padding:6px 12px}
+    .hpop .mnav{padding:4px 6px} .whom:not(:empty){padding:6px 6px 2px;border-top:1px solid var(--border);font-size:13px;color:var(--dim)}
   }
 
   /* ── vertical spine-column timeline (the only view, all widths) ──
@@ -835,12 +839,14 @@
         </div>
         <span class="hmenu" id="hmenu"><button class="linkbtn" id="hbtn" type="button" aria-label="Share" aria-expanded="false">☰</button>
           <span class="hpop" hidden>
+            <button id="addtlm" class="linkbtn" type="button" hidden>Add timelines</button>
             <button id="copylink" class="linkbtn" type="button"
               title="Copy a shareable link to the selected view">⧉ Copy link</button>
             <button id="sharepic" class="linkbtn" type="button"
               title="Download a picture of this timeline and copy its link — post the picture, paste the link as the caption">▣ Share picture</button>
             <button id="exportbtn" class="linkbtn" type="button"
               title="Download this timeline as you see it — the glyph's lit lines, one file">⤓ Export</button>
+            <span class="whom" id="whom"></span>
           </span></span></div>
       </div>
       <div class="mastsub">
@@ -1093,7 +1099,7 @@ let activeN = null;                       // chosen notary coord, or null = the 
 const wantedK = _q.get("k") || "";
 
 const tabsEl   = document.getElementById("tabs");
-const statusEl = document.getElementById("status");
+const statusEl = document.getElementById("status"), whomEl = document.getElementById("whom");
 const copyBtn  = document.getElementById("copylink");
 const nowEl    = document.getElementById("collnow");   // the selected timeline, named large
 const metaEl   = document.getElementById("collmeta");  // its entry count, right under it
@@ -1190,6 +1196,11 @@ const exportBtn = document.getElementById("exportbtn");
 const hMenu = document.getElementById("hmenu"), hBtn = document.getElementById("hbtn"), hPop = hMenu.querySelector(".hpop");
 const setMenu = open => { hPop.hidden = !open; hBtn.setAttribute("aria-expanded", open); };
 hBtn.addEventListener("click", () => setMenu(hPop.hidden));
+const addtlM = document.getElementById("addtlm"); addtlM.onclick = () => toLibrary("&pick=" + encodeURIComponent(activeF.slice(2)));
+// phone: the page links and the theme switch live in ☰; wider, they sit beside it
+const headPhone = matchMedia("(max-width:640px)"), mastR = hMenu.parentNode, headMoved = [mastR.querySelector(".mnav"), document.getElementById("thmtog")];
+const seatHead = () => headMoved.forEach(el => headPhone.matches ? hPop.insertBefore(el, whomEl) : mastR.insertBefore(el, hMenu));
+seatHead(); headPhone.addEventListener("change", seatHead);
 document.addEventListener("click", e => { if (!hMenu.contains(e.target) && !pick) setMenu(false); });
 // the range picker: Export arms it, two taps on the spine bound it, Export again downloads.
 // pick = null (off) | {a, b}: endpoint d's in tap order, either may be null. Nothing picked
@@ -2033,7 +2044,8 @@ function slugName(c){ const n = notaryOf(c); return n ? tag(n,"title") || c : c.
 // count under the collection's own name (collmeta) — each fact beside its subject.
 function renderStatus(){
   const v = [...relayState.values()], up = v.filter(x => x === "up").length;
-  statusEl.innerHTML = `<span>${up ? "Connected" : v.includes("connecting") ? "Connecting…" : "Offline"}</span>` + (myPk ? ` · <span>Signed in as ${authorLabel(myPk)}</span>` : "");   // who you are, on every screen; a phone breaks between the two
+  statusEl.innerHTML = `<span>${up ? "Connected" : v.includes("connecting") ? "Connecting…" : "Offline"}</span>` + (myPk ? `<span class="me"> · <span>Signed in as ${authorLabel(myPk)}</span></span>` : "");
+  statusEl.classList.toggle("ok", !!up); whomEl.innerHTML = myPk ? `Signed in as ${authorLabel(myPk)}` : "";   // who you are, on every screen; a phone breaks between the two
   statusEl.title = `${up} of ${RELAYS.length} relays answering`;
 }
 
@@ -2091,6 +2103,7 @@ function renderTabs(){
   if (tabsEl.dataset.k !== tk){ tabsEl.dataset.k = tk;
     tabsEl.innerHTML = activeF ? `<button class="linkbtn" type="button" id="tolib" title="Every timeline — pick another">‹ Library</button>${hasSigner ? ` <button class="linkbtn" type="button" id="addtl" title="Pick the timelines this one groups">Add timelines</button>` : ""}` : "";
     tabsEl.onclick = e => e.target.id === "tolib" ? toLibrary() : e.target.id === "addtl" && toLibrary("&pick=" + encodeURIComponent(activeF.slice(2))); }
+  addtlM.hidden = !(activeF && hasSigner);
 }
 
 // the strip under the title (CSS .collmap). Even spacing, except a gap ten times the usual one:
